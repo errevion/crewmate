@@ -1,0 +1,62 @@
+{
+  "name": "crewmate",
+  "version": "0.1.0",
+  "description": "AI agent workflow CLI tool",
+  "type": "module",
+  "bin": {
+    "crewmate": "./dist/index.mjs"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts --fix",
+    "format": "prettier --write \"src/**/*.{ts,json}\"",
+    "lint:check": "eslint src --ext .ts --max-warnings=0",
+    "format:check": "prettier --check \"src/**/*.{ts,json}\"",
+    "test": "vitest run",
+    "test:e2e": "npm run build && vitest run -c vitest.e2e.config.ts",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "husky"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsdoc": "^64.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true
+  },
+  "lint-staged": {
+    "*.{ts,json}": [
+      "npm run format"
+    ]
+  },
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  }
+}
