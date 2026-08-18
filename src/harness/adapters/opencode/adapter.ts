@@ -3,9 +3,11 @@ import { join } from 'node:path';
 import type { HarnessAdapter, InstallResult } from '../../types.js';
 import { CREWMATE_PLUGIN } from './templates/crewmate-plugin.js';
 import BRIEF_MD from './templates/brief.md';
+import EXECUTE_MD from './templates/execute.md';
 import FRONTMAN_MD from './templates/agents/Frontman.md';
 import SCOUT_MD from './templates/agents/Scout.md';
 import PLANNER_MD from './templates/agents/Planner.md';
+import EXECUTOR_MD from './templates/agents/Executor.md';
 
 const PLUGIN_DEP = '@opencode-ai/plugin';
 
@@ -57,6 +59,10 @@ export class OpenCodeAdapter implements HarnessAdapter {
     writeFileSync(commandPath, BRIEF_MD, 'utf-8');
     filesWritten.push('.opencode/commands/brief.md');
 
+    const executeCommandPath = join(commandsDir, 'execute.md');
+    writeFileSync(executeCommandPath, EXECUTE_MD, 'utf-8');
+    filesWritten.push('.opencode/commands/execute.md');
+
     const frontmanPath = join(agentsDir, 'frontman.md');
     writeFileSync(frontmanPath, FRONTMAN_MD, 'utf-8');
     filesWritten.push('.opencode/agents/frontman.md');
@@ -68,6 +74,10 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const plannerPath = join(agentsDir, 'planner.md');
     writeFileSync(plannerPath, PLANNER_MD, 'utf-8');
     filesWritten.push('.opencode/agents/planner.md');
+
+    const executorPath = join(agentsDir, 'executor.md');
+    writeFileSync(executorPath, EXECUTOR_MD, 'utf-8');
+    filesWritten.push('.opencode/agents/executor.md');
 
     const pkgPath = join(baseDir, 'package.json');
     let pkg: Record<string, unknown> = {};

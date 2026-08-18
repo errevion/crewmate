@@ -328,6 +328,133 @@ const CrewmatePlugin: Plugin = async ({ $ }) => {
           }
         },
       }),
+
+      crewmate_acquire_lock: tool({
+        description:
+          "Acquire write locks on files for a task to prevent collisions during parallel execution. REQUIRED: taskId, files.",
+        args: {
+          taskId: z.string().min(1).describe("REQUIRED: The task ID acquiring locks"),
+          files: z.array(z.string()).min(1).describe("REQUIRED: Array of relative file paths to lock"),
+        },
+        async execute(args, context) {
+          const escapedFiles = args.files.map((f: string) => $.escape(f))
+          const json = await runCrewmate($, context.directory, [
+            "lock",
+            "acquire",
+            args.taskId,
+            "--files",
+            ...escapedFiles,
+          ])
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Locked \${args.files.length} file(s) for task \${args.taskId}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_release_lock: tool({
+        description:
+          "Release file locks held by a task after execution completes or on failure. REQUIRED: taskId. Optional: files.",
+        args: {
+          taskId: z.string().min(1).describe("REQUIRED: The task ID releasing locks"),
+          files: z.array(z.string()).optional().describe("Optional: Specific file paths to release"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["lock", "release", args.taskId]
+          if (args.files && args.files.length > 0) {
+            cmdParts.push("--files", ...args.files.map((f: string) => $.escape(f)))
+          }
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Released locks for task \${args.taskId}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_list_locks: tool({
+        description: "List currently held file locks. Optional: taskId.",
+        args: {
+          taskId: z.string().optional().describe("Optional: Filter locks by task ID"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["lock", "list"]
+          if (args.taskId) {
+            cmdParts.push("--task", args.taskId)
+          }
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: "Active file locks",
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_add_artifact: tool({
+        description: [
+          "Add an execution artifact / incremental knowledge fact for a task.",
+          "REQUIRED: taskId, type (fact | decision | api_contract | constraint | note | log), content.",
+          "Optional: briefId.",
+        ].join(" "),
+        args: {
+          taskId: z.string().min(1).describe("REQUIRED: The task ID creating this artifact"),
+          type: z
+            .enum(["fact", "decision", "api_contract", "constraint", "note", "log"])
+            .describe("REQUIRED: Artifact category"),
+          content: z.string().min(1).describe("REQUIRED: Artifact text, contract, decision, or note"),
+          briefId: z.string().optional().describe("Optional: Brief ID"),
+        },
+        async execute(args, context) {
+          const escapedContent = $.escape(args.content)
+          const cmdParts = [
+            "artifact",
+            "add",
+            args.taskId,
+            "--type",
+            args.type,
+            "--content",
+            escapedContent,
+          ]
+          if (args.briefId) {
+            cmdParts.push("--brief", args.briefId)
+          }
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Added \${args.type} artifact for task \${args.taskId}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_list_artifacts: tool({
+        description:
+          "List incremental knowledge artifacts (facts, decisions, api_contracts, constraints). Optional: briefId, taskId, type.",
+        args: {
+          briefId: z.string().optional().describe("Optional: Brief ID filter"),
+          taskId: z.string().optional().describe("Optional: Task ID filter"),
+          type: z
+            .enum(["fact", "decision", "api_contract", "constraint", "note", "log"])
+            .optional()
+            .describe("Optional: Artifact category filter"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "list"]
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          if (args.taskId) cmdParts.push("--task", args.taskId)
+          if (args.type) cmdParts.push("--type", args.type)
+
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: "Execution artifacts",
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
     },
   }
 }

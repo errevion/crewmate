@@ -21,7 +21,7 @@ Crewmate integrates with AI coding assistants through a harness adapter system. 
 
 Currently supported harnesses:
 
-- **OpenCode** — scaffolds plugin tools (`crewmate_create_brief`, `crewmate_update_field`, `crewmate_get_field`, `crewmate_show_brief`, `crewmate_check_status`, `crewmate_finish_brief`, `crewmate_add_task`, `crewmate_list_tasks`, `crewmate_update_task`, `crewmate_remove_task`), dedicated agent roles (`Frontman`, `Scout`, `Planner`), and a `/brief` slash command.
+- **OpenCode** — scaffolds plugin tools (`crewmate_create_brief`, `crewmate_update_field`, `crewmate_get_field`, `crewmate_show_brief`, `crewmate_check_status`, `crewmate_finish_brief`, `crewmate_add_task`, `crewmate_list_tasks`, `crewmate_update_task`, `crewmate_remove_task`, `crewmate_acquire_lock`, `crewmate_release_lock`, `crewmate_list_locks`, `crewmate_add_artifact`, `crewmate_list_artifacts`), dedicated agent roles (`Frontman`, `Scout`, `Planner`, `Executor`), and slash commands (`/brief`, `/execute`).
 
 ## Quick start
 
@@ -51,9 +51,11 @@ This creates integration files in your project's `.opencode/` directory:
 
 - `.opencode/plugins/crewmate.ts` — plugin exposing crewmate tools to OpenCode agents
 - `.opencode/commands/brief.md` — `/brief` slash command that kicks off the briefing flow
+- `.opencode/commands/execute.md` — `/execute` slash command for orchestrated parallel task execution
 - `.opencode/agents/frontman.md` — Frontman orchestrator agent prompt
 - `.opencode/agents/scout.md` — Scout read-only codebase explorer agent prompt
 - `.opencode/agents/planner.md` — Planner task decomposition agent prompt
+- `.opencode/agents/executor.md` — Executor task implementation & verification agent prompt
 - `.opencode/package.json` — dependency on `@opencode-ai/plugin`
 
 > **Note**: Add `.crewmate/` to your target project's `.gitignore` to avoid committing local SQLite database state.
@@ -87,23 +89,25 @@ Or let your AI agent handle the whole lifecycle conversationally through the `/b
 ## Multi-Agent Architecture
 
 ```
-                       User / Slash Command (/brief)
-                                     │
-                                     ▼
-                            [Frontman Orchestrator]
-                      (Mode: primary | Zero Direct I/O)
-                                     │
-            ┌────────────────────────┼────────────────────────┐
-            ▼                                                 ▼
-     [Scout Subagent]                                 [Planner Subagent]
-(Read-only workspace explorer)                    (Task decomposition & DAG)
- - Scans manifests and configs                     - Breaks brief into tasks
- - Reports objective facts                         - Identifies dependencies
+                        User / Slash Command (/brief)
+                                      │
+                                      ▼
+                             [Frontman Orchestrator]
+                       (Mode: primary | Zero Direct I/O)
+                                      │
+            ┌─────────────────────────┼─────────────────────────┐
+            ▼                         ▼                         ▼
+     [Scout Subagent]        [Planner Subagent]        [Executor Subagent]
+(Read-only workspace explorer) (Task decomposition & DAG) (Implementation & Verification)
+ - Scans manifests/configs    - Breaks brief into tasks  - Acquires file locks
+ - Reports objective facts    - Identifies dependencies  - Implements & tests changes
+                                                         - Records knowledge artifacts
 ```
 
 - **Frontman**: Primary conversational orchestrator. Manages user dialogue via the `question` tool, coordinates subagents, and persists state via `crewmate_*` tools. Denied direct read/edit/bash permissions.
 - **Scout**: Read-only explorer. Dispatched to inspect existing codebase structure, framework setup, and tooling.
 - **Planner**: Implementation planner. Dispatched after brief completion to break requirements into concrete, dependency-linked tasks.
+- **Executor**: Implementation agent. Dispatched during execution phase to acquire file locks, implement code changes, run tests, and contribute knowledge artifacts.
 
 ## Commands Reference
 
@@ -143,6 +147,25 @@ Manage implementation tasks linked to briefs. All `task` commands return structu
 | `get <taskId>` | Retrieve a task by ID | |
 | `update <taskId>` | Update a task's status | `--status <pending\|in_progress\|completed>` (required) |
 | `remove <taskId>` | Delete a task by ID | |
+
+### `crewmate lock <subcommand>`
+
+Manage file locks for parallel execution safety. All `lock` commands return structured JSON to stdout.
+
+| Subcommand | Description | Options |
+|---|---|---|
+| `acquire <taskId>` | Acquire write locks on files for a task | `--files <files...>` (required) |
+| `release <taskId>` | Release file locks held by a task | `--files <files...>` (optional) |
+| `list` | List currently held file locks | `--task <taskId>` (optional) |
+
+### `crewmate artifact <subcommand>`
+
+Manage incremental knowledge artifacts (facts, decisions, API contracts, constraints). All `artifact` commands return structured JSON to stdout.
+
+| Subcommand | Description | Options |
+|---|---|---|
+| `add <taskId>` | Add a knowledge artifact from a task | `--type <type>` (required), `--content <c>` (required), `--brief <briefId>` (optional) |
+| `list` | List knowledge artifacts | `--brief <briefId>` (optional), `--task <taskId>` (optional), `--type <type>` (optional) |
 
 ### Brief fields catalog
 

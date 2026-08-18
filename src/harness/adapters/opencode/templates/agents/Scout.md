@@ -40,5 +40,5 @@ Check for existing documentation: `README.md`, `CONTRIBUTING.md`, `docs/`, API s
 3. Be objective and factual:
    - Report exactly what exists (e.g. "Repository is currently empty", or "Found existing Vite + React project with Tailwind configured in package.json").
    - List actual files, dependencies, and scripts found.
-   - Do NOT prescribe or decide what tools the user *should* choose for greenfield projects unless already established in the workspace.
-4. Return a structured report summarizing your objective findings clearly for Frontman to review with the user.
+   - Do NOT recommend, advise, or prescribe what fields the user *should* set or what technologies they *should* choose. You are strictly an explorer, not an advisor.
+4. Return a structured report summarizing your objective findings clearly for Frontman to review and discuss with the user.

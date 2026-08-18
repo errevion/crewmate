@@ -52,6 +52,11 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('crewmate_list_tasks');
     expect(CREWMATE_PLUGIN).toContain('crewmate_update_task');
     expect(CREWMATE_PLUGIN).toContain('crewmate_remove_task');
+    expect(CREWMATE_PLUGIN).toContain('crewmate_acquire_lock');
+    expect(CREWMATE_PLUGIN).toContain('crewmate_release_lock');
+    expect(CREWMATE_PLUGIN).toContain('crewmate_list_locks');
+    expect(CREWMATE_PLUGIN).toContain('crewmate_add_artifact');
+    expect(CREWMATE_PLUGIN).toContain('crewmate_list_artifacts');
   });
 
   it('should include canonical FIELD_SCHEMAS definitions', () => {
