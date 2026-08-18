@@ -14,6 +14,10 @@ harness/
       templates/
         crewmate-plugin.ts        Plugin source (exported as string)
         brief.md                  Markdown template for the /brief command
+        agents/
+          Frontman.md             Primary orchestrator agent
+          Scout.md                Read-only codebase explorer subagent
+          Planner.md              Task decomposition subagent
 ```
 
 ### `HarnessAdapter` interface
@@ -57,4 +61,7 @@ Templates are source files exported as string constants. The adapter's `install(
 For example, the OpenCode adapter writes:
 - `.opencode/plugins/crewmate.ts` — a plugin that exposes Crewmate CLI tools to the AI agent
 - `.opencode/commands/brief.md` — a slash command for guided briefing
+- `.opencode/agents/Frontman.md` — primary orchestrator agent
+- `.opencode/agents/scout.md` — read-only codebase explorer subagent
+- `.opencode/agents/planner.md` — task decomposition subagent
 - `.opencode/package.json` — adds `@opencode-ai/plugin` as a dependency
