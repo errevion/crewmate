@@ -98,6 +98,76 @@ describe('crewmate init', () => {
     });
   });
 
+  describe('opencode harness agents', () => {
+    it('should create .opencode/agents/frontman.md', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout) as Record<string, unknown>;
+      expect(output.filesWritten).toContain('.opencode/agents/frontman.md');
+    });
+
+    it('should create .opencode/agents/scout.md', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout) as Record<string, unknown>;
+      expect(output.filesWritten).toContain('.opencode/agents/scout.md');
+    });
+
+    it('should create .opencode/agents/planner.md', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout) as Record<string, unknown>;
+      expect(output.filesWritten).toContain('.opencode/agents/planner.md');
+    });
+
+    it('should write well-formed agent files', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const { readFileSync } = await import('node:fs');
+
+      const frontmanContent = readFileSync(
+        join(tmpDir, '.opencode', 'agents', 'frontman.md'),
+        'utf-8'
+      );
+      expect(frontmanContent.length).toBeGreaterThan(100);
+      expect(frontmanContent).toContain('description:');
+      expect(frontmanContent).toContain('mode: primary');
+      expect(frontmanContent).toContain('permission:');
+
+      const scoutContent = readFileSync(join(tmpDir, '.opencode', 'agents', 'scout.md'), 'utf-8');
+      expect(scoutContent.length).toBeGreaterThan(100);
+      expect(scoutContent).toContain('description:');
+      expect(scoutContent).toContain('mode: subagent');
+      expect(scoutContent).toContain('permission:');
+      expect(scoutContent).toContain('crewmate_*: deny');
+
+      const plannerContent = readFileSync(
+        join(tmpDir, '.opencode', 'agents', 'planner.md'),
+        'utf-8'
+      );
+      expect(plannerContent.length).toBeGreaterThan(100);
+      expect(plannerContent).toContain('description:');
+      expect(plannerContent).toContain('mode: subagent');
+      expect(plannerContent).toContain('permission:');
+      expect(plannerContent).toContain('crewmate_*: deny');
+      expect(plannerContent).toContain('crewmate_show_brief: allow');
+      expect(plannerContent).toContain('crewmate_get_field: allow');
+    });
+
+    it('should route brief.md to the frontman agent', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const { readFileSync } = await import('node:fs');
+      const briefContent = readFileSync(join(tmpDir, '.opencode', 'commands', 'brief.md'), 'utf-8');
+      expect(briefContent).toContain('agent: frontman');
+    });
+  });
+
   describe('invalid harness', () => {
     it('should fail with unknown harness', async () => {
       const result = await runCli(['init', '--harness', 'nonexistent'], { cwd: tmpDir });

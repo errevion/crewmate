@@ -15,12 +15,12 @@
     "lint:check": "eslint src --ext .ts --max-warnings=0",
     "format:check": "prettier --check \"src/**/*.{ts,json}\"",
     "test": "vitest run",
-    "test:e2e": "npm run build && vitest run -c vitest.e2e.config.ts",
+    "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "test:coverage": "vitest run --coverage",
     "prepare": "husky"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "private": true,
   "dependencies": {
@@ -33,6 +33,7 @@
     "@types/node": "^26.2.0",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsdoc": "^64.2.0",

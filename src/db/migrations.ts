@@ -25,4 +25,18 @@ export function runMigrations(db: Database.Database): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id           TEXT PRIMARY KEY,
+      brief_id     TEXT NOT NULL REFERENCES briefs(id),
+      title        TEXT NOT NULL,
+      description  TEXT NOT NULL,
+      dependencies TEXT NOT NULL DEFAULT '[]',
+      field        TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
 }

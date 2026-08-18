@@ -44,6 +44,15 @@ describe('crewmate brief', () => {
       expect(output).toHaveProperty('ok', true);
       expect(output).toHaveProperty('complete');
     });
+
+    it('should reject --json flag on brief init (as brief subcommands do not accept it)', async () => {
+      const result = await runCli(['brief', 'init', '--json'], { cwd: tmpDir });
+      await expectFailure(
+        result,
+        /unknown option '--json'/i,
+        'brief init --json should fail because brief subcommands output JSON unconditionally'
+      );
+    });
   });
 
   describe('set', () => {
