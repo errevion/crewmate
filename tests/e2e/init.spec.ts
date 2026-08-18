@@ -50,6 +50,14 @@ describe('crewmate init', () => {
       expect(output.filesWritten).toContain('.opencode/commands/brief.md');
     });
 
+    it('should create .opencode/commands/execute.md', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout);
+      expect(output.filesWritten).toContain('.opencode/commands/execute.md');
+    });
+
     it('should create/update .opencode/package.json', async () => {
       const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
       await expectSuccess(result);
@@ -123,6 +131,14 @@ describe('crewmate init', () => {
       expect(output.filesWritten).toContain('.opencode/agents/planner.md');
     });
 
+    it('should create .opencode/agents/executor.md', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout) as Record<string, unknown>;
+      expect(output.filesWritten).toContain('.opencode/agents/executor.md');
+    });
+
     it('should write well-formed agent files', async () => {
       const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
       await expectSuccess(result);
@@ -156,6 +172,20 @@ describe('crewmate init', () => {
       expect(plannerContent).toContain('crewmate_*: deny');
       expect(plannerContent).toContain('crewmate_show_brief: allow');
       expect(plannerContent).toContain('crewmate_get_field: allow');
+
+      const executorContent = readFileSync(
+        join(tmpDir, '.opencode', 'agents', 'executor.md'),
+        'utf-8'
+      );
+      expect(executorContent.length).toBeGreaterThan(100);
+      expect(executorContent).toContain('description:');
+      expect(executorContent).toContain('mode: subagent');
+      expect(executorContent).toContain('permission:');
+      expect(executorContent).toContain('edit: allow');
+      expect(executorContent).toContain('bash: allow');
+      expect(executorContent).toContain('crewmate_acquire_lock: allow');
+      expect(executorContent).toContain('crewmate_release_lock: allow');
+      expect(executorContent).toContain('crewmate_add_artifact: allow');
     });
 
     it('should route brief.md to the frontman agent', async () => {
@@ -165,6 +195,20 @@ describe('crewmate init', () => {
       const { readFileSync } = await import('node:fs');
       const briefContent = readFileSync(join(tmpDir, '.opencode', 'commands', 'brief.md'), 'utf-8');
       expect(briefContent).toContain('agent: frontman');
+    });
+
+    it('should route execute.md to the frontman agent and include execution instructions', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const { readFileSync } = await import('node:fs');
+      const executeContent = readFileSync(
+        join(tmpDir, '.opencode', 'commands', 'execute.md'),
+        'utf-8'
+      );
+      expect(executeContent).toContain('agent: frontman');
+      expect(executeContent).toContain('crewmate_list_tasks');
+      expect(executeContent).toContain('Executor');
     });
   });
 

@@ -18,9 +18,10 @@ The user wants to create a structured project brief. Use the crewmate tools to g
 4. After all required fields are set, call `crewmate_check_status` to confirm completeness.
 5. Offer to dispatch Scout (via the Task tool) to auto-discover non-required fields:
     - technicalStack, constraints, existingCodebase, referenceMaterials, qualityStandards, dependencies, risks, deliverables
-6. After Scout returns, present each discovered field with its notes to the user for confirmation. Set approved fields via `crewmate_update_field`.
+6. After Scout returns: Scout is an explorer, NOT an advisor. Scout reports only objective facts found in the workspace (files, manifests, configs). Frontman must present these facts and discuss them conversationally with the user first before proposing or recommending any field values. Only persist fields via `crewmate_update_field` after discussing and agreeing with the user.
 7. Call `crewmate_check_status` to verify, `crewmate_finish_brief` to finalize, then `crewmate_show_brief` to display the completed brief.
 8. Automatically dispatch Planner (via the Task tool) to decompose the brief into implementation tasks. Present the task breakdown to the user for review and modification, then persist approved tasks via `crewmate_add_task`.
+9. After task agreement and persistence, present the finalized task list and tell the user to run `/execute` whenever they are ready to begin implementation.
 
 ## Guidelines
 

@@ -39,4 +39,24 @@ export function runMigrations(db: Database.Database): void {
       updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS file_locks (
+      id         TEXT PRIMARY KEY,
+      task_id    TEXT NOT NULL REFERENCES tasks(id),
+      file_path  TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS execution_artifacts (
+      id         TEXT PRIMARY KEY,
+      task_id    TEXT NOT NULL REFERENCES tasks(id),
+      brief_id   TEXT NOT NULL REFERENCES briefs(id),
+      type       TEXT NOT NULL,
+      content    TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
 }
