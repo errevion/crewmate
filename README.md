@@ -1,8 +1,13 @@
-# Crewmate
+<p align="center">
+    <img width="650" height="123" alt="carbon (2)" src="https://github.com/user-attachments/assets/966e96b3-f626-4b12-b6d3-1cc5519564e4" />
+</p>
 
-**Think it through first. Then let the agents build it.**
+---
+<p align="center">
+    <strong>Discuss it first. Then let the agents build it.</strong>
+</p>
 
-Crewmate sits between you and your coding agents. You explain what you want built. Crewmate turns that into a clear brief, looks through your codebase for the relevant patterns, splits the work into ordered tasks, then hands those tasks to agents that can run several at once without stepping on each other.
+Crewmate sits between you and your coding agents. You explain what you want built. Crewmate turns that into a clear brief, looks through your codebase for the relevant patterns, discuss for the best outcome with you, splits the work into ordered tasks, then hands those tasks to agents that can run several at once without stepping on each other.
 
 `crewmate` is the command-line tool that makes this work. It keeps track of briefs, tasks, file locks, and notes from past work, so the agent guiding your project can spend its time making calls, not doing bookkeeping.
 
