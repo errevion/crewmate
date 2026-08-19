@@ -1,10 +1,10 @@
 # Harness
 
-The harness system lets Crewmate integrate with different AI coding assistants. Each assistant (OpenCode, Cursor, etc.) has its own adapter that knows how to scaffold the right plugin files, commands, and dependencies into a target project.
+The harness system lets Crewmate integrate with different AI coding assistants. Each assistant (OpenCode today; Cursor, Claude Code, etc. in the future) has its own adapter that knows how to scaffold the right plugin files, slash commands, agent prompts, and dependencies into a target project.
 
 ## Architecture
 
-```
+```text
 harness/
   types.ts                        Interface definitions
   registry.ts                     Adapter lookup and registration
@@ -12,12 +12,14 @@ harness/
     opencode/
       adapter.ts                  OpenCode adapter implementation
       templates/
-        crewmate-plugin.ts        Plugin source (exported as string)
+        crewmate-plugin.ts        Plugin source template (TypeScript)
         brief.md                  Markdown template for the /brief command
+        execute.md                Markdown template for the /execute command
         agents/
-          Frontman.md             Primary orchestrator agent
-          Scout.md                Read-only codebase explorer subagent
-          Planner.md              Task decomposition subagent
+          Frontman.md             Primary orchestrator agent prompt
+          Scout.md                Read-only codebase explorer subagent prompt
+          Planner.md              Task decomposition subagent prompt
+          Executor.md             Implementation subagent prompt
 ```
 
 ### `HarnessAdapter` interface
@@ -56,12 +58,15 @@ const adapters: Record<string, HarnessAdapter> = {
 
 ### Adapter templates
 
-Templates are source files exported as string constants. The adapter's `install()` method writes these strings into the target project. This keeps each adapter self-contained — its templates live alongside its implementation, not in a shared directory.
+Templates live directly alongside each adapter implementation. The adapter's `install()` method imports or reads these templates and writes them into the target project directory.
 
-For example, the OpenCode adapter writes:
-- `.opencode/plugins/crewmate.ts` — a plugin that exposes Crewmate CLI tools to the AI agent
-- `.opencode/commands/brief.md` — a slash command for guided briefing
-- `.opencode/agents/Frontman.md` — primary orchestrator agent
+For example, the OpenCode adapter writes into `.opencode/`:
+
+- `.opencode/plugins/crewmate.ts` — hooks Crewmate's tools into OpenCode
+- `.opencode/commands/brief.md` — the `/brief` command that starts the planning conversation
+- `.opencode/commands/execute.md` — the `/execute` command that runs the implementation plan
+- `.opencode/agents/frontman.md` — supervisor agent that orchestrates brief creation and task dispatch
 - `.opencode/agents/scout.md` — read-only codebase explorer subagent
 - `.opencode/agents/planner.md` — task decomposition subagent
+- `.opencode/agents/executor.md` — parallel implementation subagent
 - `.opencode/package.json` — adds `@opencode-ai/plugin` as a dependency
