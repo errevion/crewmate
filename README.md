@@ -369,4 +369,4 @@ tests/
 
 ## License
 
-Private
+[MIT](LICENSE)
