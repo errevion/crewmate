@@ -110,6 +110,88 @@ crewmate brief set acceptanceCriteria '["Users can log in via GitHub","Tokens pe
 crewmate brief complete
 ```
 
+### Watching the workflow (`crewmate watch`)
+
+While agents are working, `crewmate watch` opens a live terminal dashboard that refreshes automatically:
+
+```bash
+crewmate watch
+```
+
+The dashboard has four sections:
+
+| Section | What it shows |
+| --- | --- |
+| **Header** | Brief ID, status (draft/complete), goal text, progress bar, running task count |
+| **Task board** | Every task with a status marker — `[✓]` completed, `[→]` running (animated spinner), `[ ]` pending — plus blocking dependencies and ready-to-run indicators |
+| **Event feed** | Last 12 lifecycle events with timestamp, actor, type, and message |
+| **Activity graph** | Animated visualization of Frontman dispatching work to Scout, Planner, and Executors, with color-coded agent nodes |
+
+Press `q`, `Escape`, or `Ctrl-C` to exit. The dashboard cleanly restores your terminal state.
+
+#### Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--brief <id>` | latest brief | Monitor a specific brief instead of the most recent one |
+| `--interval <ms>` | `500` | Database poll interval in milliseconds |
+| `--once` | — | Print a single JSON snapshot to stdout and exit |
+
+#### Non-interactive mode
+
+When stdout is not a TTY, or when you pass `--once`, the dashboard skips the TUI and prints structured JSON:
+
+```bash
+crewmate watch --once | jq .snapshot.tasks
+```
+
+This is useful for CI checks, scripting, or feeding state into other tools.
+
+#### Rendering
+
+By default the activity graph uses Unicode box-drawing characters. Set the `CREWMATE_GRAPH_RENDERER` environment variable to `ascii` to fall back to plain ASCII, which is useful in terminals without full Unicode support (e.g. Windows CMD without Windows Terminal):
+
+```bash
+export CREWMATE_GRAPH_RENDERER=ascii   # Linux/macOS
+set CREWMATE_GRAPH_RENDERER=ascii      # Windows
+crewmate watch
+```
+
+### Recording events (`crewmate event`)
+
+Workflow lifecycle events are emitted by agents during execution and displayed in the `watch` dashboard. You can also record or query them manually:
+
+```bash
+crewmate event add \
+  --actor executor \
+  --type completed \
+  --message "OAuth token storage implemented" \
+  --task <taskId>
+
+crewmate event list --brief <briefId> --limit 20
+```
+
+**Actors:** `frontman`, `scout`, `planner`, `executor`
+
+**Event types:** `dispatched`, `started`, `locked`, `artifact`, `completed`, `error`
+
+Filters (`--brief`, `--task`, `--actor`, `--type`, `--limit`) can be combined.
+
+### Managing Frontman activity (`crewmate activity`)
+
+Frontman's current operational state is tracked separately from events and powers the activity graph in `crewmate watch`:
+
+```bash
+crewmate activity set orchestrating --message "Dispatching auth tasks"
+crewmate activity get
+crewmate activity clear
+crewmate activity list --limit 50
+```
+
+**Activity types:** `idle`, `questioning`, `awaiting_response`, `analyzing`, `planning`, `orchestrating`, `reviewing`
+
+All activity subcommands accept `--brief <id>` to target a specific brief (defaults to latest).
+
 ## The brief
 
 The brief is the one source of truth Frontman and every downstream agent work from. Five fields are required before Crewmate will let you mark it complete:
@@ -122,7 +204,7 @@ The brief is the one source of truth Frontman and every downstream agent work fr
 | `functionalRequirements` | JSON array | `["user-messages", "read-receipts"]` |
 | `acceptanceCriteria` | JSON array | `["Messages persist", "Files < 25MB"]` |
 
-You can also set `technicalStack`, `constraints`, `existingCodebase`, `referenceMaterials`, `qualityStandards`, `dependencies`, `risks`, and `deliverables`.T hese add context but aren't required.
+You can also set `technicalStack`, `constraints`, `existingCodebase`, `referenceMaterials`, `qualityStandards`, `dependencies`, `risks`, and `deliverables`. These add context but aren't required.
 
 ## Who does what
 
@@ -174,6 +256,8 @@ Everything is stored in SQLite, at `.crewmate/crewmate.db`:
 - **tasks** — linked to a brief, with dependency edges between them
 - **artifacts** — the knowledge Executors have written down
 - **locks** — which files are currently claimed, and by which task
+- **events** — lifecycle events from each agent (dispatched, started, completed, errors)
+- **activities** — Frontman's operational state history
 
 This survives between sessions. Point Crewmate at a project that already has a `.crewmate` folder and it picks up right where it left off.
 
@@ -203,8 +287,15 @@ Every command prints structured JSON to stdout, so it's easy to script against o
 | `crewmate lock list` | Show every active lock |
 | `crewmate artifact add <taskId>` | Record an artifact (`--type`, `--content`) |
 | `crewmate artifact list` | List artifacts, filterable by `--brief`, `--task`, `--type` |
+| `crewmate event add` | Record a lifecycle event (`--actor`, `--type`, `--message`, `--task`, `--brief`) |
+| `crewmate event list` | List events, filterable by `--brief`, `--task`, `--actor`, `--type`, `--limit` |
+| `crewmate activity set <type>` | Set Frontman's current activity state (`--message`, `--metadata`, `--brief`) |
+| `crewmate activity get` | Get the current Frontman activity |
+| `crewmate activity clear` | Clear (end) the current activity |
+| `crewmate activity list` | List recent activities (`--brief`, `--limit`) |
+| `crewmate watch` | Live dashboard showing brief, tasks, events, and activity graph |
 
-Run `crewmate --help` for the full, current list.
+Run `crewmate <command> --help` for detailed usage and all available flags.
 
 A typical session, watching a brief through to completion:
 
@@ -217,10 +308,18 @@ crewmate brief set functionalRequirements '["GitHub OAuth 2.0","Token storage"]'
 crewmate brief set acceptanceCriteria '["Users can log in","Tokens persist"]'
 crewmate brief complete
 
-# while it's running
+# watch the live dashboard in another terminal
+crewmate watch --brief $BRIEF_ID
+
+# or pull a snapshot for scripting
+crewmate watch --once --brief $BRIEF_ID | jq .snapshot.tasks
+
+# query individual components
 crewmate task list --brief $BRIEF_ID
 crewmate lock list
 crewmate artifact list --brief $BRIEF_ID
+crewmate event list --brief $BRIEF_ID --limit 20
+crewmate activity list --brief $BRIEF_ID
 
 # if something's stuck
 crewmate brief status      # see which required fields are missing
@@ -253,7 +352,7 @@ npm run format         # format with Prettier
 
 ```text
 src/
-  commands/       CLI command handlers (init, brief, task, lock, artifact)
+  commands/       CLI command handlers (init, brief, task, lock, artifact, event, activity, watch)
   db/             SQLite layer — connection, migrations, repositories
   harness/        Harness adapters (OpenCode today)
     adapters/opencode/
