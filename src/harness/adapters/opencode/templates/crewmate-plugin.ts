@@ -590,6 +590,69 @@ const CrewmatePlugin: Plugin = async ({ $ }) => {
         },
       }),
     },
+
+    "tool.execute.before": async (input: any, output: any) => {
+      try {
+        const toolName = input?.tool
+        const args = output?.args || input?.args || {}
+        if (toolName === "task" && args) {
+          const subagent = String(args.subagent_type || args.agent || "").toLowerCase()
+          if (["scout", "planner", "executor"].includes(subagent)) {
+            let msg = \`Dispatched \${subagent}\`
+            if (subagent === "scout") {
+              msg = "Dispatched scout to explore the codebase"
+            } else if (subagent === "planner") {
+              msg = "Dispatched planner to decompose the brief into tasks"
+            } else if (subagent === "executor") {
+              const taskDesc = args.description || args.title || "task"
+              const firstLine = String(taskDesc).trim().split(/\\r?\\n/)[0].slice(0, 60)
+              msg = \`Dispatched executor for \${firstLine}\`
+            }
+
+            const targetDir = typeof directory === "string" && directory.trim() ? directory : process.cwd()
+
+            // Check if Frontman already emitted this event recently to prevent duplicate logging
+            const recent = await runCrewmate($, targetDir, [
+              "event",
+              "list",
+              "--actor",
+              "frontman",
+              "--type",
+              "dispatched",
+              "--limit",
+              "5",
+            ]).catch(() => null)
+
+            const isDuplicate =
+              recent?.ok &&
+              Array.isArray(recent.events) &&
+              recent.events.some((e: any) => {
+                const age = Date.now() - new Date(e.createdAt).getTime()
+                return age < 5000 && (e.message === msg || e.message.toLowerCase().includes(subagent))
+              })
+
+            if (!isDuplicate) {
+              const cmdParts = [
+                "event",
+                "add",
+                "--actor",
+                "frontman",
+                "--type",
+                "dispatched",
+                "--message",
+                $.escape(msg),
+              ]
+              if (args.task_id || args.taskId) {
+                cmdParts.push("--task", $.escape(args.task_id || args.taskId))
+              }
+              await runCrewmate($, targetDir, cmdParts).catch(() => {})
+            }
+          }
+        }
+      } catch {
+        // Guardrail should not break tool execution
+      }
+    },
   }
 }
 
