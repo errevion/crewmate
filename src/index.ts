@@ -4,6 +4,9 @@ import { registerInitCommand } from './commands/init.js';
 import { registerTaskCommand } from './commands/task.js';
 import { registerLockCommand } from './commands/lock.js';
 import { registerArtifactCommand } from './commands/artifact.js';
+import { registerEventCommand } from './commands/event.js';
+import { registerActivityCommand } from './commands/activity.js';
+import { registerWatchCommand } from './commands/watch.js';
 
 const program = new Command();
 
@@ -14,5 +17,8 @@ registerInitCommand(program);
 registerTaskCommand(program);
 registerLockCommand(program);
 registerArtifactCommand(program);
+registerEventCommand(program);
+registerActivityCommand(program);
+registerWatchCommand(program);
 
 program.parse();

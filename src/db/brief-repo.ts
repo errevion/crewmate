@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import Database from 'better-sqlite3';
 import { getDb } from './connection.js';
 import {
   type Brief,
@@ -42,10 +43,10 @@ function rowToBrief(row: Record<string, unknown>): Brief {
 /**
  * Creates a new brief entry in the database
  *
+ * @param db Database connection (defaults to the shared connection)
  * @returns The newly created brief object with ID assigned
  */
-export function createBrief(): Brief {
-  const db = getDb();
+export function createBrief(db: Database.Database = getDb()): Brief {
   const id = generateId();
 
   db.prepare('INSERT INTO briefs (id) VALUES (?)').run(id);
@@ -57,10 +58,10 @@ export function createBrief(): Brief {
 /**
  * Retrieves the most recently created brief from the database
  *
+ * @param db Database connection (defaults to the shared connection)
  * @returns The latest brief object, or null if no briefs exist
  */
-export function getLatestBrief(): Brief | null {
-  const db = getDb();
+export function getLatestBrief(db: Database.Database = getDb()): Brief | null {
   const row = db.prepare('SELECT * FROM briefs ORDER BY created_at DESC LIMIT 1').get() as
     Record<string, unknown> | undefined;
   return row ? rowToBrief(row) : null;
@@ -70,10 +71,10 @@ export function getLatestBrief(): Brief | null {
  * Retrieves a specific brief by its ID
  *
  * @param id - The unique identifier of the brief to retrieve
+ * @param db Database connection (defaults to the shared connection)
  * @returns The brief object if found, or null if not found
  */
-export function getBriefById(id: string): Brief | null {
-  const db = getDb();
+export function getBriefById(id: string, db: Database.Database = getDb()): Brief | null {
   const row = db.prepare('SELECT * FROM briefs WHERE id = ?').get(id) as
     Record<string, unknown> | undefined;
   return row ? rowToBrief(row) : null;
@@ -83,10 +84,11 @@ export function getBriefById(id: string): Brief | null {
  * Resolves a brief by ID or falls back to the latest one
  *
  * @param id - Optional brief identifier
+ * @param db Database connection (defaults to the shared connection)
  * @returns The resolved brief object or null if not found
  */
-export function resolveBrief(id?: string): Brief | null {
-  return id ? getBriefById(id) : getLatestBrief();
+export function resolveBrief(id?: string, db: Database.Database = getDb()): Brief | null {
+  return id ? getBriefById(id, db) : getLatestBrief(db);
 }
 
 /**
@@ -95,9 +97,14 @@ export function resolveBrief(id?: string): Brief | null {
  * @param briefId - The unique identifier of the brief
  * @param field - The field name to update
  * @param value - The new value for the field
+ * @param db Database connection (defaults to the shared connection)
  */
-export function setField(briefId: string, field: BriefField, value: unknown): void {
-  const db = getDb();
+export function setField(
+  briefId: string,
+  field: BriefField,
+  value: unknown,
+  db: Database.Database = getDb()
+): void {
   const column = FIELD_TO_COLUMN[field];
   const storeValue = JSON_FIELDS.includes(field) ? JSON.stringify(value) : (value as string);
 
@@ -112,10 +119,14 @@ export function setField(briefId: string, field: BriefField, value: unknown): vo
  *
  * @param briefId - The unique identifier of the brief
  * @param field - The field name to retrieve
+ * @param db Database connection (defaults to the shared connection)
  * @returns The field value, or null/undefined if not found
  */
-export function getField(briefId: string, field: BriefField): unknown {
-  const db = getDb();
+export function getField(
+  briefId: string,
+  field: BriefField,
+  db: Database.Database = getDb()
+): unknown {
   const column = FIELD_TO_COLUMN[field];
   const row = db.prepare(`SELECT ${column} FROM briefs WHERE id = ?`).get(briefId) as
     Record<string, unknown> | undefined;
@@ -139,9 +150,9 @@ export function getField(briefId: string, field: BriefField): unknown {
  * Marks a brief as complete
  *
  * @param briefId - The unique identifier of the brief to mark complete
+ * @param db Database connection (defaults to the shared connection)
  */
-export function markComplete(briefId: string): void {
-  const db = getDb();
+export function markComplete(briefId: string, db: Database.Database = getDb()): void {
   db.prepare(
     "UPDATE briefs SET status = 'complete', updated_at = datetime('now') WHERE id = ?"
   ).run(briefId);

@@ -455,6 +455,140 @@ const CrewmatePlugin: Plugin = async ({ $ }) => {
           }
         },
       }),
+
+      crewmate_add_event: tool({
+        description: [
+          "Record a workflow lifecycle event for the live watch dashboard.",
+          "REQUIRED: actor (frontman | scout | planner | executor), type (dispatched | started | locked | artifact | completed | error), message.",
+          "Optional: taskId, briefId (defaults to task brief or latest).",
+        ].join(" "),
+        args: {
+          actor: z
+            .enum(["frontman", "scout", "planner", "executor"])
+            .describe("REQUIRED: Agent that emitted the event"),
+          type: z
+            .enum(["dispatched", "started", "locked", "artifact", "completed", "error"])
+            .describe("REQUIRED: Event type"),
+          message: z.string().min(1).describe("REQUIRED: Human-readable event description"),
+          taskId: z.string().optional().describe("Optional: Task this event relates to"),
+          briefId: z.string().optional().describe("Optional: Brief ID (defaults to latest)"),
+        },
+        async execute(args, context) {
+          const escapedMessage = $.escape(args.message)
+          const cmdParts = [
+            "event",
+            "add",
+            "--actor",
+            args.actor,
+            "--type",
+            args.type,
+            "--message",
+            escapedMessage,
+          ]
+          if (args.taskId) cmdParts.push("--task", args.taskId)
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Added \${args.type} event from \${args.actor}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_list_events: tool({
+        description:
+          "List workflow lifecycle events (dispatch, start, lock, artifact, completion, error). Optional: briefId, taskId, actor, type, limit.",
+        args: {
+          briefId: z.string().optional().describe("Optional: Brief ID filter"),
+          taskId: z.string().optional().describe("Optional: Task ID filter"),
+          actor: z
+            .enum(["frontman", "scout", "planner", "executor"])
+            .optional()
+            .describe("Optional: Actor filter"),
+          type: z
+            .enum(["dispatched", "started", "locked", "artifact", "completed", "error"])
+            .optional()
+            .describe("Optional: Event type filter"),
+          limit: z
+            .string()
+            .optional()
+            .describe("Optional: Max number of events to return"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["event", "list"]
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          if (args.taskId) cmdParts.push("--task", args.taskId)
+          if (args.actor) cmdParts.push("--actor", args.actor)
+          if (args.type) cmdParts.push("--type", args.type)
+          if (args.limit) cmdParts.push("--limit", args.limit)
+
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: "Workflow events",
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_set_activity: tool({
+        description: [
+          "Set Frontman's active state for the live watch dashboard.",
+          "REQUIRED: activityType (questioning | awaiting_response | analyzing | planning | orchestrating | reviewing | idle).",
+          "Optional: message (context or question description), briefId (defaults to latest).",
+        ].join(" "),
+        args: {
+          activityType: z
+            .enum([
+              "questioning",
+              "awaiting_response",
+              "analyzing",
+              "planning",
+              "orchestrating",
+              "reviewing",
+              "idle",
+            ])
+            .describe("REQUIRED: Frontman activity type"),
+          message: z.string().optional().describe("Optional: Context or description of what Frontman is doing"),
+          briefId: z.string().optional().describe("Optional: Brief ID (defaults to latest)"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["activity", "set", args.activityType]
+          if (args.message) {
+            cmdParts.push("--message", $.escape(args.message))
+          }
+          if (args.briefId) {
+            cmdParts.push("--brief", args.briefId)
+          }
+
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Set Frontman activity to \${args.activityType}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_get_activity: tool({
+        description: "Get Frontman's current active state. Optional: briefId.",
+        args: {
+          briefId: z.string().optional().describe("Optional: Brief ID filter"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["activity", "get"]
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+
+          const json = await runCrewmate($, context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: "Frontman activity",
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
     },
   }
 }
