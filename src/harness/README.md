@@ -6,10 +6,10 @@ The harness system lets Crewmate integrate with different AI coding assistants. 
 
 ```text
 harness/
-  types.ts                        Interface definitions
+  types.ts                        Interface definitions (HarnessAdapter, InstallResult)
   registry.ts                     Adapter lookup and registration
   adapters/
-    opencode/
+    opencode/                     See adapters/opencode/README.md for details
       adapter.ts                  OpenCode adapter implementation
       templates/
         crewmate-plugin.ts        Plugin source template (TypeScript)
@@ -34,11 +34,37 @@ interface HarnessAdapter {
 }
 ```
 
-`install()` receives a target project directory and writes whatever files that AI assistant needs to interact with Crewmate. It returns the harness name and a list of files written.
+`install()` receives a target project directory and writes whatever files that AI assistant needs to interact with Crewmate. It returns an `InstallResult`:
+
+```typescript
+interface InstallResult {
+  harness: string;       // adapter name (e.g. "opencode")
+  filesWritten: string[]; // relative paths of every file created
+}
+```
 
 ### Registry
 
-The registry maps adapter names to instances. Commands use `getAdapter(name)` to look up an adapter and `listAdapterNames()` to show available options.
+The registry (`registry.ts`) maps adapter names to instances. It exposes four functions:
+
+| Function | Returns | Purpose |
+| --- | --- | --- |
+| `getAdapter(name)` | `HarnessAdapter \| undefined` | Look up a single adapter |
+| `listAdapters()` | `HarnessAdapter[]` | All registered adapter instances |
+| `listAdapterNames()` | `string[]` | Just the names (used by `crewmate init` help text) |
+| `hasAdapter(name)` | `boolean` | Check whether a name is registered |
+
+### How adapters connect to agents
+
+An adapter's job is purely scaffolding. It writes files into the target project that make the AI assistant aware of Crewmate's tools. The assistant's own extension system then loads those files at runtime.
+
+For OpenCode this means:
+
+1. A **plugin** (`crewmate-plugin.ts`) that wraps every `crewmate` CLI command as an OpenCode tool, so agents can call them without knowing the CLI exists.
+2. **Slash commands** (`brief.md`, `execute.md`) that give users `/brief` and `/execute` entry points.
+3. **Agent prompts** (`Frontman.md`, `Scout.md`, `Planner.md`, `Executor.md`) that tell each agent its role, constraints, and available tools.
+
+The plugin calls `crewmate <subcommand>` under the hood, parses JSON output, and returns structured results to the agent. Agents never shell out to `crewmate` directly.
 
 ## Adding a new adapter
 
@@ -56,6 +82,17 @@ const adapters: Record<string, HarnessAdapter> = {
 };
 ```
 
+### What your adapter needs to provide
+
+At minimum, an adapter should scaffold:
+
+| Concern | What to provide | OpenCode example |
+| --- | --- | --- |
+| Tool bridge | A plugin or extension that wraps `crewmate` CLI calls | `crewmate-plugin.ts` |
+| User entry points | Slash commands or UI hooks for `/brief` and `/execute` | `brief.md`, `execute.md` |
+| Agent prompts | Role-specific instructions for Frontman, Scout, Planner, Executor | `agents/*.md` |
+| Dependencies | Any packages the plugin needs | `package.json` with `@opencode-ai/plugin` |
+
 ### Adapter templates
 
 Templates live directly alongside each adapter implementation. The adapter's `install()` method imports or reads these templates and writes them into the target project directory.
@@ -70,3 +107,5 @@ For example, the OpenCode adapter writes into `.opencode/`:
 - `.opencode/agents/planner.md` — task decomposition subagent
 - `.opencode/agents/executor.md` — parallel implementation subagent
 - `.opencode/package.json` — adds `@opencode-ai/plugin` as a dependency
+
+See [adapters/opencode/README.md](adapters/opencode/README.md) for OpenCode-specific details.
