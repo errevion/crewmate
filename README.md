@@ -331,6 +331,7 @@ crewmate task remove <id>  # remove a task that's stuck
 - Node.js 20 or newer
 - A project directory, new or existing
 - OpenCode installed (the only supported harness for now)
+- **Windows only:** Visual Studio Build Tools with the "Desktop development with C++" workload _and_ a Windows SDK component (required by `better-sqlite3`'s native compilation via `node-gyp`)
 
 ## Working on Crewmate itself
 
