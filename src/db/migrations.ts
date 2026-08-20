@@ -59,4 +59,39 @@ export function runMigrations(db: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS execution_events (
+      id         TEXT PRIMARY KEY,
+      brief_id   TEXT NOT NULL REFERENCES briefs(id),
+      task_id    TEXT REFERENCES tasks(id),
+      actor      TEXT NOT NULL,
+      type       TEXT NOT NULL,
+      message    TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_events_brief_id ON execution_events (brief_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_events_task_id ON execution_events (task_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_events_created_at ON execution_events (created_at)`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS frontman_activities (
+      id            TEXT PRIMARY KEY,
+      brief_id      TEXT NOT NULL REFERENCES briefs(id),
+      activity_type TEXT NOT NULL,
+      message       TEXT,
+      metadata      TEXT,
+      started_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      ended_at      TEXT
+    );
+  `);
+
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_frontman_activities_brief_id ON frontman_activities (brief_id)`
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_frontman_activities_started_at ON frontman_activities (started_at)`
+  );
 }
