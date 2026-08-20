@@ -4,10 +4,10 @@ import type { HarnessAdapter, InstallResult } from '../../types.js';
 import { CREWMATE_PLUGIN } from './templates/crewmate-plugin.js';
 import BRIEF_MD from './templates/brief.md';
 import EXECUTE_MD from './templates/execute.md';
-import FRONTMAN_MD from './templates/agents/Frontman.md';
-import SCOUT_MD from './templates/agents/Scout.md';
-import PLANNER_MD from './templates/agents/Planner.md';
-import EXECUTOR_MD from './templates/agents/Executor.md';
+import FRONTMAN_MD from './templates/agents/frontman.md';
+import SCOUT_MD from './templates/agents/scout.md';
+import PLANNER_MD from './templates/agents/planner.md';
+import EXECUTOR_MD from './templates/agents/executor.md';
 
 const PLUGIN_DEP = '@opencode-ai/plugin';
 

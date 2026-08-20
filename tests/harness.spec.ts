@@ -84,4 +84,13 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('.split(/\\r?\\n/)[0]');
     expect(CREWMATE_PLUGIN).not.toMatch(/split\("\r?\n"\)/);
   });
+
+  it('should include tool.execute.before hook for automatic dispatch event recording', () => {
+    expect(CREWMATE_PLUGIN).toContain('"tool.execute.before": async');
+    expect(CREWMATE_PLUGIN).toContain('toolName === "task"');
+    expect(CREWMATE_PLUGIN).toContain('["scout", "planner", "executor"].includes(subagent)');
+    expect(CREWMATE_PLUGIN).toContain('"Dispatched scout to explore the codebase"');
+    expect(CREWMATE_PLUGIN).toContain('"Dispatched planner to decompose the brief into tasks"');
+    expect(CREWMATE_PLUGIN).toContain('Dispatched executor for');
+  });
 });

@@ -85,6 +85,7 @@ export interface SnapshotOptions {
   briefId?: string;
   eventLimit?: number;
   artifactLimit?: number;
+  allowEmpty?: boolean;
 }
 
 function deriveAgentState(type: ExecutionEvent['type']): AgentState {
@@ -98,11 +99,41 @@ function deriveAgentState(type: ExecutionEvent['type']): AgentState {
 }
 
 /**
+ * Builds an empty workflow snapshot when no brief exists
+ */
+export function buildEmptySnapshot(): WorkflowSnapshot {
+  return {
+    briefId: '(none)',
+    briefStatus: 'none',
+    goal: null,
+    tasks: [],
+    locks: [],
+    artifacts: [],
+    events: [],
+    agents: EVENT_ACTORS.map((actor) => ({
+      actor,
+      state: 'idle',
+      taskId: null,
+      taskTitle: null,
+      message: null,
+    })),
+    activeCount: 0,
+    completedCount: 0,
+    totalCount: 0,
+    eventCount: 0,
+    updatedAt: new Date().toISOString(),
+    dispatchEdges: [],
+    frontmanState: 'idle',
+    currentActivity: null,
+  };
+}
+
+/**
  * Builds a snapshot of the current workflow state for a brief
  *
- * @param options Optional brief ID and fetch limits
+ * @param options Optional brief ID, fetch limits, and allowEmpty flag
  * @param db Database connection (defaults to the shared connection)
- * @returns The workflow snapshot, or null if no brief exists
+ * @returns The workflow snapshot, or null if no brief exists and allowEmpty is not set
  */
 export function buildSnapshot(
   options: SnapshotOptions = {},
@@ -110,7 +141,7 @@ export function buildSnapshot(
 ): WorkflowSnapshot | null {
   const brief = resolveBrief(options.briefId, db);
   if (!brief) {
-    return null;
+    return options.allowEmpty ? buildEmptySnapshot() : null;
   }
 
   const tasks = listTasksByBrief(db, brief.id);

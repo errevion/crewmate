@@ -6,6 +6,7 @@
 import type { EventActor } from '../models/event.js';
 import type { FrontmanActivity } from '../models/activity.js';
 import { SPINNERS } from './ascii.js';
+import { easeInOutCubic } from './animation.js';
 
 /**
  * Character set used for box drawing and line animation
@@ -184,24 +185,28 @@ function computeEdgeStates(
     const elapsed = now - edge.startTime;
     const cycleDuration = 2000; // 2 seconds per animation cycle
 
-    let progress = elapsed / cycleDuration;
+    let linearProgress = elapsed / cycleDuration;
 
-    if (progress >= 1) {
+    if (linearProgress >= 1) {
       // Check if we should replay
       if (!edge.nextPlayAt || now >= edge.nextPlayAt) {
         // Start new cycle
-        progress = ((now - edge.startTime) % cycleDuration) / cycleDuration;
+        linearProgress = ((now - edge.startTime) % cycleDuration) / cycleDuration;
         // Schedule next replay 1 second after completion
         edge.nextPlayAt = edge.startTime + cycleDuration + 1000;
       } else {
         // Not time to replay yet, hold at 1
-        progress = 1;
+        linearProgress = 1;
       }
     }
 
+    const clampedLinear = Math.min(1, Math.max(0, linearProgress));
+    // Apply cubic ease-in-out curve for natural acceleration and deceleration
+    const progress = linearProgress >= 1 ? 1 : easeInOutCubic(clampedLinear);
+
     results.push({
       edge,
-      progress: Math.min(1, Math.max(0, progress)),
+      progress,
     });
   }
 

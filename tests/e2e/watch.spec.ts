@@ -67,12 +67,16 @@ describe('crewmate watch CLI', () => {
     expect(snapshot.agents.find((a) => a.actor === 'frontman')?.state).toBe('active');
   });
 
-  it('should fail cleanly when no brief exists', async () => {
+  it('should return empty snapshot with brief (none) when no brief exists in --once mode', async () => {
     const emptyDir = await mkdtemp(join(tmpdir(), TEST_PREFIX));
     const result = await runCli(['watch', '--once'], { cwd: emptyDir });
-    expect(result.code).not.toBe(0);
+    await expectSuccess(result);
     const output = parseJsonOutput(result.stdout);
-    expect(output.ok).toBe(false);
+    expect(output.ok).toBe(true);
+    expect(output.snapshot.briefId).toBe('(none)');
+    expect(output.snapshot.briefStatus).toBe('none');
+    expect(output.snapshot.tasks).toEqual([]);
+    expect(output.snapshot.frontmanState).toBe('idle');
     await rm(emptyDir, { recursive: true, force: true });
   });
 });
