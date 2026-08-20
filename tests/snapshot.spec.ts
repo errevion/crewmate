@@ -75,4 +75,17 @@ describe('Workflow Snapshot Frontman State Derivation', () => {
     snapshot = buildSnapshot({ briefId }, db);
     expect(snapshot?.frontmanState).toBe('idle');
   });
+
+  it('builds empty snapshot when allowEmpty is true and no brief exists', () => {
+    const emptyDb = new Database(':memory:');
+    runMigrations(emptyDb);
+
+    const snapshot = buildSnapshot({ allowEmpty: true }, emptyDb);
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.briefId).toBe('(none)');
+    expect(snapshot?.briefStatus).toBe('none');
+    expect(snapshot?.tasks).toEqual([]);
+    expect(snapshot?.events).toEqual([]);
+    expect(snapshot?.frontmanState).toBe('idle');
+  });
 });

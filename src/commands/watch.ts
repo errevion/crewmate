@@ -41,7 +41,7 @@ export function registerWatchCommand(program: Command): void {
     .option('--interval <ms>', 'Database poll interval in ms', String(DEFAULT_INTERVAL_MS))
     .option('--once', 'Print a single snapshot as JSON and exit (non-interactive)')
     .action((opts: WatchOptions) => {
-      const snapshot = buildSnapshot({ briefId: opts.brief });
+      const snapshot = buildSnapshot({ briefId: opts.brief, allowEmpty: true });
 
       if (opts.once || !process.stdout.isTTY) {
         if (!snapshot) {
@@ -50,11 +50,6 @@ export function registerWatchCommand(program: Command): void {
         }
         process.stdout.write(JSON.stringify({ ok: true, snapshot }) + '\n');
         return;
-      }
-
-      if (!snapshot) {
-        process.stdout.write(JSON.stringify({ ok: false, error: 'No brief found' }) + '\n');
-        process.exit(1);
       }
 
       runDashboard(opts);
@@ -191,6 +186,17 @@ function runDashboard(opts: WatchOptions): void {
   }
 
   function renderHeader(s: WorkflowSnapshot): void {
+    if (s.briefId === '(none)') {
+      header.setContent(
+        [
+          `Brief {bold}{red-fg}(none){/red-fg}{/bold} · status: {gray-fg}none{/gray-fg} · events: {cyan-fg}0{/cyan-fg}`,
+          `Goal: {gray-fg}(no brief created yet — run /brief or \`crewmate brief init\` to begin){/gray-fg}`,
+          `[{yellow-fg}░░░░░░░░░░{/yellow-fg}] {bold}0/0{/bold} tasks done · 0 running`,
+        ].join('\n')
+      );
+      return;
+    }
+
     const progress = s.totalCount > 0 ? Math.round((s.completedCount / s.totalCount) * 10) : 0;
     const bar = '█'.repeat(progress) + '░'.repeat(10 - progress);
     const status =
@@ -245,7 +251,13 @@ function runDashboard(opts: WatchOptions): void {
       }
     }
     if (lines.length === 0) {
-      lines.push('{gray-fg}No tasks yet. Run /brief and /execute to get started.{/gray-fg}');
+      if (s.briefId === '(none)') {
+        lines.push(
+          '{gray-fg}No brief available. Run /brief or `crewmate brief init` to get started.{/gray-fg}'
+        );
+      } else {
+        lines.push('{gray-fg}No tasks yet. Run /brief and /execute to get started.{/gray-fg}');
+      }
     }
     taskBoard.setContent(lines.join('\n'));
   }
@@ -276,13 +288,9 @@ function runDashboard(opts: WatchOptions): void {
   }
 
   function pollDb(): void {
-    const snapshot = buildSnapshot({ briefId: opts.brief });
+    const snapshot = buildSnapshot({ briefId: opts.brief, allowEmpty: true });
     if (!snapshot) {
-      clearInterval(pollTimer);
-      clearInterval(animTimer);
-      screen.destroy();
-      process.stdout.write(JSON.stringify({ ok: false, error: 'No brief found' }) + '\n');
-      process.exit(1);
+      return;
     }
 
     currentSnapshot = snapshot;
