@@ -4,6 +4,11 @@ import { buildSnapshot, type WorkflowSnapshot } from '../utils/snapshot.js';
 import { renderGraph } from '../utils/graph.js';
 import { SPINNERS } from '../utils/ascii.js';
 import type { ExecutionEvent } from '../models/event.js';
+import { resolveBrief } from '../db/brief-repo.js';
+import type { Brief } from '../models/brief.js';
+import { getDb } from '../db/connection.js';
+import { getTaskById, listTasksByBrief } from '../db/task-repo.js';
+import type { Task } from '../models/task.js';
 
 // Resolve blessed default export for CJS/ESM interop
 const blessed = ((blessedModule as unknown as { default?: typeof blessedModule }).default ||
@@ -28,6 +33,288 @@ function formatTime(createdAt: string): string {
     return createdAt;
   }
   return date.toISOString().slice(11, 19);
+}
+
+/**
+ * Formats a brief into a tagged string for display in the TUI overlay modal
+ *
+ * @param brief The brief to format, or null if not found
+ * @returns Tagged string representation of the brief
+ */
+export function formatBriefDetails(brief: Brief | null): string {
+  if (!brief) {
+    return '{yellow-fg}No brief found.{/yellow-fg}\n\nRun /brief or `crewmate brief init` to create one.';
+  }
+
+  const lines: string[] = [];
+  lines.push(`{bold}{cyan-fg}Brief ID:{/cyan-fg}{/bold} ${brief.id}`);
+  lines.push(
+    `{bold}{cyan-fg}Status:{/cyan-fg}{/bold} ${
+      brief.status === 'complete' ? '{green-fg}complete{/green-fg}' : '{yellow-fg}draft{/yellow-fg}'
+    }`
+  );
+  lines.push(
+    `{bold}{cyan-fg}Work Type:{/cyan-fg}{/bold} ${brief.workType ?? '{gray-fg}(not set){/gray-fg}'}`
+  );
+  lines.push(
+    `{bold}{cyan-fg}Goal:{/cyan-fg}{/bold} ${brief.goal ?? '{gray-fg}(not set){/gray-fg}'}`
+  );
+  lines.push(
+    `{bold}{cyan-fg}Created:{/cyan-fg}{/bold} ${brief.createdAt} · {bold}{cyan-fg}Updated:{/cyan-fg}{/bold} ${brief.updatedAt}`
+  );
+  lines.push('');
+
+  // Scope
+  lines.push(
+    '{bold}{yellow-fg}── Scope ──────────────────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.scope) {
+    if (brief.scope.included?.length) {
+      lines.push('  {bold}Included:{/bold}');
+      for (const inc of brief.scope.included) {
+        lines.push(`    • ${inc}`);
+      }
+    }
+    if (brief.scope.excluded?.length) {
+      lines.push('  {bold}Excluded:{/bold}');
+      for (const exc of brief.scope.excluded) {
+        lines.push(`    • ${exc}`);
+      }
+    }
+    if (!brief.scope.included?.length && !brief.scope.excluded?.length) {
+      lines.push('  {gray-fg}(empty scope){/gray-fg}');
+    }
+  } else {
+    lines.push('  {gray-fg}(not set){/gray-fg}');
+  }
+  lines.push('');
+
+  // Functional Requirements
+  lines.push(
+    '{bold}{yellow-fg}── Functional Requirements ───────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.functionalRequirements?.length) {
+    brief.functionalRequirements.forEach((req, i) => lines.push(`  ${i + 1}. ${req}`));
+  } else {
+    lines.push('  {gray-fg}(not set){/gray-fg}');
+  }
+  lines.push('');
+
+  // Acceptance Criteria
+  lines.push(
+    '{bold}{yellow-fg}── Acceptance Criteria ───────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.acceptanceCriteria?.length) {
+    brief.acceptanceCriteria.forEach((crit, i) => lines.push(`  ${i + 1}. ${crit}`));
+  } else {
+    lines.push('  {gray-fg}(not set){/gray-fg}');
+  }
+  lines.push('');
+
+  // Technical Stack
+  lines.push(
+    '{bold}{yellow-fg}── Technical Stack ───────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.technicalStack) {
+    const ts = brief.technicalStack;
+    if (ts.frontend?.length) {
+      lines.push(`  {bold}Frontend:{/bold} ${ts.frontend.join(', ')}`);
+    }
+    if (ts.backend?.length) {
+      lines.push(`  {bold}Backend:{/bold} ${ts.backend.join(', ')}`);
+    }
+    if (ts.database?.length) {
+      lines.push(`  {bold}Database:{/bold} ${ts.database.join(', ')}`);
+    }
+    if (ts.tools?.length) {
+      lines.push(`  {bold}Tools:{/bold} ${ts.tools.join(', ')}`);
+    }
+    if (!ts.frontend?.length && !ts.backend?.length && !ts.database?.length && !ts.tools?.length) {
+      lines.push('  {gray-fg}(empty stack){/gray-fg}');
+    }
+  } else {
+    lines.push('  {gray-fg}(not set){/gray-fg}');
+  }
+  lines.push('');
+
+  // Constraints
+  lines.push(
+    '{bold}{yellow-fg}── Constraints ───────────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.constraints) {
+    if (brief.constraints.requirements?.length) {
+      lines.push('  {bold}Requirements:{/bold}');
+      for (const r of brief.constraints.requirements) {
+        lines.push(`    • ${r}`);
+      }
+    }
+    if (brief.constraints.exclusions?.length) {
+      lines.push('  {bold}Exclusions:{/bold}');
+      for (const e of brief.constraints.exclusions) {
+        lines.push(`    • ${e}`);
+      }
+    }
+    if (!brief.constraints.requirements?.length && !brief.constraints.exclusions?.length) {
+      lines.push('  {gray-fg}(empty constraints){/gray-fg}');
+    }
+  } else {
+    lines.push('  {gray-fg}(not set){/gray-fg}');
+  }
+  lines.push('');
+
+  // Deliverables
+  lines.push(
+    '{bold}{yellow-fg}── Deliverables ──────────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.deliverables?.length) {
+    for (const d of brief.deliverables) {
+      lines.push(`  • [${d.type}] (${d.format})`);
+    }
+  } else {
+    lines.push('  {gray-fg}(not set){/gray-fg}');
+  }
+  lines.push('');
+
+  // Dependencies & Risks
+  lines.push(
+    '{bold}{yellow-fg}── Dependencies & Risks ──────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.dependencies?.length) {
+    lines.push('  {bold}Dependencies:{/bold}');
+    for (const d of brief.dependencies) {
+      lines.push(`    • ${d}`);
+    }
+  }
+  if (brief.risks?.length) {
+    lines.push('  {bold}Risks:{/bold}');
+    for (const r of brief.risks) {
+      lines.push(`    • ${r}`);
+    }
+  }
+  if (!brief.dependencies?.length && !brief.risks?.length) {
+    lines.push('  {gray-fg}(none){/gray-fg}');
+  }
+  lines.push('');
+
+  // References & Existing Codebase
+  lines.push(
+    '{bold}{yellow-fg}── References & Codebase ─────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.existingCodebase?.length) {
+    lines.push('  {bold}Existing Codebase:{/bold}');
+    for (const c of brief.existingCodebase) {
+      lines.push(`    • ${c}`);
+    }
+  }
+  if (brief.referenceMaterials?.length) {
+    lines.push('  {bold}Reference Materials:{/bold}');
+    for (const r of brief.referenceMaterials) {
+      lines.push(`    • ${r}`);
+    }
+  }
+  if (!brief.existingCodebase?.length && !brief.referenceMaterials?.length) {
+    lines.push('  {gray-fg}(none){/gray-fg}');
+  }
+  lines.push('');
+
+  // Quality Standards
+  lines.push(
+    '{bold}{yellow-fg}── Quality Standards ─────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (brief.qualityStandards) {
+    lines.push(`  ${JSON.stringify(brief.qualityStandards, null, 2).replace(/\n/g, '\n  ')}`);
+  } else {
+    lines.push('  {gray-fg}(not set){/gray-fg}');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Formats a task for the task selector list item
+ *
+ * @param task The task to format
+ * @returns Tagged string representation for the list item
+ */
+function formatTaskListItem(task: Task): string {
+  let marker = '{cyan-fg}[ ]{/cyan-fg}';
+  if (task.status === 'completed') {
+    marker = '{green-fg}[✓]{/green-fg}';
+  } else if (task.status === 'in_progress') {
+    marker = '{yellow-fg}[→]{/yellow-fg}';
+  }
+  const field = task.field ? ` {gray-fg}(${task.field}){/gray-fg}` : '';
+  return `${marker} {bold}${task.title}{/bold}${field}`;
+}
+
+/**
+ * Formats a task into a tagged string for display in the TUI overlay modal
+ *
+ * @param task The task to format, or null if not found
+ * @param allTasks Optional list or map of all tasks for dependency title resolution
+ * @returns Tagged string representation of the task
+ */
+export function formatTaskDetails(
+  task: Task | null,
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  if (!task) {
+    return '{yellow-fg}No task selected.{/yellow-fg}';
+  }
+
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const lines: string[] = [];
+  lines.push(`{bold}{cyan-fg}Task ID:{/cyan-fg}{/bold} ${task.id}`);
+  lines.push(`{bold}{cyan-fg}Title:{/cyan-fg}{/bold} ${task.title}`);
+
+  let statusText = '{cyan-fg}pending [ ]{/cyan-fg}';
+  if (task.status === 'completed') {
+    statusText = '{green-fg}complete [✓]{/green-fg}';
+  } else if (task.status === 'in_progress') {
+    statusText = '{yellow-fg}in_progress [→]{/yellow-fg}';
+  }
+  lines.push(`{bold}{cyan-fg}Status:{/cyan-fg}{/bold} ${statusText}`);
+  lines.push(`{bold}{cyan-fg}Brief ID:{/cyan-fg}{/bold} ${task.briefId}`);
+  if (task.field) {
+    lines.push(`{bold}{cyan-fg}Brief Field:{/cyan-fg}{/bold} ${task.field}`);
+  }
+  lines.push(
+    `{bold}{cyan-fg}Created:{/cyan-fg}{/bold} ${task.createdAt} · {bold}{cyan-fg}Updated:{/cyan-fg}{/bold} ${task.updatedAt}`
+  );
+  lines.push('');
+
+  // Description
+  lines.push(
+    '{bold}{yellow-fg}── Description ───────────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (task.description && task.description.trim().length > 0) {
+    lines.push(task.description);
+  } else {
+    lines.push('  {gray-fg}(no description provided){/gray-fg}');
+  }
+  lines.push('');
+
+  // Dependencies
+  lines.push(
+    '{bold}{yellow-fg}── Dependencies ──────────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (task.dependencies && task.dependencies.length > 0) {
+    for (const depId of task.dependencies) {
+      const depTask = tasksMap.get(depId);
+      const depTitle = depTask ? depTask.title : depId;
+      lines.push(`  • {bold}${depId}:{/bold} ${depTitle}`);
+    }
+  } else {
+    lines.push('  {gray-fg}(none){/gray-fg}');
+  }
+
+  return lines.join('\n');
 }
 
 /**
@@ -164,13 +451,92 @@ function runDashboard(opts: WatchOptions): void {
     left: 0,
     width: '100%',
     height: 2,
-    content: ' q / Ctrl-C: quit ',
+    content: ' q / Ctrl-C: quit · b: brief details · t: task details ',
     style: { fg: 'gray' },
     tags: true,
   });
 
+  const briefModal = blessed.box({
+    parent: screen,
+    top: 'center',
+    left: 'center',
+    width: '90%',
+    height: '90%',
+    label: ' Brief Details (Press b or Esc to close, ↑/↓/PgUp/PgDn to scroll) ',
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: 'cyan' }, bg: 'black' },
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'cyan' },
+    },
+    keys: true,
+    vi: true,
+    mouse: true,
+    hidden: true,
+  });
+
+  const taskListModal = blessed.list({
+    parent: screen,
+    top: 'center',
+    left: 'center',
+    width: '80%',
+    height: '70%',
+    label: ' Select Task (Press Enter to view, Esc/t to close, ↑/↓ to navigate) ',
+    border: { type: 'line' },
+    style: {
+      fg: 'white',
+      border: { fg: 'blue' },
+      bg: 'black',
+      selected: {
+        bg: 'blue',
+        fg: 'white',
+        bold: true,
+      },
+      item: {
+        fg: 'white',
+      },
+    },
+    tags: true,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollable: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'blue' },
+    },
+    hidden: true,
+  });
+
+  const taskDetailModal = blessed.box({
+    parent: screen,
+    top: 'center',
+    left: 'center',
+    width: '90%',
+    height: '90%',
+    label: ' Task Details (Press Esc to return to list, ↑/↓/PgUp/PgDn to scroll) ',
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: 'blue' }, bg: 'black' },
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'blue' },
+    },
+    keys: true,
+    vi: true,
+    mouse: true,
+    hidden: true,
+  });
+
   let spinnerFrame = 0;
   let currentSnapshot: WorkflowSnapshot | null = null;
+  let currentTasks: Task[] = [];
+  let selectedTaskId: string | null = null;
 
   function eventColor(type: ExecutionEvent['type']): string {
     switch (type) {
@@ -298,6 +664,29 @@ function runDashboard(opts: WatchOptions): void {
     renderTaskBoard(snapshot);
     renderEventFeed(snapshot);
     renderActivity(snapshot);
+
+    if (!briefModal.hidden) {
+      const brief = resolveBrief(opts.brief);
+      briefModal.setContent(formatBriefDetails(brief));
+    }
+
+    if (!taskDetailModal.hidden && selectedTaskId) {
+      const task = getTaskById(getDb(), selectedTaskId);
+      const brief = resolveBrief(opts.brief);
+      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+      taskDetailModal.setContent(formatTaskDetails(task, allTasks));
+    }
+
+    if (!taskListModal.hidden) {
+      const brief = resolveBrief(opts.brief);
+      if (brief) {
+        currentTasks = listTasksByBrief(getDb(), brief.id);
+        if (currentTasks.length > 0) {
+          taskListModal.setItems(currentTasks.map(formatTaskListItem));
+        }
+      }
+    }
+
     screen.render();
   }
 
@@ -318,12 +707,165 @@ function runDashboard(opts: WatchOptions): void {
   );
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
-  screen.key(['q', 'C-c', 'escape'], () => {
+  function openTaskListModal(): void {
+    const brief = resolveBrief(opts.brief);
+    if (!brief) {
+      taskListModal.setItems(['{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}']);
+      currentTasks = [];
+    } else {
+      currentTasks = listTasksByBrief(getDb(), brief.id);
+      if (currentTasks.length === 0) {
+        taskListModal.setItems(['{yellow-fg}(no tasks yet — run /brief and /execute){/yellow-fg}']);
+      } else {
+        taskListModal.setItems(currentTasks.map(formatTaskListItem));
+        taskListModal.select(0);
+      }
+    }
+    taskListModal.show();
+    taskListModal.focus();
+    screen.render();
+  }
+
+  function showTaskDetail(taskId: string): void {
+    selectedTaskId = taskId;
+    const task = getTaskById(getDb(), taskId);
+    const brief = resolveBrief(opts.brief);
+    const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+    taskDetailModal.setContent(formatTaskDetails(task, allTasks));
+    taskDetailModal.scrollTo(0);
+    taskListModal.hide();
+    taskDetailModal.show();
+    taskDetailModal.focus();
+    screen.render();
+  }
+
+  taskListModal.on('select', (_item, index) => {
+    const task = currentTasks[index];
+    if (task) {
+      showTaskDetail(task.id);
+    }
+  });
+
+  function toggleTaskListModal(): void {
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+      openTaskListModal();
+      return;
+    }
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+      screen.render();
+      return;
+    }
+    if (!briefModal.hidden) {
+      briefModal.hide();
+    }
+    openTaskListModal();
+  }
+
+  function toggleBriefModal(): void {
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+    }
+    if (briefModal.hidden) {
+      const brief = resolveBrief(opts.brief);
+      briefModal.setContent(formatBriefDetails(brief));
+      briefModal.scrollTo(0);
+      briefModal.show();
+      briefModal.focus();
+      screen.render();
+    } else {
+      briefModal.hide();
+      screen.render();
+    }
+  }
+
+  screen.key(['b', 'B'], () => {
+    toggleBriefModal();
+  });
+
+  screen.key(['t', 'T'], () => {
+    toggleTaskListModal();
+  });
+
+  screen.key(['escape'], () => {
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+      openTaskListModal();
+      return;
+    }
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+      screen.render();
+      return;
+    }
+    if (!briefModal.hidden) {
+      briefModal.hide();
+      screen.render();
+      return;
+    }
     clearInterval(pollTimer);
     clearInterval(animTimer);
     cleanup();
     screen.destroy();
     process.exit(0);
+  });
+
+  screen.key(['q', 'C-c'], () => {
+    clearInterval(pollTimer);
+    clearInterval(animTimer);
+    cleanup();
+    screen.destroy();
+    process.exit(0);
+  });
+
+  screen.key(['up', 'k'], () => {
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.scroll(-1);
+      screen.render();
+    } else if (!briefModal.hidden) {
+      briefModal.scroll(-1);
+      screen.render();
+    } else if (!taskListModal.hidden) {
+      taskListModal.up(1);
+      screen.render();
+    }
+  });
+
+  screen.key(['down', 'j'], () => {
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.scroll(1);
+      screen.render();
+    } else if (!briefModal.hidden) {
+      briefModal.scroll(1);
+      screen.render();
+    } else if (!taskListModal.hidden) {
+      taskListModal.down(1);
+      screen.render();
+    }
+  });
+
+  screen.key(['pageup'], () => {
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.scroll(-5);
+      screen.render();
+    } else if (!briefModal.hidden) {
+      briefModal.scroll(-5);
+      screen.render();
+    }
+  });
+
+  screen.key(['pagedown'], () => {
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.scroll(5);
+      screen.render();
+    } else if (!briefModal.hidden) {
+      briefModal.scroll(5);
+      screen.render();
+    }
   });
 
   process.on('exit', cleanup);
