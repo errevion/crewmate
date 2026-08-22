@@ -1,13 +1,27 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import type { HarnessAdapter, InstallResult } from '../../types.js';
+import { dirname, join } from 'node:path';
+import type {
+  FileUpdateStatus,
+  HarnessAdapter,
+  InstallResult,
+  ManifestFileEntry,
+  UpdateOptions,
+  UpdateResult,
+} from '../../types.js';
+import {
+  computeHash,
+  createBackup,
+  CREWMATE_VERSION,
+  readManifest,
+  writeManifest,
+} from '../../manifest.js';
 import { CREWMATE_PLUGIN } from './templates/crewmate-plugin.js';
 import BRIEF_MD from './templates/brief.md';
 import EXECUTE_MD from './templates/execute.md';
 import FRONTMAN_MD from './templates/agents/frontman.md';
 import SCOUT_MD from './templates/agents/scout.md';
-import PLANNER_MD from './templates/agents/planner.md';
-import EXECUTOR_MD from './templates/agents/executor.md';
+import PLANNER_MD from './templates/agents/Planner.md';
+import EXECUTOR_MD from './templates/agents/Executor.md';
 
 const PLUGIN_DEP = '@opencode-ai/plugin';
 
@@ -26,60 +40,26 @@ const getPluginVersion = (): string => {
 /**
  * Adapter for OpenCode AI coding assistant harness
  *
- * Installs crewmate integration files including plugins, commands, and package configuration
+ * Installs and updates crewmate integration files including plugins, commands, and package configuration
  */
 export class OpenCodeAdapter implements HarnessAdapter {
   name = 'opencode';
   description = 'OpenCode AI coding assistant';
 
-  /**
-   * Installs crewmate integration files into the target directory
-   *
-   * Creates plugin files, command templates, and updates package.json with dependencies
-   *
-   * @param targetDir - The target directory to install files into
-   * @returns Promise resolving to installation result with harness name and written files
-   */
-  async install(targetDir: string): Promise<InstallResult> {
-    const baseDir = join(targetDir, '.opencode');
-    const pluginsDir = join(baseDir, 'plugins');
-    const commandsDir = join(baseDir, 'commands');
-    const agentsDir = join(baseDir, 'agents');
-    const filesWritten: string[] = [];
+  private getTemplateFiles(): Record<string, string> {
+    return {
+      '.opencode/plugins/crewmate.ts': CREWMATE_PLUGIN,
+      '.opencode/commands/brief.md': BRIEF_MD,
+      '.opencode/commands/execute.md': EXECUTE_MD,
+      '.opencode/agents/frontman.md': FRONTMAN_MD,
+      '.opencode/agents/scout.md': SCOUT_MD,
+      '.opencode/agents/planner.md': PLANNER_MD,
+      '.opencode/agents/executor.md': EXECUTOR_MD,
+    };
+  }
 
-    mkdirSync(pluginsDir, { recursive: true });
-    mkdirSync(commandsDir, { recursive: true });
-    mkdirSync(agentsDir, { recursive: true });
-
-    const pluginPath = join(pluginsDir, 'crewmate.ts');
-    writeFileSync(pluginPath, CREWMATE_PLUGIN, 'utf-8');
-    filesWritten.push('.opencode/plugins/crewmate.ts');
-
-    const commandPath = join(commandsDir, 'brief.md');
-    writeFileSync(commandPath, BRIEF_MD, 'utf-8');
-    filesWritten.push('.opencode/commands/brief.md');
-
-    const executeCommandPath = join(commandsDir, 'execute.md');
-    writeFileSync(executeCommandPath, EXECUTE_MD, 'utf-8');
-    filesWritten.push('.opencode/commands/execute.md');
-
-    const frontmanPath = join(agentsDir, 'frontman.md');
-    writeFileSync(frontmanPath, FRONTMAN_MD, 'utf-8');
-    filesWritten.push('.opencode/agents/frontman.md');
-
-    const scoutPath = join(agentsDir, 'scout.md');
-    writeFileSync(scoutPath, SCOUT_MD, 'utf-8');
-    filesWritten.push('.opencode/agents/scout.md');
-
-    const plannerPath = join(agentsDir, 'planner.md');
-    writeFileSync(plannerPath, PLANNER_MD, 'utf-8');
-    filesWritten.push('.opencode/agents/planner.md');
-
-    const executorPath = join(agentsDir, 'executor.md');
-    writeFileSync(executorPath, EXECUTOR_MD, 'utf-8');
-    filesWritten.push('.opencode/agents/executor.md');
-
-    const pkgPath = join(baseDir, 'package.json');
+  private generatePackageJson(targetDir: string): string {
+    const pkgPath = join(targetDir, '.opencode', 'package.json');
     let pkg: Record<string, unknown> = {};
     if (existsSync(pkgPath)) {
       try {
@@ -91,9 +71,153 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const deps = (pkg.dependencies ?? {}) as Record<string, string>;
     deps[PLUGIN_DEP] = getPluginVersion();
     pkg.dependencies = deps;
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
-    filesWritten.push('.opencode/package.json');
+    return JSON.stringify(pkg, null, 2) + '\n';
+  }
+
+  /**
+   * Installs crewmate integration files into the target directory
+   *
+   * Creates plugin files, command templates, and updates package.json with dependencies
+   *
+   * @param targetDir - The target directory to install files into
+   * @returns Promise resolving to installation result with harness name and written files
+   */
+  async install(targetDir: string): Promise<InstallResult> {
+    const filesWritten: string[] = [];
+    const manifestEntries: Record<string, ManifestFileEntry> = {};
+    const now = new Date().toISOString();
+
+    const templateFiles = this.getTemplateFiles();
+    for (const [relPath, content] of Object.entries(templateFiles)) {
+      const absPath = join(targetDir, relPath);
+      mkdirSync(dirname(absPath), { recursive: true });
+      writeFileSync(absPath, content, 'utf-8');
+      filesWritten.push(relPath);
+      manifestEntries[relPath] = {
+        hash: computeHash(content),
+        updatedAt: now,
+      };
+    }
+
+    const pkgContent = this.generatePackageJson(targetDir);
+    const pkgRelPath = '.opencode/package.json';
+    const pkgAbsPath = join(targetDir, pkgRelPath);
+    mkdirSync(dirname(pkgAbsPath), { recursive: true });
+    writeFileSync(pkgAbsPath, pkgContent, 'utf-8');
+    filesWritten.push(pkgRelPath);
+    manifestEntries[pkgRelPath] = {
+      hash: computeHash(pkgContent),
+      updatedAt: now,
+    };
+
+    writeManifest(targetDir, this.name, manifestEntries, now);
 
     return { harness: this.name, filesWritten };
+  }
+
+  /**
+   * Updates crewmate integration files in the target directory
+   *
+   * If existing files were modified by the user, creates backups in .crewmate/backups/
+   * and updates them to the latest template versions.
+   *
+   * @param targetDir - The target directory to update
+   * @param options - Update options (force, dryRun, backup)
+   * @returns Promise resolving to UpdateResult
+   */
+  async update(targetDir: string, options: UpdateOptions = {}): Promise<UpdateResult> {
+    const existingManifest = readManifest(targetDir);
+    const manifestEntries: Record<string, ManifestFileEntry> = {
+      ...(existingManifest?.files ?? {}),
+    };
+    const now = new Date().toISOString();
+
+    const templateFiles = this.getTemplateFiles();
+    templateFiles['.opencode/package.json'] = this.generatePackageJson(targetDir);
+
+    const fileStatuses: FileUpdateStatus[] = [];
+    const backedUpFiles: string[] = [];
+
+    for (const [relPath, newContent] of Object.entries(templateFiles)) {
+      const absPath = join(targetDir, relPath);
+      const fileExists = existsSync(absPath);
+      const newHash = computeHash(newContent);
+
+      if (!fileExists) {
+        // File didn't exist before, create it
+        if (!options.dryRun) {
+          mkdirSync(dirname(absPath), { recursive: true });
+          writeFileSync(absPath, newContent, 'utf-8');
+          manifestEntries[relPath] = { hash: newHash, updatedAt: now };
+        }
+        fileStatuses.push({ path: relPath, action: 'created' });
+        continue;
+      }
+
+      const currentContent = readFileSync(absPath, 'utf-8');
+      const currentHash = computeHash(currentContent);
+
+      if (currentHash === newHash) {
+        // File content is identical to latest template
+        fileStatuses.push({ path: relPath, action: 'unchanged' });
+        manifestEntries[relPath] = { hash: newHash, updatedAt: now };
+        continue;
+      }
+
+      // Content differs from new template.
+      // Check if file was modified by user since last recorded installation/update.
+      const previousRecordedHash = existingManifest?.files?.[relPath]?.hash;
+      const isUserModified = previousRecordedHash && previousRecordedHash !== currentHash;
+
+      let backupPath: string | undefined;
+      const shouldBackup = options.backup !== false && (isUserModified || !previousRecordedHash);
+
+      if (shouldBackup) {
+        if (!options.dryRun) {
+          backupPath = createBackup(targetDir, relPath);
+          if (backupPath) {
+            backedUpFiles.push(backupPath);
+          }
+        } else {
+          backupPath = `.crewmate/backups/<timestamp>/${relPath}`;
+          backedUpFiles.push(backupPath);
+        }
+      }
+
+      if (!options.dryRun) {
+        mkdirSync(dirname(absPath), { recursive: true });
+        writeFileSync(absPath, newContent, 'utf-8');
+        manifestEntries[relPath] = { hash: newHash, updatedAt: now };
+      }
+
+      fileStatuses.push({
+        path: relPath,
+        action: backupPath ? 'backed_up_and_updated' : 'updated',
+        ...(backupPath && { backupPath }),
+      });
+    }
+
+    if (!options.dryRun) {
+      writeManifest(targetDir, this.name, manifestEntries, existingManifest?.installedAt ?? now);
+    }
+
+    const summary = {
+      total: fileStatuses.length,
+      created: fileStatuses.filter((f) => f.action === 'created').length,
+      updated: fileStatuses.filter(
+        (f) => f.action === 'updated' || f.action === 'backed_up_and_updated'
+      ).length,
+      unchanged: fileStatuses.filter((f) => f.action === 'unchanged').length,
+      backedUp: backedUpFiles.length,
+    };
+
+    return {
+      harness: this.name,
+      version: CREWMATE_VERSION,
+      files: fileStatuses,
+      backedUpFiles,
+      summary,
+      ...(options.dryRun && { dryRun: true }),
+    };
   }
 }

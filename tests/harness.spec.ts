@@ -30,6 +30,7 @@ describe('harness registry', () => {
         name: expect.any(String),
         description: expect.any(String),
         install: expect.any(Function),
+        update: expect.any(Function),
       });
     }
   });
