@@ -4,10 +4,20 @@ import {
   parseFieldValue,
   getMissingRequiredFields,
   isBriefComplete,
+  FIELD_FORMAT_HINTS,
 } from '../src/utils/validation.js';
-import type { Brief } from '../src/models/brief.js';
+import { BRIEF_FIELDS, type Brief } from '../src/models/brief.js';
 
 describe('validation', () => {
+  describe('FIELD_FORMAT_HINTS', () => {
+    it('should provide format hints for all valid brief fields', () => {
+      for (const field of BRIEF_FIELDS) {
+        expect(FIELD_FORMAT_HINTS[field]).toBeDefined();
+        expect(typeof FIELD_FORMAT_HINTS[field]).toBe('string');
+        expect(FIELD_FORMAT_HINTS[field].length).toBeGreaterThan(0);
+      }
+    });
+  });
   describe('isValidField', () => {
     const validFields = [
       'workType',
@@ -65,8 +75,60 @@ describe('validation', () => {
       expect(result).toEqual({ included: ['a'], excluded: ['b'] });
     });
 
-    it('should throw on invalid JSON', () => {
-      expect(() => parseFieldValue('scope', '{invalid')).toThrow(/Invalid JSON/i);
+    it('should throw on invalid JSON with format hint', () => {
+      expect(() => parseFieldValue('scope', '{invalid')).toThrow(
+        /Expected format: \{"included": string\[\], "excluded": string\[\]\}/
+      );
+    });
+
+    it('should throw on invalid structure for scope', () => {
+      expect(() => parseFieldValue('scope', '{"invalid": true}')).toThrow(
+        /Invalid structure for field "scope"/
+      );
+      expect(() => parseFieldValue('scope', '["item"]')).toThrow(
+        /Invalid structure for field "scope"/
+      );
+    });
+
+    it('should throw on invalid structure for array fields', () => {
+      expect(() => parseFieldValue('functionalRequirements', '{"not": "an array"}')).toThrow(
+        /Invalid structure for field "functionalRequirements"/
+      );
+      expect(() => parseFieldValue('acceptanceCriteria', '"plain string"')).toThrow(
+        /Invalid structure for field "acceptanceCriteria"/
+      );
+    });
+
+    it('should throw on invalid structure for technicalStack and constraints', () => {
+      expect(() => parseFieldValue('technicalStack', '["not", "object"]')).toThrow(
+        /Invalid structure for field "technicalStack"/
+      );
+      expect(() => parseFieldValue('technicalStack', '{"frontend": 123}')).toThrow(
+        /Invalid structure for field "technicalStack"/
+      );
+      expect(() => parseFieldValue('constraints', '"not an object"')).toThrow(
+        /Invalid structure for field "constraints"/
+      );
+      expect(() => parseFieldValue('constraints', '{"requirements": 123}')).toThrow(
+        /Invalid structure for field "constraints"/
+      );
+    });
+
+    it('should normalize string values in technicalStack and constraints to arrays', () => {
+      const ts = parseFieldValue('technicalStack', '{"frontend": "React", "backend": ["Node"]}');
+      expect(ts).toEqual({ frontend: ['React'], backend: ['Node'] });
+
+      const constraints = parseFieldValue(
+        'constraints',
+        '{"requirements": "Node 20+", "exclusions": ["Cloud"]}'
+      );
+      expect(constraints).toEqual({ requirements: ['Node 20+'], exclusions: ['Cloud'] });
+    });
+
+    it('should throw on invalid structure for deliverables', () => {
+      expect(() => parseFieldValue('deliverables', '{"type": "code"}')).toThrow(
+        /Invalid structure for field "deliverables"/
+      );
     });
 
     it('should parse complex nested JSON', () => {

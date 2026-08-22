@@ -20,10 +20,11 @@ import BRIEF_MD from './templates/brief.md';
 import EXECUTE_MD from './templates/execute.md';
 import FRONTMAN_MD from './templates/agents/frontman.md';
 import SCOUT_MD from './templates/agents/scout.md';
-import PLANNER_MD from './templates/agents/Planner.md';
-import EXECUTOR_MD from './templates/agents/Executor.md';
+import PLANNER_MD from './templates/agents/planner.md';
+import EXECUTOR_MD from './templates/agents/executor.md';
 
 const PLUGIN_DEP = '@opencode-ai/plugin';
+const CROSS_SPAWN_DEP = 'cross-spawn';
 
 // Read version from environment variable or package.json peerDependencies
 const getPluginVersion = (): string => {
@@ -70,6 +71,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
     }
     const deps = (pkg.dependencies ?? {}) as Record<string, string>;
     deps[PLUGIN_DEP] = getPluginVersion();
+    deps[CROSS_SPAWN_DEP] = '^7.0.6';
     pkg.dependencies = deps;
     return JSON.stringify(pkg, null, 2) + '\n';
   }

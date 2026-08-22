@@ -12,7 +12,7 @@ import { registerSessionCommand } from './commands/session.js';
 
 const program = new Command();
 
-program.name('crewmate').description('AI agent workflow CLI tool').version('0.1.0');
+program.name('crewmate').description('AI agent workflow CLI tool').version('0.2.1');
 
 registerBriefCommand(program);
 registerInitCommand(program);

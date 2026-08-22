@@ -33,4 +33,16 @@ The user wants to create a structured project brief. Use the crewmate tools to g
 - If the user's initial prompt already contains useful information, extract what you can and pre-fill fields, then confirm with the user.
 - Use `crewmate_check_status` to track progress and let the user know what's remaining.
 
+## Field Format Reference
+
+When calling `crewmate_update_field`:
+- **workType**: `"software"` | `"infrastructure"` | `"data"` | `"documentation"` | `"audit"`
+- **goal**: plain text string
+- **scope**: `{"included": ["..."], "excluded": ["..."]}`
+- **functionalRequirements** / **acceptanceCriteria** / **existingCodebase** / **referenceMaterials** / **dependencies** / **risks**: `["item 1", "item 2"]`
+- **technicalStack**: `{"frontend": ["..."], "backend": ["..."], "database": ["..."], "tools": ["..."]}`
+- **constraints**: `{"exclusions": ["..."], "requirements": ["..."]}`
+- **deliverables**: `[{"type": "code"|"doc"|"report", "format": "file"|"repo"|"presentation"}]`
+- **qualityStandards**: `{"performance": {}, "security": {}, "accessibility": {}}`
+
 The user initial request are: $ARGUMENTS

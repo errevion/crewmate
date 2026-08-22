@@ -1,5 +1,6 @@
 // Template file written into target project's .opencode/plugins/crewmate.ts
 export const CREWMATE_PLUGIN = `import { type Plugin, tool } from "@opencode-ai/plugin"
+import spawn from "cross-spawn"
 
 const z = tool.schema
 
@@ -58,28 +59,65 @@ const FIELD_SCHEMAS = {
 } as const
 
 async function runCrewmate(
-  $: any,
   directory: string,
   args: string[],
 ): Promise<any> {
-  const cmd = ["crewmate", ...args].join(" ")
-  const result = await $\`\${{ raw: cmd }}\`.cwd(directory).quiet().nothrow()
-  const text = typeof result.text === "function" ? result.text().trim() : ""
-  if (!text) {
-    let errorDetails = \`exit code \${result.exitCode}\`
-    if (typeof result.stderr === "string" && result.stderr.trim()) {
-      errorDetails = result.stderr.trim()
-    } else if (result.stderr && typeof result.stderr.toString === "function") {
-      const s = result.stderr.toString().trim()
-      if (s && s !== "[object Object]") errorDetails = s
-    }
-    throw new Error(\`crewmate command failed (\${errorDetails})\`)
-  }
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new Error(\`crewmate returned invalid JSON: \${text}\`)
-  }
+  return new Promise((resolve, reject) => {
+    const child = spawn("crewmate", args, {
+      cwd: directory,
+      windowsHide: true,
+    })
+
+    let stdout = ""
+    let stderr = ""
+
+    child.stdout.on("data", (data) => {
+      stdout += data.toString()
+    })
+
+    child.stderr.on("data", (data) => {
+      stderr += data.toString()
+    })
+
+    child.on("close", (code) => {
+      const text = stdout.trim()
+      let parsed: any = null
+      if (text) {
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          // not JSON
+        }
+      }
+
+      if (code !== 0 || !text) {
+        let errorDetails = stderr.trim()
+        if (!errorDetails && parsed && parsed.error) {
+          errorDetails = parsed.error
+        }
+        if (!errorDetails && text) {
+          errorDetails = text
+        }
+        if (!errorDetails) {
+          errorDetails = \`exit code \${code}\`
+        }
+        return reject(new Error(\`crewmate command failed (\${errorDetails})\`))
+      }
+
+      if (parsed !== null) {
+        if (parsed.ok === false && parsed.error) {
+          return reject(new Error(parsed.error))
+        }
+        return resolve(parsed)
+      }
+
+      reject(new Error(\`crewmate returned invalid JSON: \${text}\`))
+    })
+
+    child.on("error", (err) => {
+      reject(new Error(\`crewmate process error: \${err.message}\`))
+    })
+  })
 }
 
 interface TrackedSubagentSession {
@@ -88,23 +126,23 @@ interface TrackedSubagentSession {
   dispatchedAt: number
 }
 
-const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
+const CrewmatePlugin: Plugin = async ({ directory }: any) => {
   const targetDir = typeof directory === "string" && directory.trim() ? directory : process.cwd()
   const sessionAgentMap = new Map<string, TrackedSubagentSession>()
   const pendingDispatches = new Map<string, { agent: string; taskId?: string; dispatchedAt: number }>()
 
   // Send initial session heartbeat
   const pid = process.pid
-  runCrewmate($, targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
+  runCrewmate(targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
 
   const heartbeatInterval = setInterval(() => {
-    runCrewmate($, targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
+    runCrewmate(targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
   }, 4000)
 
   return {
     dispose: async () => {
       clearInterval(heartbeatInterval)
-      await runCrewmate($, targetDir, ["session", "stop"]).catch(() => {})
+      await runCrewmate(targetDir, ["session", "stop"]).catch(() => {})
     },
 
     tool: {
@@ -113,7 +151,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           "Create a new crewmate brief. Call this before updating any fields. Returns the brief ID.",
         args: {},
         async execute(_, context) {
-          const json = await runCrewmate($, context.directory, ["brief", "init"])
+          const json = await runCrewmate(context.directory, ["brief", "init"])
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Brief created: \${json.id}\`,
@@ -125,14 +163,12 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
       crewmate_update_field: tool({
         description: [
           "Update a field on the current crewmate brief.",
-          \`Valid fields: \${VALID_FIELDS_STR}.\`,
-          "For simple fields (workType, goal), pass a plain string value.",
-          \`For complex fields, pass a JSON string (e.g., scope: '{"included":["x"],"excluded":["y"]}').\`,
-          "workType must be one of: software, infrastructure, data, documentation, audit.",
+          "Simple: workType ('software'|'infrastructure'|'data'|'documentation'|'audit'), goal (string).",
+          "Complex (JSON string): scope {included:[],excluded:[]}, technicalStack {frontend:[],backend:[],database:[],tools:[]}, constraints {exclusions:[],requirements:[]}, deliverables [{type,format}], all other complex fields string[].",
         ].join(" "),
         args: {
           field: z.enum(VALID_FIELDS),
-          value: z.string().describe("Field value (string or JSON)"),
+          value: z.string().describe("Field value (plain string or JSON string)"),
           id: z
             .string()
             .optional()
@@ -140,11 +176,10 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
         },
         async execute(args, context) {
           const idArgs = args.id ? ["--id", args.id] : []
-          const escaped = $.escape(args.value)
+          const b64Value = Buffer.from(args.value, "utf-8").toString("base64")
           const json = await runCrewmate(
-            $,
             context.directory,
-            ["brief", "set", args.field, escaped, ...idArgs],
+            ["brief", "set", args.field, b64Value, "--base64", ...idArgs],
           )
           if (!json.ok) throw new Error(json.error)
           return {
@@ -166,7 +201,6 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
         async execute(args, context) {
           const idArgs = args.id ? ["--id", args.id] : []
           const json = await runCrewmate(
-            $,
             context.directory,
             ["brief", "get", args.field, ...idArgs],
           )
@@ -190,7 +224,6 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
         async execute(args, context) {
           const idArgs = args.id ? ["--id", args.id] : []
           const json = await runCrewmate(
-            $,
             context.directory,
             ["brief", "show", ...idArgs],
           )
@@ -214,7 +247,6 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
         async execute(args, context) {
           const idArgs = args.id ? ["--id", args.id] : []
           const json = await runCrewmate(
-            $,
             context.directory,
             ["brief", "status", ...idArgs],
           )
@@ -238,7 +270,6 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
         async execute(args, context) {
           const idArgs = args.id ? ["--id", args.id] : []
           const json = await runCrewmate(
-            $,
             context.directory,
             ["brief", "complete", ...idArgs],
           )
@@ -280,15 +311,13 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
             : args.description.trim().split(/\\r?\\n/)[0].slice(0, 80)
           const taskDescription = args.description.trim()
 
-          const escapedTitle = $.escape(taskTitle)
-          const escapedDesc = $.escape(taskDescription)
-          const cmdParts = ["task", "add", args.briefId, "--title", escapedTitle, "--description", escapedDesc]
+          const cmdParts = ["task", "add", args.briefId, "--title", taskTitle, "--description", taskDescription]
           if (args.dependencies && args.dependencies.length > 0) {
-            cmdParts.push("--dependencies", ...args.dependencies.map((d: string) => $.escape(d)))
+            cmdParts.push("--dependencies", ...args.dependencies)
           }
-          if (args.field) cmdParts.push("--field", $.escape(args.field))
+          if (args.field) cmdParts.push("--field", args.field)
           
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Added task: \${json.title}\`,
@@ -303,7 +332,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           briefId: z.string().min(1).describe("REQUIRED: The brief ID to list tasks for"),
         },
         async execute(args, context) {
-          const json = await runCrewmate($, context.directory, ["task", "list", "--brief", args.briefId])
+          const json = await runCrewmate(context.directory, ["task", "list", "--brief", args.briefId])
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Tasks for brief \${args.briefId}\`,
@@ -322,7 +351,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           status: z.enum(["pending", "in_progress", "completed"]).describe("REQUIRED: New status"),
         },
         async execute(args, context) {
-          const json = await runCrewmate($, context.directory, [
+          const json = await runCrewmate(context.directory, [
             "task",
             "update",
             args.taskId,
@@ -343,7 +372,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           taskId: z.string().min(1).describe("REQUIRED: The task ID to remove"),
         },
         async execute(args, context) {
-          const json = await runCrewmate($, context.directory, ["task", "remove", args.taskId])
+          const json = await runCrewmate(context.directory, ["task", "remove", args.taskId])
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Removed task \${args.taskId}\`,
@@ -360,13 +389,12 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           files: z.array(z.string()).min(1).describe("REQUIRED: Array of relative file paths to lock"),
         },
         async execute(args, context) {
-          const escapedFiles = args.files.map((f: string) => $.escape(f))
-          const json = await runCrewmate($, context.directory, [
+          const json = await runCrewmate(context.directory, [
             "lock",
             "acquire",
             args.taskId,
             "--files",
-            ...escapedFiles,
+            ...args.files,
           ])
           if (!json.ok) throw new Error(json.error)
           return {
@@ -386,9 +414,9 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
         async execute(args, context) {
           const cmdParts = ["lock", "release", args.taskId]
           if (args.files && args.files.length > 0) {
-            cmdParts.push("--files", ...args.files.map((f: string) => $.escape(f)))
+            cmdParts.push("--files", ...args.files)
           }
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Released locks for task \${args.taskId}\`,
@@ -407,7 +435,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           if (args.taskId) {
             cmdParts.push("--task", args.taskId)
           }
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: "Active file locks",
@@ -431,7 +459,6 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           briefId: z.string().optional().describe("Optional: Brief ID"),
         },
         async execute(args, context) {
-          const escapedContent = $.escape(args.content)
           const cmdParts = [
             "artifact",
             "add",
@@ -439,12 +466,12 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
             "--type",
             args.type,
             "--content",
-            escapedContent,
+            args.content,
           ]
           if (args.briefId) {
             cmdParts.push("--brief", args.briefId)
           }
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Added \${args.type} artifact for task \${args.taskId}\`,
@@ -470,7 +497,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           if (args.taskId) cmdParts.push("--task", args.taskId)
           if (args.type) cmdParts.push("--type", args.type)
 
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: "Execution artifacts",
@@ -497,7 +524,6 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           briefId: z.string().optional().describe("Optional: Brief ID (defaults to latest)"),
         },
         async execute(args, context) {
-          const escapedMessage = $.escape(args.message)
           const cmdParts = [
             "event",
             "add",
@@ -506,12 +532,12 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
             "--type",
             args.type,
             "--message",
-            escapedMessage,
+            args.message,
           ]
           if (args.taskId) cmdParts.push("--task", args.taskId)
           if (args.briefId) cmdParts.push("--brief", args.briefId)
 
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Added \${args.type} event from \${args.actor}\`,
@@ -547,7 +573,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           if (args.type) cmdParts.push("--type", args.type)
           if (args.limit) cmdParts.push("--limit", args.limit)
 
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: "Workflow events",
@@ -580,13 +606,13 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
         async execute(args, context) {
           const cmdParts = ["activity", "set", args.activityType]
           if (args.message) {
-            cmdParts.push("--message", $.escape(args.message))
+            cmdParts.push("--message", args.message)
           }
           if (args.briefId) {
             cmdParts.push("--brief", args.briefId)
           }
 
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Set Frontman activity to \${args.activityType}\`,
@@ -604,7 +630,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           const cmdParts = ["activity", "get"]
           if (args.briefId) cmdParts.push("--brief", args.briefId)
 
-          const json = await runCrewmate($, context.directory, cmdParts)
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: "Frontman activity",
@@ -643,7 +669,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
             }
 
             // Check if a dispatch event for this agent or task was recorded in the last 4 seconds
-            const recent = await runCrewmate($, targetDir, [
+            const recent = await runCrewmate(targetDir, [
               "event",
               "list",
               "--actor",
@@ -673,12 +699,12 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
                 "--type",
                 "dispatched",
                 "--message",
-                $.escape(msg),
+                msg,
               ]
               if (taskId) {
-                cmdParts.push("--task", $.escape(taskId))
+                cmdParts.push("--task", taskId)
               }
-              await runCrewmate($, targetDir, cmdParts).catch(() => {})
+              await runCrewmate(targetDir, cmdParts).catch(() => {})
             }
           }
         }
@@ -707,7 +733,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           const status = args.status
           if (status === "in_progress") {
             const taskTitle = parsedOutput?.title || taskId
-            await runCrewmate($, targetDir, [
+            await runCrewmate(targetDir, [
               "event",
               "add",
               "--actor",
@@ -715,13 +741,13 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
               "--type",
               "started",
               "--task",
-              $.escape(taskId),
+              taskId,
               "--message",
-              $.escape(\`Started task \${taskTitle}\`),
+              \`Started task \${taskTitle}\`,
             ]).catch(() => {})
           } else if (status === "completed") {
             const taskTitle = parsedOutput?.title || taskId
-            await runCrewmate($, targetDir, [
+            await runCrewmate(targetDir, [
               "event",
               "add",
               "--actor",
@@ -729,9 +755,9 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
               "--type",
               "completed",
               "--task",
-              $.escape(taskId),
+              taskId,
               "--message",
-              $.escape(\`Completed task \${taskTitle}\`),
+              \`Completed task \${taskTitle}\`,
             ]).catch(() => {})
           }
         }
@@ -740,7 +766,7 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
           const taskId = args.taskId
           const count = args.files.length
           const taskTitle = parsedOutput?.taskTitle || taskId
-          await runCrewmate($, targetDir, [
+          await runCrewmate(targetDir, [
             "event",
             "add",
             "--actor",
@@ -748,9 +774,9 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
             "--type",
             "locked",
             "--task",
-            $.escape(taskId),
+            taskId,
             "--message",
-            $.escape(\`Locked \${count} file(s) for task \${taskTitle}\`),
+            \`Locked \${count} file(s) for task \${taskTitle}\`,
           ]).catch(() => {})
         }
       } catch {
@@ -822,12 +848,12 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
               "--type",
               "completed",
               "--message",
-              $.escape(msg),
+              msg,
             ]
             if (tracked.taskId) {
-              cmdParts.push("--task", $.escape(tracked.taskId))
+              cmdParts.push("--task", tracked.taskId)
             }
-            await runCrewmate($, targetDir, cmdParts).catch(() => {})
+            await runCrewmate(targetDir, cmdParts).catch(() => {})
           }
         }
 
@@ -849,12 +875,12 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
               "--type",
               "error",
               "--message",
-              $.escape(msg),
+              msg,
             ]
             if (tracked.taskId) {
-              cmdParts.push("--task", $.escape(tracked.taskId))
+              cmdParts.push("--task", tracked.taskId)
             }
-            await runCrewmate($, targetDir, cmdParts).catch(() => {})
+            await runCrewmate(targetDir, cmdParts).catch(() => {})
           }
         }
       } catch {

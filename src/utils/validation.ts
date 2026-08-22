@@ -9,6 +9,26 @@ import {
 } from '../models/brief.js';
 
 /**
+ * Human-readable format hints for brief fields used in validation error messages
+ */
+export const FIELD_FORMAT_HINTS: Record<BriefField, string> = {
+  workType: 'One of: software, infrastructure, data, documentation, audit',
+  goal: 'Plain text string',
+  scope: '{"included": string[], "excluded": string[]}',
+  functionalRequirements: 'string[] (e.g. ["req 1", "req 2"])',
+  acceptanceCriteria: 'string[] (e.g. ["criteria 1", "criteria 2"])',
+  technicalStack:
+    '{"frontend": string[], "backend": string[], "database": string[], "tools": string[]}',
+  constraints: '{"exclusions": string[], "requirements": string[]}',
+  existingCodebase: 'string[] (e.g. ["src/index.ts"])',
+  referenceMaterials: 'string[] (e.g. ["docs/spec.md"])',
+  qualityStandards: '{"performance": object, "security": object, "accessibility": object}',
+  dependencies: 'string[] (e.g. ["package1", "package2"])',
+  risks: 'string[] (e.g. ["risk 1", "risk 2"])',
+  deliverables: '[{"type": "code"|"doc"|"report", "format": "file"|"repo"|"presentation"}]',
+};
+
+/**
  * Validates that a field name is a valid brief field
  *
  * @param field - The field name to validate
@@ -39,11 +59,89 @@ export function parseFieldValue(field: BriefField, raw: string): unknown {
   }
 
   if (JSON_FIELDS.includes(field)) {
+    let parsed: unknown;
     try {
-      return JSON.parse(raw);
+      parsed = JSON.parse(raw);
     } catch {
-      throw new Error(`Invalid JSON for field "${field}". Value must be valid JSON.`);
+      throw new Error(
+        `Invalid JSON for field "${field}". Expected format: ${FIELD_FORMAT_HINTS[field]}`
+      );
     }
+
+    if (
+      [
+        'functionalRequirements',
+        'acceptanceCriteria',
+        'existingCodebase',
+        'referenceMaterials',
+        'dependencies',
+        'risks',
+      ].includes(field)
+    ) {
+      if (!Array.isArray(parsed)) {
+        throw new Error(
+          `Invalid structure for field "${field}". Expected an array of strings: ${FIELD_FORMAT_HINTS[field]}`
+        );
+      }
+    } else if (field === 'scope') {
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        Array.isArray(parsed) ||
+        !('included' in parsed) ||
+        !('excluded' in parsed) ||
+        !Array.isArray((parsed as Record<string, unknown>).included) ||
+        !Array.isArray((parsed as Record<string, unknown>).excluded)
+      ) {
+        throw new Error(
+          `Invalid structure for field "scope". Expected format: ${FIELD_FORMAT_HINTS.scope}`
+        );
+      }
+    } else if (field === 'technicalStack') {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error(
+          `Invalid structure for field "technicalStack". Expected format: ${FIELD_FORMAT_HINTS.technicalStack}`
+        );
+      }
+      const record = parsed as Record<string, unknown>;
+      for (const key of ['frontend', 'backend', 'database', 'tools']) {
+        if (key in record && record[key] !== null && record[key] !== undefined) {
+          if (typeof record[key] === 'string') {
+            record[key] = [record[key]];
+          } else if (!Array.isArray(record[key])) {
+            throw new Error(
+              `Invalid structure for field "technicalStack". Expected format: ${FIELD_FORMAT_HINTS.technicalStack}`
+            );
+          }
+        }
+      }
+    } else if (field === 'constraints') {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error(
+          `Invalid structure for field "constraints". Expected format: ${FIELD_FORMAT_HINTS.constraints}`
+        );
+      }
+      const record = parsed as Record<string, unknown>;
+      for (const key of ['exclusions', 'requirements']) {
+        if (key in record && record[key] !== null && record[key] !== undefined) {
+          if (typeof record[key] === 'string') {
+            record[key] = [record[key]];
+          } else if (!Array.isArray(record[key])) {
+            throw new Error(
+              `Invalid structure for field "constraints". Expected format: ${FIELD_FORMAT_HINTS.constraints}`
+            );
+          }
+        }
+      }
+    } else if (field === 'deliverables') {
+      if (!Array.isArray(parsed)) {
+        throw new Error(
+          `Invalid structure for field "deliverables". Expected format: ${FIELD_FORMAT_HINTS.deliverables}`
+        );
+      }
+    }
+
+    return parsed;
   }
 
   return raw;

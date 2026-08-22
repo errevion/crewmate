@@ -99,9 +99,17 @@ export function registerBriefCommand(program: Command): void {
     .description('Set a field on the brief')
     .argument('<field>', `Field name (${BRIEF_FIELDS.join(', ')})`)
     .argument('<value...>', 'Field value (string or JSON)')
+    .option('--base64', 'Interpret value as a base64-encoded string')
     .option('--id <briefId>', 'Brief ID (defaults to latest)')
-    .action((field: string, valueParts: string[], opts: { id?: string }) => {
-      const value = valueParts.join(' ');
+    .action((field: string, valueParts: string[], opts: { id?: string; base64?: boolean }) => {
+      let value = valueParts.join(' ');
+      if (opts.base64) {
+        try {
+          value = Buffer.from(value, 'base64').toString('utf-8');
+        } catch {
+          fail('Invalid base64 encoding for field value');
+        }
+      }
       if (!isValidField(field)) {
         fail(`Unknown field "${field}"`, {
           validFields: [...BRIEF_FIELDS],
