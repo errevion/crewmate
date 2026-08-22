@@ -166,6 +166,7 @@ export interface GraphRenderOptions {
   spinnerFrame?: number;
   frontmanState?: 'thinking' | 'asking' | 'idle';
   activity?: FrontmanActivity | null;
+  sessionStatus?: 'active' | 'idle' | 'stopped' | 'offline';
 }
 
 /**
@@ -262,7 +263,10 @@ export function renderGraph(options: GraphRenderOptions): string {
     let stateDescription = '{gray-fg}── (idle · waiting for dispatch){/gray-fg}';
     let frontmanNode = buildAgentNode('frontman', charSet);
 
-    if (activity) {
+    if (options.sessionStatus === 'stopped' || options.sessionStatus === 'offline') {
+      frontmanNode = buildAgentNode('frontman', charSet);
+      stateDescription = '{yellow-fg}── (offline · OpenCode exited / disconnected){/yellow-fg}';
+    } else if (activity) {
       const msgSuffix = activity.message ? `: ${activity.message}` : '';
       switch (activity.activityType) {
         case 'questioning':

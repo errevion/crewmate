@@ -569,16 +569,23 @@ function runDashboard(opts: WatchOptions): void {
       s.briefStatus === 'complete'
         ? '{green-fg}complete{/green-fg}'
         : '{yellow-fg}draft{/yellow-fg}';
+    const sessionTag =
+      s.sessionStatus === 'stopped' || s.sessionStatus === 'offline'
+        ? ' · {yellow-fg}(harness offline){/yellow-fg}'
+        : '';
     header.setContent(
       [
-        `Brief {bold}{cyan-fg}${s.briefId}{/cyan-fg}{/bold} · status: ${status} · events: {cyan-fg}${s.eventCount}{/cyan-fg}`,
+        `Brief {bold}{cyan-fg}${s.briefId}{/cyan-fg}{/bold} · status: ${status}${sessionTag} · events: {cyan-fg}${s.eventCount}{/cyan-fg}`,
         `Goal: ${truncate(s.goal ?? '(no goal set)', 60)}`,
         `[{yellow-fg}${bar}{/yellow-fg}] {bold}${s.completedCount}/${s.totalCount}{/bold} tasks done · ${s.activeCount} running`,
       ].join('\n')
     );
   }
 
-  function statusLine(status: string): string {
+  function statusLine(status: string, interrupted?: boolean): string {
+    if (interrupted) {
+      return '{yellow-fg}{bold}[!]{/bold}{/yellow-fg}';
+    }
     switch (status) {
       case 'completed':
         return '{green-fg}{bold}[✓]{/bold}{/green-fg}';
@@ -593,9 +600,11 @@ function runDashboard(opts: WatchOptions): void {
     const tasksById = new Map(s.tasks.map((t) => [t.id, t]));
     const lines: string[] = [];
     for (const t of s.tasks) {
-      const marker = statusLine(t.status);
+      const marker = statusLine(t.status, t.interrupted);
       let suffix = '';
-      if (t.status === 'in_progress') {
+      if (t.interrupted) {
+        suffix = ' {yellow-fg}(paused · harness offline){/yellow-fg}';
+      } else if (t.status === 'in_progress') {
         suffix = ` {yellow-fg}(${SPINNERS[spinnerFrame % SPINNERS.length]} running){/yellow-fg}`;
       } else if (t.blocked) {
         const blockers = t.dependencies
@@ -649,6 +658,7 @@ function runDashboard(opts: WatchOptions): void {
       spinnerFrame,
       frontmanState: s.frontmanState,
       activity: s.currentActivity,
+      sessionStatus: s.sessionStatus,
     });
     activityGraph.setContent(graphContent);
   }

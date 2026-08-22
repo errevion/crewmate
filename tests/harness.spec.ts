@@ -115,4 +115,10 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('Finished codebase exploration');
     expect(CREWMATE_PLUGIN).toContain('Finished task breakdown');
   });
+
+  it('should include heartbeat and dispose hook for session liveness tracking', () => {
+    expect(CREWMATE_PLUGIN).toContain('session", "heartbeat"');
+    expect(CREWMATE_PLUGIN).toContain('session", "stop"');
+    expect(CREWMATE_PLUGIN).toContain('dispose: async () =>');
+  });
 });

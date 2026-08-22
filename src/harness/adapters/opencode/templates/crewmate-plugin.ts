@@ -93,7 +93,20 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
   const sessionAgentMap = new Map<string, TrackedSubagentSession>()
   const pendingDispatches = new Map<string, { agent: string; taskId?: string; dispatchedAt: number }>()
 
+  // Send initial session heartbeat
+  const pid = process.pid
+  runCrewmate($, targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
+
+  const heartbeatInterval = setInterval(() => {
+    runCrewmate($, targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
+  }, 4000)
+
   return {
+    dispose: async () => {
+      clearInterval(heartbeatInterval)
+      await runCrewmate($, targetDir, ["session", "stop"]).catch(() => {})
+    },
+
     tool: {
       crewmate_create_brief: tool({
         description:

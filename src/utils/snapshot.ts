@@ -10,6 +10,7 @@ import { listLocks } from '../db/lock-repo.js';
 import { listArtifacts } from '../db/artifact-repo.js';
 import { listEvents, countEvents } from '../db/event-repo.js';
 import { getCurrentActivity } from '../db/activity-repo.js';
+import { getLatestSession, isProcessAlive } from '../db/session-repo.js';
 import { EVENT_ACTORS, type EventActor } from '../models/event.js';
 import type { ExecutionEvent } from '../models/event.js';
 import type { FrontmanActivity } from '../models/activity.js';
@@ -38,6 +39,7 @@ export interface TaskView {
   field: string | null;
   ready: boolean;
   blocked: boolean;
+  interrupted?: boolean;
 }
 
 /**
@@ -76,6 +78,8 @@ export interface WorkflowSnapshot {
   dispatchEdges: DispatchEdge[];
   frontmanState: 'thinking' | 'asking' | 'idle';
   currentActivity?: FrontmanActivity | null;
+  isSessionActive?: boolean;
+  sessionStatus?: 'active' | 'idle' | 'stopped' | 'offline';
 }
 
 /**
@@ -248,8 +252,43 @@ export function buildSnapshot(
 
   const currentActivity = getCurrentActivity(db, brief.id);
 
+  // Check harness session liveness
+  const session = getLatestSession(db, brief.id);
+  let sessionStatus: 'active' | 'idle' | 'stopped' | 'offline' = 'active';
+  let isSessionActive = true;
+
+  if (session) {
+    const ageMs = Date.now() - new Date(session.lastHeartbeatAt).getTime();
+    if (session.status === 'stopped') {
+      sessionStatus = 'stopped';
+      isSessionActive = false;
+    } else if (session.pid && !isProcessAlive(session.pid)) {
+      sessionStatus = 'offline';
+      isSessionActive = false;
+    } else if (ageMs > 8000) {
+      sessionStatus = 'offline';
+      isSessionActive = false;
+    } else {
+      sessionStatus = session.status === 'idle' ? 'idle' : 'active';
+      isSessionActive = true;
+    }
+  }
+
+  // If session is offline or stopped, mark in_progress tasks as interrupted and suppress active edges
+  if (!isSessionActive) {
+    for (const t of taskViews) {
+      if (t.status === 'in_progress') {
+        t.interrupted = true;
+      }
+    }
+  }
+
+  const effectiveDispatchEdges = isSessionActive ? dispatchEdges : [];
+
   let frontmanState: 'thinking' | 'asking' | 'idle';
-  if (currentActivity) {
+  if (!isSessionActive) {
+    frontmanState = 'idle';
+  } else if (currentActivity) {
     if (
       currentActivity.activityType === 'questioning' ||
       currentActivity.activityType === 'awaiting_response'
@@ -287,9 +326,11 @@ export function buildSnapshot(
     totalCount: taskViews.length,
     eventCount,
     updatedAt: new Date().toISOString(),
-    dispatchEdges,
+    dispatchEdges: effectiveDispatchEdges,
     frontmanState,
     currentActivity,
+    isSessionActive,
+    sessionStatus,
   };
 }
 

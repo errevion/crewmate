@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../src/db/migrations.js';
 import { createEvent, listEvents, countEvents } from '../src/db/event-repo.js';
+import { recordHeartbeat, markSessionStopped } from '../src/db/session-repo.js';
 import { buildSnapshot, newEvents } from '../src/utils/snapshot.js';
 import { SPINNERS, buildDispatchFrame, buildWorkScene } from '../src/utils/ascii.js';
 
@@ -205,6 +206,25 @@ describe('workflow snapshot', () => {
     const executorEdges = snapshot?.dispatchEdges.filter((e) => e.target === 'executor');
     expect(executorEdges?.length).toBe(1);
     expect(executorEdges?.[0].taskId).toBe('task-1');
+  });
+
+  it('should mark in_progress tasks as interrupted and suppress active edges when session is stopped', () => {
+    // Start task 1
+    db.prepare(`UPDATE tasks SET status = 'in_progress' WHERE id = 'task-1'`).run();
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1', {
+      taskId: 'task-1',
+    });
+
+    // Mark session stopped
+    recordHeartbeat(db, 'brief-1', 'opencode', process.pid, 'active');
+    markSessionStopped(db, 'brief-1', 'opencode');
+
+    const snapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.isSessionActive).toBe(false);
+    expect(snapshot?.sessionStatus).toBe('stopped');
+    expect(snapshot?.dispatchEdges.length).toBe(0);
+    expect(snapshot?.tasks.find((t) => t.id === 'task-1')?.interrupted).toBe(true);
   });
 
   it('should return null when no brief exists', () => {
