@@ -56,7 +56,21 @@ This adds a few files under `.opencode/`:
 - `agents/planner.md` — the task-breakdown agent's prompt
 - `agents/executor.md` — the implementer's prompt
 
-Crewmate keeps its own state in `.crewmate/crewmate.db` (SQLite). Add `.crewmate/` to your `.gitignore`. It doesn't need to be checked in.
+Crewmate keeps its own state in `.crewmate/crewmate.db` (SQLite) and records file checksums in `.crewmate/manifest.json`. Add `.crewmate/` to your `.gitignore`. It doesn't need to be checked in.
+
+### Updating existing projects (`crewmate update`)
+
+When you update your `crewmate` CLI to a newer version, you can seamlessly update integration files, agent prompts, and plugins in your existing projects:
+
+```bash
+cd ~/my-project
+crewmate update
+```
+
+- **Custom prompt protection:** If you modified agent prompts or plugins, `crewmate update` automatically creates a timestamped backup in `.crewmate/backups/` before applying the latest template updates.
+- **Dependency sync:** It updates plugin dependencies in `.opencode/package.json` while preserving your custom dependencies.
+- **Dry run:** Preview changes before applying them with `crewmate update --dry-run`.
+- **Skip backups:** Pass `--no-backup` if you don't need backup copies of modified files.
 
 ## Running a project through it
 
@@ -284,6 +298,7 @@ Every command prints structured JSON to stdout, so it's easy to script against o
 | Command | What it does |
 | --- | --- |
 | `crewmate init` | Set up the integration files for a harness |
+| `crewmate update` | Update integration files, prompts, and plugins with automatic backups |
 | `crewmate brief init` | Start a new draft brief |
 | `crewmate brief set <field> <value>` | Set one field on the brief |
 | `crewmate brief get <field>` | Read one field back |

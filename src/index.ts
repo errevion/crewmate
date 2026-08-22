@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { registerBriefCommand } from './commands/brief.js';
 import { registerInitCommand } from './commands/init.js';
+import { registerUpdateCommand } from './commands/update.js';
 import { registerTaskCommand } from './commands/task.js';
 import { registerLockCommand } from './commands/lock.js';
 import { registerArtifactCommand } from './commands/artifact.js';
@@ -15,6 +16,7 @@ program.name('crewmate').description('AI agent workflow CLI tool').version('0.1.
 
 registerBriefCommand(program);
 registerInitCommand(program);
+registerUpdateCommand(program);
 registerTaskCommand(program);
 registerLockCommand(program);
 registerArtifactCommand(program);
