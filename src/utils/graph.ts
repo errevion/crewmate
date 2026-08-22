@@ -167,6 +167,7 @@ export interface GraphRenderOptions {
   frontmanState?: 'thinking' | 'asking' | 'idle';
   activity?: FrontmanActivity | null;
   sessionStatus?: 'active' | 'idle' | 'stopped' | 'offline';
+  harnessName?: string;
 }
 
 /**
@@ -265,7 +266,10 @@ export function renderGraph(options: GraphRenderOptions): string {
 
     if (options.sessionStatus === 'stopped' || options.sessionStatus === 'offline') {
       frontmanNode = buildAgentNode('frontman', charSet);
-      stateDescription = '{yellow-fg}── (offline · OpenCode exited / disconnected){/yellow-fg}';
+      const harnessLabel = options.harnessName
+        ? `${options.harnessName} disconnected`
+        : 'harness disconnected';
+      stateDescription = `{yellow-fg}── (offline · ${harnessLabel}){/yellow-fg}`;
     } else if (activity) {
       const msgSuffix = activity.message ? `: ${activity.message}` : '';
       switch (activity.activityType) {

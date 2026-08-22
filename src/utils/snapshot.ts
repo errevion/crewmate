@@ -80,6 +80,7 @@ export interface WorkflowSnapshot {
   currentActivity?: FrontmanActivity | null;
   isSessionActive?: boolean;
   sessionStatus?: 'active' | 'idle' | 'stopped' | 'offline';
+  harness?: string;
 }
 
 /**
@@ -331,6 +332,7 @@ export function buildSnapshot(
     currentActivity,
     isSessionActive,
     sessionStatus,
+    harness: session?.harness,
   };
 }
 

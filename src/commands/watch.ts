@@ -659,6 +659,7 @@ function runDashboard(opts: WatchOptions): void {
       frontmanState: s.frontmanState,
       activity: s.currentActivity,
       sessionStatus: s.sessionStatus,
+      harnessName: s.harness,
     });
     activityGraph.setContent(graphContent);
   }
