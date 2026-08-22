@@ -127,7 +127,19 @@ The dashboard has four sections:
 | **Event feed** | Last 12 lifecycle events with timestamp, actor, type, and message |
 | **Activity graph** | Animated visualization of Frontman dispatching work to Scout, Planner, and Executors, with color-coded agent nodes |
 
-Press `q`, `Escape`, or `Ctrl-C` to exit. The dashboard cleanly restores your terminal state.
+#### Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| `b` | Toggle full brief details overlay (scope, requirements, stack, constraints, etc.) |
+| `t` | Open interactive task selector list |
+| `Enter` | View full details of the selected task in the task list |
+| `↑` / `↓` or `j` / `k` | Navigate task list or scroll open detail overlay |
+| `PgUp` / `PgDn` | Fast scroll in detail overlays |
+| `Escape` | Close overlay (task detail → task list → dashboard) or exit dashboard |
+| `q` / `Ctrl-C` | Exit dashboard |
+
+The dashboard cleanly restores your terminal state upon exit.
 
 #### Options
 
