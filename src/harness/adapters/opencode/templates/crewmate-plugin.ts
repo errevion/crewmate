@@ -629,20 +629,44 @@ const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
               })
             }
 
-            const cmdParts = [
+            // Check if a dispatch event for this agent or task was recorded in the last 4 seconds
+            const recent = await runCrewmate($, targetDir, [
               "event",
-              "add",
+              "list",
               "--actor",
               "frontman",
               "--type",
               "dispatched",
-              "--message",
-              $.escape(msg),
-            ]
-            if (taskId) {
-              cmdParts.push("--task", $.escape(taskId))
+              "--limit",
+              "5",
+            ]).catch(() => null)
+
+            const isDuplicate =
+              recent?.ok &&
+              Array.isArray(recent.events) &&
+              recent.events.some((e: any) => {
+                const age = Date.now() - new Date(e.createdAt).getTime()
+                if (age > 4000) return false
+                if (taskId && e.taskId === taskId) return true
+                return e.message === msg || e.message.toLowerCase().includes(subagent)
+              })
+
+            if (!isDuplicate) {
+              const cmdParts = [
+                "event",
+                "add",
+                "--actor",
+                "frontman",
+                "--type",
+                "dispatched",
+                "--message",
+                $.escape(msg),
+              ]
+              if (taskId) {
+                cmdParts.push("--task", $.escape(taskId))
+              }
+              await runCrewmate($, targetDir, cmdParts).catch(() => {})
             }
-            await runCrewmate($, targetDir, cmdParts).catch(() => {})
           }
         }
       } catch {

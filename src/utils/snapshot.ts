@@ -217,10 +217,23 @@ export function buildSnapshot(
       }
 
       return true;
-    })
-    .slice(-6); // Take up to 6 active dispatches
+    });
 
-  const dispatchEdges = dispatchedEvents
+  // Deduplicate active dispatches: keep only the most recent edge per target/taskId
+  const seenTargets = new Set<string>();
+  const deduplicatedDispatches: typeof dispatchedEvents = [];
+
+  for (const evt of dispatchedEvents) {
+    const target = parseDispatchTarget(evt.message);
+    const key = evt.taskId ? `${target}:${evt.taskId}` : target;
+    if (!seenTargets.has(key)) {
+      seenTargets.add(key);
+      deduplicatedDispatches.push(evt);
+    }
+  }
+
+  const dispatchEdges = deduplicatedDispatches
+    .slice(-6)
     .map((e) => ({
       source: 'frontman' as const,
       target: parseDispatchTarget(e.message),

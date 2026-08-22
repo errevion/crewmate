@@ -168,6 +168,45 @@ describe('workflow snapshot', () => {
     expect(allDoneSnapshot?.dispatchEdges.length).toBe(0);
   });
 
+  it('should deduplicate multiple active dispatches to the same target or task', () => {
+    // Frontman emits two scout dispatches back-to-back
+    createEvent(
+      db,
+      'brief-1',
+      'frontman',
+      'dispatched',
+      'Dispatched scout for workspace exploration'
+    );
+    createEvent(
+      db,
+      'brief-1',
+      'frontman',
+      'dispatched',
+      'Dispatched scout to explore the codebase'
+    );
+
+    // And two dispatches for the same task
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1', {
+      taskId: 'task-1',
+    });
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1 again', {
+      taskId: 'task-1',
+    });
+
+    const snapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(snapshot).not.toBeNull();
+    // Should collapse duplicate scout dispatches to 1 edge, and duplicate task-1 dispatches to 1 edge
+    expect(snapshot?.dispatchEdges.length).toBe(2);
+
+    const targets = snapshot?.dispatchEdges.map((e) => e.target);
+    expect(targets).toContain('scout');
+    expect(targets).toContain('executor');
+
+    const executorEdges = snapshot?.dispatchEdges.filter((e) => e.target === 'executor');
+    expect(executorEdges?.length).toBe(1);
+    expect(executorEdges?.[0].taskId).toBe('task-1');
+  });
+
   it('should return null when no brief exists', () => {
     const empty = new Database(':memory:');
     runMigrations(empty);
