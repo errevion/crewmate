@@ -69,14 +69,43 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('deliverables: z.array');
   });
 
-  it('should not append --json to CLI commands in runCrewmate', () => {
+  it('should spawn crewmate safely with argument array without raw string join', () => {
     expect(CREWMATE_PLUGIN).not.toContain('"--json"');
-    expect(CREWMATE_PLUGIN).toContain('const cmd = ["crewmate", ...args].join(" ")');
+    expect(CREWMATE_PLUGIN).toContain('import spawn from "cross-spawn"');
+    expect(CREWMATE_PLUGIN).toContain('spawn("crewmate", args');
+    expect(CREWMATE_PLUGIN).not.toContain('shell: isWin');
+    expect(CREWMATE_PLUGIN).not.toContain('["crewmate", ...args].join(" ")');
+    expect(CREWMATE_PLUGIN).not.toContain('$.escape');
+  });
+
+  it('should extract error details from stdout JSON in runCrewmate error handling', () => {
+    expect(CREWMATE_PLUGIN).toContain('parsed && parsed.error');
+    expect(CREWMATE_PLUGIN).toContain('errorDetails = parsed.error');
+  });
+
+  it('should pass unescaped raw argument values directly to runCrewmate across write tools', () => {
+    // update_field should pass base64 encoded value with --base64
+    expect(CREWMATE_PLUGIN).toContain(
+      '["brief", "set", args.field, b64Value, "--base64", ...idArgs]'
+    );
+    expect(CREWMATE_PLUGIN).toContain(
+      'const b64Value = Buffer.from(args.value, "utf-8").toString("base64")'
+    );
+    // add_artifact should pass args.content directly
+    expect(CREWMATE_PLUGIN).toContain('"--content",');
+    expect(CREWMATE_PLUGIN).toContain('args.content,');
+    // set_activity should pass args.message directly
+    expect(CREWMATE_PLUGIN).toContain('cmdParts.push("--message", args.message)');
+    // add_event should pass args.message directly
+    expect(CREWMATE_PLUGIN).toContain('"--message",');
+    expect(CREWMATE_PLUGIN).toContain('args.message,');
+    // acquire_lock should pass ...args.files directly
+    expect(CREWMATE_PLUGIN).toContain('...args.files,');
   });
 
   it('should correctly format task add arguments in crewmate_add_task', () => {
     expect(CREWMATE_PLUGIN).toContain(
-      '["task", "add", args.briefId, "--title", escapedTitle, "--description", escapedDesc]'
+      '["task", "add", args.briefId, "--title", taskTitle, "--description", taskDescription]'
     );
     expect(CREWMATE_PLUGIN).not.toContain('JSON.stringify(args.dependencies)');
     expect(CREWMATE_PLUGIN).toContain(

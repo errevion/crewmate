@@ -5,7 +5,7 @@ import { createBrief, setField, markComplete } from '../src/db/brief-repo.js';
 import { createTask, updateTaskStatus } from '../src/db/task-repo.js';
 import { setActivity } from '../src/db/activity-repo.js';
 import { buildSnapshot } from '../src/utils/snapshot.js';
-import { formatBriefDetails, formatTaskDetails } from '../src/commands/watch.js';
+import { formatBriefDetails, formatTaskDetails, formatTime } from '../src/commands/watch.js';
 import type { Brief } from '../src/models/brief.js';
 import type { Task } from '../src/models/task.js';
 
@@ -178,6 +178,44 @@ describe('formatBriefDetails', () => {
     expect(formatted).toContain('draft');
     expect(formatted).toContain('(not set)');
     expect(formatted).toContain('(none)');
+  });
+
+  it('handles non-array / string fields in technicalStack, scope, and constraints without throwing', () => {
+    const brief: any = {
+      id: 'loose123',
+      status: 'draft',
+      workType: 'software',
+      goal: 'Test resilient formatting',
+      scope: { included: 'Single scope item', excluded: 'Single exclusion' },
+      functionalRequirements: 'Single requirement',
+      acceptanceCriteria: 'Single criterion',
+      technicalStack: {
+        frontend: 'React with Tailwind',
+        backend: 'Express.js',
+        database: 'SQLite',
+        tools: 'Vitest',
+      },
+      constraints: {
+        requirements: 'Node 20+',
+        exclusions: 'No external APIs',
+      },
+      deliverables: { type: 'code', format: 'file' },
+      dependencies: 'single-dep',
+      risks: 'single-risk',
+      existingCodebase: 'src/main.ts',
+      referenceMaterials: 'README.md',
+      qualityStandards: null,
+      createdAt: '2026-08-21T00:00:00Z',
+      updatedAt: '2026-08-21T00:00:00Z',
+    };
+
+    expect(() => formatBriefDetails(brief)).not.toThrow();
+    const formatted = formatBriefDetails(brief);
+    expect(formatted).toContain('React with Tailwind');
+    expect(formatted).toContain('Express.js');
+    expect(formatted).toContain('Single scope item');
+    expect(formatted).toContain('Single requirement');
+    expect(formatted).toContain('Node 20+');
   });
 });
 

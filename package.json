@@ -1,6 +1,6 @@
 {
   "name": "crewmate",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "AI agent workflow CLI tool",
   "type": "module",
   "bin": {
@@ -26,12 +26,14 @@
   "dependencies": {
     "better-sqlite3": "12.9.0",
     "blessed": "^0.1.81",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "cross-spawn": "^7.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/blessed": "^0.1.27",
+    "@types/cross-spawn": "^6.0.6",
     "@types/node": "^26.2.0",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",

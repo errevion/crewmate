@@ -135,6 +135,91 @@ describe('crewmate brief', () => {
       );
       await expectSuccess(result);
     });
+
+    it('should set scope field with base64 encoded JSON', async () => {
+      const scopeObj = {
+        included: ['Backend API CRUD with "quotes" and spaces', 'SQLite local persistence'],
+        excluded: ['auth', 'cloud & complex/special-chars'],
+      };
+      const b64 = Buffer.from(JSON.stringify(scopeObj)).toString('base64');
+      const result = await runCli(['brief', 'set', 'scope', b64, '--base64'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout) as {
+        ok: boolean;
+        field: string;
+        value: typeof scopeObj;
+      };
+      expect(output.ok).toBe(true);
+      expect(output.field).toBe('scope');
+      expect(output.value).toEqual(scopeObj);
+
+      // Verify reading back the value
+      const getResult = await runCli(['brief', 'get', 'scope'], { cwd: tmpDir });
+      await expectSuccess(getResult);
+      const getOutput = parseJsonOutput(getResult.stdout) as {
+        ok: boolean;
+        value: typeof scopeObj;
+      };
+      expect(getOutput.value).toEqual(scopeObj);
+    });
+
+    it('should set functionalRequirements field with base64 encoded JSON array', async () => {
+      const reqs = ['GitHub OAuth 2.0 login', 'Token storage with "secure" keys'];
+      const b64 = Buffer.from(JSON.stringify(reqs)).toString('base64');
+      const result = await runCli(['brief', 'set', 'functionalRequirements', b64, '--base64'], {
+        cwd: tmpDir,
+      });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout) as {
+        ok: boolean;
+        field: string;
+        value: typeof reqs;
+      };
+      expect(output.ok).toBe(true);
+      expect(output.field).toBe('functionalRequirements');
+      expect(output.value).toEqual(reqs);
+    });
+
+    it('should handle exact scope payload from CREWMATE_FAILURE_REPORT2 via base64', async () => {
+      const failureReportScope = {
+        included: [
+          'backend REST API with CRUD operations for notes',
+          'SQLite local persistence',
+          'Notes with tags, search, and tag filtering',
+          'Responsive frontend UI (sidebar + main view with markdown editor and live preview)',
+          'Tag manager (add/remove tags)',
+          'Automated test suite',
+          'Initial seed dataset with sample notes',
+        ],
+        excluded: [
+          'user authentication/accounts',
+          'multi-user collaboration',
+          'mobile app or native desktop app',
+          'cloud deployment/hosting',
+          'rich text formatting beyond Markdown',
+        ],
+      };
+      const b64 = Buffer.from(JSON.stringify(failureReportScope)).toString('base64');
+      const result = await runCli(['brief', 'set', 'scope', b64, '--base64'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout) as {
+        ok: boolean;
+        field: string;
+        value: typeof failureReportScope;
+      };
+      expect(output.ok).toBe(true);
+      expect(output.field).toBe('scope');
+      expect(output.value).toEqual(failureReportScope);
+    });
+
+    it('should reject invalid JSON content inside base64 string', async () => {
+      const b64 = Buffer.from('{not valid json}').toString('base64');
+      const result = await runCli(['brief', 'set', 'scope', b64, '--base64'], { cwd: tmpDir });
+      await expectFailure(result, /Invalid JSON/i);
+    });
   });
 
   describe('get', () => {

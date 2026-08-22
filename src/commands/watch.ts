@@ -5,7 +5,7 @@ import { renderGraph } from '../utils/graph.js';
 import { SPINNERS } from '../utils/ascii.js';
 import type { ExecutionEvent } from '../models/event.js';
 import { resolveBrief } from '../db/brief-repo.js';
-import type { Brief } from '../models/brief.js';
+import type { Brief, Deliverable } from '../models/brief.js';
 import { getDb } from '../db/connection.js';
 import { getTaskById, listTasksByBrief } from '../db/task-repo.js';
 import type { Task } from '../models/task.js';
@@ -27,16 +27,46 @@ function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-function formatTime(createdAt: string): string {
-  const date = new Date(createdAt.endsWith('Z') ? createdAt : `${createdAt}Z`);
+/**
+ * Formats a timestamp into local HH:mm:ss for display
+ *
+ * @param createdAt UTC or ISO timestamp string
+ * @returns Local time formatted as HH:mm:ss
+ */
+export function formatTime(createdAt: string): string {
+  let dateStr = createdAt;
+  if (!dateStr.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(dateStr)) {
+    dateStr = dateStr.includes('T') ? `${dateStr}Z` : `${dateStr.replace(' ', 'T')}Z`;
+  }
+  let date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) {
+    date = new Date(createdAt);
+  }
   if (Number.isNaN(date.getTime())) {
     return createdAt;
   }
-  return date.toISOString().slice(11, 19);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 /**
- * Formats a brief into a tagged string for display in the TUI overlay modal
+ * Helper to safely extract an array of strings from a field value (string or array)
+ *
+ * @param val The value to convert to a string array
+ * @returns Array of non-empty strings
+ */
+function toStringArray(val: unknown): string[] {
+  if (Array.isArray(val)) {
+    return val.map(String).filter((s) => s.trim().length > 0);
+  }
+  if (typeof val === 'string' && val.trim().length > 0) {
+    return [val.trim()];
+  }
+  return [];
+}
+
+/**
+ * Formats a project brief into a tagged string for display in the TUI overlay modal
  *
  * @param brief The brief to format, or null if not found
  * @returns Tagged string representation of the brief
@@ -69,19 +99,21 @@ export function formatBriefDetails(brief: Brief | null): string {
     '{bold}{yellow-fg}── Scope ──────────────────────────────────────────{/yellow-fg}{/bold}'
   );
   if (brief.scope) {
-    if (brief.scope.included?.length) {
+    const included = toStringArray(brief.scope.included);
+    const excluded = toStringArray(brief.scope.excluded);
+    if (included.length) {
       lines.push('  {bold}Included:{/bold}');
-      for (const inc of brief.scope.included) {
+      for (const inc of included) {
         lines.push(`    • ${inc}`);
       }
     }
-    if (brief.scope.excluded?.length) {
+    if (excluded.length) {
       lines.push('  {bold}Excluded:{/bold}');
-      for (const exc of brief.scope.excluded) {
+      for (const exc of excluded) {
         lines.push(`    • ${exc}`);
       }
     }
-    if (!brief.scope.included?.length && !brief.scope.excluded?.length) {
+    if (!included.length && !excluded.length) {
       lines.push('  {gray-fg}(empty scope){/gray-fg}');
     }
   } else {
@@ -93,8 +125,13 @@ export function formatBriefDetails(brief: Brief | null): string {
   lines.push(
     '{bold}{yellow-fg}── Functional Requirements ───────────────────────{/yellow-fg}{/bold}'
   );
-  if (brief.functionalRequirements?.length) {
-    brief.functionalRequirements.forEach((req, i) => lines.push(`  ${i + 1}. ${req}`));
+  if (brief.functionalRequirements) {
+    const reqs = toStringArray(brief.functionalRequirements);
+    if (reqs.length) {
+      reqs.forEach((req, i) => lines.push(`  ${i + 1}. ${req}`));
+    } else {
+      lines.push('  {gray-fg}(not set){/gray-fg}');
+    }
   } else {
     lines.push('  {gray-fg}(not set){/gray-fg}');
   }
@@ -104,8 +141,13 @@ export function formatBriefDetails(brief: Brief | null): string {
   lines.push(
     '{bold}{yellow-fg}── Acceptance Criteria ───────────────────────────{/yellow-fg}{/bold}'
   );
-  if (brief.acceptanceCriteria?.length) {
-    brief.acceptanceCriteria.forEach((crit, i) => lines.push(`  ${i + 1}. ${crit}`));
+  if (brief.acceptanceCriteria) {
+    const crits = toStringArray(brief.acceptanceCriteria);
+    if (crits.length) {
+      crits.forEach((crit, i) => lines.push(`  ${i + 1}. ${crit}`));
+    } else {
+      lines.push('  {gray-fg}(not set){/gray-fg}');
+    }
   } else {
     lines.push('  {gray-fg}(not set){/gray-fg}');
   }
@@ -117,19 +159,24 @@ export function formatBriefDetails(brief: Brief | null): string {
   );
   if (brief.technicalStack) {
     const ts = brief.technicalStack;
-    if (ts.frontend?.length) {
-      lines.push(`  {bold}Frontend:{/bold} ${ts.frontend.join(', ')}`);
+    const fe = toStringArray(ts.frontend);
+    const be = toStringArray(ts.backend);
+    const db = toStringArray(ts.database);
+    const tl = toStringArray(ts.tools);
+
+    if (fe.length) {
+      lines.push(`  {bold}Frontend:{/bold} ${fe.join(', ')}`);
     }
-    if (ts.backend?.length) {
-      lines.push(`  {bold}Backend:{/bold} ${ts.backend.join(', ')}`);
+    if (be.length) {
+      lines.push(`  {bold}Backend:{/bold} ${be.join(', ')}`);
     }
-    if (ts.database?.length) {
-      lines.push(`  {bold}Database:{/bold} ${ts.database.join(', ')}`);
+    if (db.length) {
+      lines.push(`  {bold}Database:{/bold} ${db.join(', ')}`);
     }
-    if (ts.tools?.length) {
-      lines.push(`  {bold}Tools:{/bold} ${ts.tools.join(', ')}`);
+    if (tl.length) {
+      lines.push(`  {bold}Tools:{/bold} ${tl.join(', ')}`);
     }
-    if (!ts.frontend?.length && !ts.backend?.length && !ts.database?.length && !ts.tools?.length) {
+    if (!fe.length && !be.length && !db.length && !tl.length) {
       lines.push('  {gray-fg}(empty stack){/gray-fg}');
     }
   } else {
@@ -142,19 +189,21 @@ export function formatBriefDetails(brief: Brief | null): string {
     '{bold}{yellow-fg}── Constraints ───────────────────────────────────{/yellow-fg}{/bold}'
   );
   if (brief.constraints) {
-    if (brief.constraints.requirements?.length) {
+    const reqs = toStringArray(brief.constraints.requirements);
+    const excs = toStringArray(brief.constraints.exclusions);
+    if (reqs.length) {
       lines.push('  {bold}Requirements:{/bold}');
-      for (const r of brief.constraints.requirements) {
+      for (const r of reqs) {
         lines.push(`    • ${r}`);
       }
     }
-    if (brief.constraints.exclusions?.length) {
+    if (excs.length) {
       lines.push('  {bold}Exclusions:{/bold}');
-      for (const e of brief.constraints.exclusions) {
+      for (const e of excs) {
         lines.push(`    • ${e}`);
       }
     }
-    if (!brief.constraints.requirements?.length && !brief.constraints.exclusions?.length) {
+    if (!reqs.length && !excs.length) {
       lines.push('  {gray-fg}(empty constraints){/gray-fg}');
     }
   } else {
@@ -166,9 +215,19 @@ export function formatBriefDetails(brief: Brief | null): string {
   lines.push(
     '{bold}{yellow-fg}── Deliverables ──────────────────────────────────{/yellow-fg}{/bold}'
   );
-  if (brief.deliverables?.length) {
-    for (const d of brief.deliverables) {
-      lines.push(`  • [${d.type}] (${d.format})`);
+  if (brief.deliverables) {
+    const dels = Array.isArray(brief.deliverables) ? brief.deliverables : [brief.deliverables];
+    if (dels.length) {
+      for (const d of dels) {
+        if (typeof d === 'object' && d !== null) {
+          const item = d as Partial<Deliverable>;
+          lines.push(`  • [${item.type ?? 'item'}] (${item.format ?? 'format'})`);
+        } else {
+          lines.push(`  • ${String(d)}`);
+        }
+      }
+    } else {
+      lines.push('  {gray-fg}(not set){/gray-fg}');
     }
   } else {
     lines.push('  {gray-fg}(not set){/gray-fg}');
@@ -179,19 +238,21 @@ export function formatBriefDetails(brief: Brief | null): string {
   lines.push(
     '{bold}{yellow-fg}── Dependencies & Risks ──────────────────────────{/yellow-fg}{/bold}'
   );
-  if (brief.dependencies?.length) {
+  const deps = toStringArray(brief.dependencies);
+  const risks = toStringArray(brief.risks);
+  if (deps.length) {
     lines.push('  {bold}Dependencies:{/bold}');
-    for (const d of brief.dependencies) {
+    for (const d of deps) {
       lines.push(`    • ${d}`);
     }
   }
-  if (brief.risks?.length) {
+  if (risks.length) {
     lines.push('  {bold}Risks:{/bold}');
-    for (const r of brief.risks) {
+    for (const r of risks) {
       lines.push(`    • ${r}`);
     }
   }
-  if (!brief.dependencies?.length && !brief.risks?.length) {
+  if (!deps.length && !risks.length) {
     lines.push('  {gray-fg}(none){/gray-fg}');
   }
   lines.push('');
@@ -200,19 +261,21 @@ export function formatBriefDetails(brief: Brief | null): string {
   lines.push(
     '{bold}{yellow-fg}── References & Codebase ─────────────────────────{/yellow-fg}{/bold}'
   );
-  if (brief.existingCodebase?.length) {
+  const codebase = toStringArray(brief.existingCodebase);
+  const refs = toStringArray(brief.referenceMaterials);
+  if (codebase.length) {
     lines.push('  {bold}Existing Codebase:{/bold}');
-    for (const c of brief.existingCodebase) {
+    for (const c of codebase) {
       lines.push(`    • ${c}`);
     }
   }
-  if (brief.referenceMaterials?.length) {
+  if (refs.length) {
     lines.push('  {bold}Reference Materials:{/bold}');
-    for (const r of brief.referenceMaterials) {
+    for (const r of refs) {
       lines.push(`    • ${r}`);
     }
   }
-  if (!brief.existingCodebase?.length && !brief.referenceMaterials?.length) {
+  if (!codebase.length && !refs.length) {
     lines.push('  {gray-fg}(none){/gray-fg}');
   }
   lines.push('');
