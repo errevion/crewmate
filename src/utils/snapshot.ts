@@ -10,6 +10,7 @@ import { listLocks } from '../db/lock-repo.js';
 import { listArtifacts } from '../db/artifact-repo.js';
 import { listEvents, countEvents } from '../db/event-repo.js';
 import { getCurrentActivity } from '../db/activity-repo.js';
+import { getLatestSession, isProcessAlive } from '../db/session-repo.js';
 import { EVENT_ACTORS, type EventActor } from '../models/event.js';
 import type { ExecutionEvent } from '../models/event.js';
 import type { FrontmanActivity } from '../models/activity.js';
@@ -38,6 +39,7 @@ export interface TaskView {
   field: string | null;
   ready: boolean;
   blocked: boolean;
+  interrupted?: boolean;
 }
 
 /**
@@ -76,6 +78,9 @@ export interface WorkflowSnapshot {
   dispatchEdges: DispatchEdge[];
   frontmanState: 'thinking' | 'asking' | 'idle';
   currentActivity?: FrontmanActivity | null;
+  isSessionActive?: boolean;
+  sessionStatus?: 'active' | 'idle' | 'stopped' | 'offline';
+  harness?: string;
 }
 
 /**
@@ -217,10 +222,23 @@ export function buildSnapshot(
       }
 
       return true;
-    })
-    .slice(-6); // Take up to 6 active dispatches
+    });
 
-  const dispatchEdges = dispatchedEvents
+  // Deduplicate active dispatches: keep only the most recent edge per target/taskId
+  const seenTargets = new Set<string>();
+  const deduplicatedDispatches: typeof dispatchedEvents = [];
+
+  for (const evt of dispatchedEvents) {
+    const target = parseDispatchTarget(evt.message);
+    const key = evt.taskId ? `${target}:${evt.taskId}` : target;
+    if (!seenTargets.has(key)) {
+      seenTargets.add(key);
+      deduplicatedDispatches.push(evt);
+    }
+  }
+
+  const dispatchEdges = deduplicatedDispatches
+    .slice(-6)
     .map((e) => ({
       source: 'frontman' as const,
       target: parseDispatchTarget(e.message),
@@ -235,8 +253,43 @@ export function buildSnapshot(
 
   const currentActivity = getCurrentActivity(db, brief.id);
 
+  // Check harness session liveness
+  const session = getLatestSession(db, brief.id);
+  let sessionStatus: 'active' | 'idle' | 'stopped' | 'offline' = 'active';
+  let isSessionActive = true;
+
+  if (session) {
+    const ageMs = Date.now() - new Date(session.lastHeartbeatAt).getTime();
+    if (session.status === 'stopped') {
+      sessionStatus = 'stopped';
+      isSessionActive = false;
+    } else if (session.pid && !isProcessAlive(session.pid)) {
+      sessionStatus = 'offline';
+      isSessionActive = false;
+    } else if (ageMs > 8000) {
+      sessionStatus = 'offline';
+      isSessionActive = false;
+    } else {
+      sessionStatus = session.status === 'idle' ? 'idle' : 'active';
+      isSessionActive = true;
+    }
+  }
+
+  // If session is offline or stopped, mark in_progress tasks as interrupted and suppress active edges
+  if (!isSessionActive) {
+    for (const t of taskViews) {
+      if (t.status === 'in_progress') {
+        t.interrupted = true;
+      }
+    }
+  }
+
+  const effectiveDispatchEdges = isSessionActive ? dispatchEdges : [];
+
   let frontmanState: 'thinking' | 'asking' | 'idle';
-  if (currentActivity) {
+  if (!isSessionActive) {
+    frontmanState = 'idle';
+  } else if (currentActivity) {
     if (
       currentActivity.activityType === 'questioning' ||
       currentActivity.activityType === 'awaiting_response'
@@ -274,9 +327,12 @@ export function buildSnapshot(
     totalCount: taskViews.length,
     eventCount,
     updatedAt: new Date().toISOString(),
-    dispatchEdges,
+    dispatchEdges: effectiveDispatchEdges,
     frontmanState,
     currentActivity,
+    isSessionActive,
+    sessionStatus,
+    harness: session?.harness,
   };
 }
 

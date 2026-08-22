@@ -94,4 +94,23 @@ export function runMigrations(db: Database.Database): void {
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_frontman_activities_started_at ON frontman_activities (started_at)`
   );
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_liveness (
+      id                TEXT PRIMARY KEY,
+      brief_id          TEXT NOT NULL REFERENCES briefs(id),
+      harness           TEXT NOT NULL,
+      pid               INTEGER,
+      status            TEXT NOT NULL DEFAULT 'active',
+      last_heartbeat_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_session_liveness_brief_id ON session_liveness (brief_id)`
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_session_liveness_last_heartbeat ON session_liveness (last_heartbeat_at)`
+  );
 }

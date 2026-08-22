@@ -105,6 +105,49 @@ export function registerEventCommand(program: Command): void {
         }
 
         const briefId = resolveTargetBrief(opts);
+
+        // Deduplication guardrail: avoid duplicate recent events of identical actor + type (especially dispatches)
+        const recentEvents = listEvents(getDb(), {
+          briefId,
+          taskId: opts.task,
+          actor: opts.actor as EventActor,
+          type: opts.type as EventType,
+          limit: 3,
+        });
+
+        const now = Date.now();
+        const duplicate = recentEvents.find((e) => {
+          const age = now - new Date(e.createdAt).getTime();
+          if (age > 4000) {
+            return false;
+          }
+          if (opts.type === 'dispatched') {
+            // Match same message or same target agent
+            const target = opts.message
+              .toLowerCase()
+              .match(/\b(frontman|scout|planner|executor)\b/)?.[1];
+            const existingTarget = e.message
+              .toLowerCase()
+              .match(/\b(frontman|scout|planner|executor)\b/)?.[1];
+            return e.message === opts.message.trim() || (target && target === existingTarget);
+          }
+          return e.message === opts.message.trim();
+        });
+
+        if (duplicate) {
+          out({
+            ok: true,
+            id: duplicate.id,
+            briefId: duplicate.briefId,
+            taskId: duplicate.taskId,
+            actor: duplicate.actor,
+            type: duplicate.type,
+            message: duplicate.message,
+            createdAt: duplicate.createdAt,
+          });
+          return;
+        }
+
         const event = createEvent(
           getDb(),
           briefId,

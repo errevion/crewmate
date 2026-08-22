@@ -85,12 +85,40 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).not.toMatch(/split\("\r?\n"\)/);
   });
 
-  it('should include tool.execute.before hook for automatic dispatch event recording', () => {
+  it('should include tool.execute.before hook for automatic dispatch event recording with deduplication', () => {
     expect(CREWMATE_PLUGIN).toContain('"tool.execute.before": async');
     expect(CREWMATE_PLUGIN).toContain('toolName === "task"');
     expect(CREWMATE_PLUGIN).toContain('["scout", "planner", "executor"].includes(subagent)');
     expect(CREWMATE_PLUGIN).toContain('"Dispatched scout to explore the codebase"');
     expect(CREWMATE_PLUGIN).toContain('"Dispatched planner to decompose the brief into tasks"');
     expect(CREWMATE_PLUGIN).toContain('Dispatched executor for');
+    expect(CREWMATE_PLUGIN).toContain('isDuplicate');
+  });
+
+  it('should include tool.execute.after hook for automatic status and lock event recording', () => {
+    expect(CREWMATE_PLUGIN).toContain('"tool.execute.after": async');
+    expect(CREWMATE_PLUGIN).toContain('toolName === "crewmate_update_task"');
+    expect(CREWMATE_PLUGIN).toContain('toolName === "crewmate_acquire_lock"');
+    expect(CREWMATE_PLUGIN).toContain('status === "in_progress"');
+    expect(CREWMATE_PLUGIN).toContain('status === "completed"');
+    expect(CREWMATE_PLUGIN).toContain('Started task');
+    expect(CREWMATE_PLUGIN).toContain('Completed task');
+    expect(CREWMATE_PLUGIN).toContain('Locked');
+  });
+
+  it('should include event hook for automatic subagent lifecycle tracking', () => {
+    expect(CREWMATE_PLUGIN).toContain('event: async ({ event }');
+    expect(CREWMATE_PLUGIN).toContain('event.type === "message.part.updated"');
+    expect(CREWMATE_PLUGIN).toContain('event.type === "session.created"');
+    expect(CREWMATE_PLUGIN).toContain('event.type === "session.idle"');
+    expect(CREWMATE_PLUGIN).toContain('event.type === "session.error"');
+    expect(CREWMATE_PLUGIN).toContain('Finished codebase exploration');
+    expect(CREWMATE_PLUGIN).toContain('Finished task breakdown');
+  });
+
+  it('should include heartbeat and dispose hook for session liveness tracking', () => {
+    expect(CREWMATE_PLUGIN).toContain('session", "heartbeat"');
+    expect(CREWMATE_PLUGIN).toContain('session", "stop"');
+    expect(CREWMATE_PLUGIN).toContain('dispose: async () =>');
   });
 });

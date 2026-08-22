@@ -7,6 +7,7 @@ import { registerArtifactCommand } from './commands/artifact.js';
 import { registerEventCommand } from './commands/event.js';
 import { registerActivityCommand } from './commands/activity.js';
 import { registerWatchCommand } from './commands/watch.js';
+import { registerSessionCommand } from './commands/session.js';
 
 const program = new Command();
 
@@ -20,5 +21,6 @@ registerArtifactCommand(program);
 registerEventCommand(program);
 registerActivityCommand(program);
 registerWatchCommand(program);
+registerSessionCommand(program);
 
 program.parse();
