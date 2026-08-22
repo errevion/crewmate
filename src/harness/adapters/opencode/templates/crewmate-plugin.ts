@@ -82,7 +82,17 @@ async function runCrewmate(
   }
 }
 
-const CrewmatePlugin: Plugin = async ({ $ }) => {
+interface TrackedSubagentSession {
+  agent: string
+  taskId?: string
+  dispatchedAt: number
+}
+
+const CrewmatePlugin: Plugin = async ({ $, directory }: any) => {
+  const targetDir = typeof directory === "string" && directory.trim() ? directory : process.cwd()
+  const sessionAgentMap = new Map<string, TrackedSubagentSession>()
+  const pendingDispatches = new Map<string, { agent: string; taskId?: string; dispatchedAt: number }>()
+
   return {
     tool: {
       crewmate_create_brief: tool({
@@ -594,10 +604,12 @@ const CrewmatePlugin: Plugin = async ({ $ }) => {
     "tool.execute.before": async (input: any, output: any) => {
       try {
         const toolName = input?.tool
+        const callID = input?.callID
         const args = output?.args || input?.args || {}
         if (toolName === "task" && args) {
           const subagent = String(args.subagent_type || args.agent || "").toLowerCase()
           if (["scout", "planner", "executor"].includes(subagent)) {
+            const taskId = args.task_id || args.taskId
             let msg = \`Dispatched \${subagent}\`
             if (subagent === "scout") {
               msg = "Dispatched scout to explore the codebase"
@@ -609,48 +621,207 @@ const CrewmatePlugin: Plugin = async ({ $ }) => {
               msg = \`Dispatched executor for \${firstLine}\`
             }
 
-            const targetDir = typeof directory === "string" && directory.trim() ? directory : process.cwd()
+            if (callID) {
+              pendingDispatches.set(callID, {
+                agent: subagent,
+                taskId,
+                dispatchedAt: Date.now(),
+              })
+            }
 
-            // Check if Frontman already emitted this event recently to prevent duplicate logging
-            const recent = await runCrewmate($, targetDir, [
+            const cmdParts = [
               "event",
-              "list",
+              "add",
               "--actor",
               "frontman",
               "--type",
               "dispatched",
-              "--limit",
-              "5",
-            ]).catch(() => null)
-
-            const isDuplicate =
-              recent?.ok &&
-              Array.isArray(recent.events) &&
-              recent.events.some((e: any) => {
-                const age = Date.now() - new Date(e.createdAt).getTime()
-                return age < 5000 && (e.message === msg || e.message.toLowerCase().includes(subagent))
-              })
-
-            if (!isDuplicate) {
-              const cmdParts = [
-                "event",
-                "add",
-                "--actor",
-                "frontman",
-                "--type",
-                "dispatched",
-                "--message",
-                $.escape(msg),
-              ]
-              if (args.task_id || args.taskId) {
-                cmdParts.push("--task", $.escape(args.task_id || args.taskId))
-              }
-              await runCrewmate($, targetDir, cmdParts).catch(() => {})
+              "--message",
+              $.escape(msg),
+            ]
+            if (taskId) {
+              cmdParts.push("--task", $.escape(taskId))
             }
+            await runCrewmate($, targetDir, cmdParts).catch(() => {})
           }
         }
       } catch {
         // Guardrail should not break tool execution
+      }
+    },
+
+    "tool.execute.after": async (input: any, output: any) => {
+      try {
+        const toolName = input?.tool
+        const args = input?.args || {}
+        const rawOutput = output?.output
+
+        let parsedOutput: any = null
+        if (rawOutput) {
+          try {
+            parsedOutput = JSON.parse(rawOutput)
+          } catch {
+            parsedOutput = null
+          }
+        }
+
+        if (toolName === "crewmate_update_task" && args?.taskId && args?.status) {
+          const taskId = args.taskId
+          const status = args.status
+          if (status === "in_progress") {
+            const taskTitle = parsedOutput?.title || taskId
+            await runCrewmate($, targetDir, [
+              "event",
+              "add",
+              "--actor",
+              "executor",
+              "--type",
+              "started",
+              "--task",
+              $.escape(taskId),
+              "--message",
+              $.escape(\`Started task \${taskTitle}\`),
+            ]).catch(() => {})
+          } else if (status === "completed") {
+            const taskTitle = parsedOutput?.title || taskId
+            await runCrewmate($, targetDir, [
+              "event",
+              "add",
+              "--actor",
+              "executor",
+              "--type",
+              "completed",
+              "--task",
+              $.escape(taskId),
+              "--message",
+              $.escape(\`Completed task \${taskTitle}\`),
+            ]).catch(() => {})
+          }
+        }
+
+        if (toolName === "crewmate_acquire_lock" && args?.taskId && Array.isArray(args?.files)) {
+          const taskId = args.taskId
+          const count = args.files.length
+          const taskTitle = parsedOutput?.taskTitle || taskId
+          await runCrewmate($, targetDir, [
+            "event",
+            "add",
+            "--actor",
+            "executor",
+            "--type",
+            "locked",
+            "--task",
+            $.escape(taskId),
+            "--message",
+            $.escape(\`Locked \${count} file(s) for task \${taskTitle}\`),
+          ]).catch(() => {})
+        }
+      } catch {
+        // Guardrail should not break tool execution
+      }
+    },
+
+    event: async ({ event }: { event: any }) => {
+      try {
+        if (event.type === "message.part.updated") {
+          const part = event.properties?.part
+          if (part?.type === "subtask" && part?.callID && part?.sessionID) {
+            const pending = pendingDispatches.get(part.callID)
+            if (pending) {
+              sessionAgentMap.set(part.sessionID, {
+                agent: pending.agent,
+                taskId: pending.taskId,
+                dispatchedAt: pending.dispatchedAt,
+              })
+              pendingDispatches.delete(part.callID)
+            }
+          }
+        }
+
+        if (event.type === "session.created") {
+          const sessionInfo = event.properties?.info
+          if (sessionInfo?.parentID && sessionInfo?.id && !sessionAgentMap.has(sessionInfo.id)) {
+            // Find most recently dispatched pending task as fallback correlation
+            let bestCallId: string | null = null
+            let latestTime = 0
+            for (const [callId, pending] of pendingDispatches.entries()) {
+              if (pending.dispatchedAt > latestTime && Date.now() - pending.dispatchedAt < 10000) {
+                latestTime = pending.dispatchedAt
+                bestCallId = callId
+              }
+            }
+            if (bestCallId) {
+              const pending = pendingDispatches.get(bestCallId)!
+              sessionAgentMap.set(sessionInfo.id, {
+                agent: pending.agent,
+                taskId: pending.taskId,
+                dispatchedAt: pending.dispatchedAt,
+              })
+              pendingDispatches.delete(bestCallId)
+            }
+          }
+        }
+
+        if (event.type === "session.idle") {
+          const sessionID = event.properties?.sessionID
+          if (sessionID && sessionAgentMap.has(sessionID)) {
+            const tracked = sessionAgentMap.get(sessionID)!
+            sessionAgentMap.delete(sessionID)
+
+            let msg = \`Completed \${tracked.agent}\`
+            if (tracked.agent === "scout") {
+              msg = "Finished codebase exploration"
+            } else if (tracked.agent === "planner") {
+              msg = "Finished task breakdown"
+            } else if (tracked.agent === "executor") {
+              msg = tracked.taskId ? \`Completed executor for task \${tracked.taskId}\` : "Completed task implementation"
+            }
+
+            const cmdParts = [
+              "event",
+              "add",
+              "--actor",
+              tracked.agent,
+              "--type",
+              "completed",
+              "--message",
+              $.escape(msg),
+            ]
+            if (tracked.taskId) {
+              cmdParts.push("--task", $.escape(tracked.taskId))
+            }
+            await runCrewmate($, targetDir, cmdParts).catch(() => {})
+          }
+        }
+
+        if (event.type === "session.error") {
+          const sessionID = event.properties?.sessionID
+          if (sessionID && sessionAgentMap.has(sessionID)) {
+            const tracked = sessionAgentMap.get(sessionID)!
+            sessionAgentMap.delete(sessionID)
+
+            const errorData = event.properties?.error
+            const errMsg = errorData?.data?.message || errorData?.name || "Subagent execution error"
+            const msg = \`Error in \${tracked.agent}: \${errMsg}\`.slice(0, 120)
+
+            const cmdParts = [
+              "event",
+              "add",
+              "--actor",
+              tracked.agent,
+              "--type",
+              "error",
+              "--message",
+              $.escape(msg),
+            ]
+            if (tracked.taskId) {
+              cmdParts.push("--task", $.escape(tracked.taskId))
+            }
+            await runCrewmate($, targetDir, cmdParts).catch(() => {})
+          }
+        }
+      } catch {
+        // Guardrail should not break event processing
       }
     },
   }
