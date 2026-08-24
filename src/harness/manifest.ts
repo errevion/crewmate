@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { CrewmateManifest, ManifestFileEntry } from './types.js';
 
-export const CREWMATE_VERSION = '0.2.1';
+export const CREWMATE_VERSION = '0.2.2';
 
 /**
  * Computes sha256 checksum of a string content
