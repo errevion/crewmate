@@ -1,6 +1,6 @@
 {
   "name": "crewmate",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "AI agent workflow CLI tool",
   "type": "module",
   "bin": {
