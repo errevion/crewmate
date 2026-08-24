@@ -1,12 +1,27 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
 import { runMigrations } from './migrations.js';
 
 const DB_DIR = '.crewmate';
 const DB_FILE = 'crewmate.db';
 
 let db: Database.Database | null = null;
+
+function findProjectRoot(startDir: string): string {
+  let current = resolve(startDir);
+
+  while (true) {
+    if (existsSync(join(current, DB_DIR)) && existsSync(join(current, '.git'))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return startDir;
+    }
+    current = parent;
+  }
+}
 
 /**
  * Returns the singleton SQLite database connection, initializing it on first call
@@ -16,7 +31,8 @@ export function getDb(): Database.Database {
     return db;
   }
 
-  const dbDir = join(process.cwd(), DB_DIR);
+  const projectRoot = findProjectRoot(process.cwd());
+  const dbDir = join(projectRoot, DB_DIR);
   mkdirSync(dbDir, { recursive: true });
 
   const dbPath = join(dbDir, DB_FILE);
@@ -24,30 +40,32 @@ export function getDb(): Database.Database {
 
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
 
   runMigrations(db);
 
   return db;
 }
 
-// Clean up database on process exit
-process.on('exit', () => {
+function closeDb(): void {
   if (db) {
-    db.close();
+    try {
+      db.close();
+    } catch {
+      // already closed
+    }
+    db = null;
   }
-});
+}
 
-// Handle graceful shutdown signals
+process.on('exit', closeDb);
+
 process.on('SIGTERM', () => {
-  if (db) {
-    db.close();
-    process.exit(0);
-  }
+  closeDb();
+  process.exit(143);
 });
 
 process.on('SIGINT', () => {
-  if (db) {
-    db.close();
-    process.exit(0);
-  }
+  closeDb();
+  process.exit(130);
 });

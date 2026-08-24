@@ -75,6 +75,9 @@ export function registerArtifactCommand(program: Command): void {
       }
 
       const briefId = opts.brief || task.briefId;
+      if (opts.brief && opts.brief !== task.briefId) {
+        fail(`Task ${taskId} belongs to brief ${task.briefId}, not ${opts.brief}`);
+      }
       const brief = getBriefById(briefId);
       if (!brief) {
         fail(`Brief not found: ${briefId}`);

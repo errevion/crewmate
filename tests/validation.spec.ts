@@ -192,9 +192,9 @@ describe('validation', () => {
       const brief = createMockBrief({
         workType: 'software',
         goal: 'Test',
-        scope: { included: [], excluded: [] },
-        functionalRequirements: [],
-        acceptanceCriteria: [],
+        scope: { included: ['feature A'], excluded: ['feature B'] },
+        functionalRequirements: ['req 1'],
+        acceptanceCriteria: ['criteria 1'],
       });
       const missing = getMissingRequiredFields(brief);
 
@@ -233,9 +233,9 @@ describe('validation', () => {
       const brief = createMockBrief({
         workType: 'software',
         goal: 'Test',
-        scope: { included: [], excluded: [] },
-        functionalRequirements: [],
-        acceptanceCriteria: [],
+        scope: { included: ['feature A'], excluded: ['feature B'] },
+        functionalRequirements: ['req 1'],
+        acceptanceCriteria: ['criteria 1'],
       });
       expect(isBriefComplete(brief)).toBe(true);
     });

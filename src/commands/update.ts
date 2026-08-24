@@ -65,8 +65,12 @@ function formatOutput(data: UpdateCommandOutput): string {
   return lines.join('\n');
 }
 
-function fail(error: string, extra?: Omit<ErrorOutput, 'ok' | 'error'>): never {
-  out({ ok: false, error, ...extra });
+function fail(
+  error: string,
+  extra?: Omit<ErrorOutput, 'ok' | 'error'>,
+  jsonOnly: boolean = false
+): never {
+  out({ ok: false, error, ...extra }, jsonOnly);
   process.exit(1);
 }
 
@@ -87,18 +91,25 @@ export function registerUpdateCommand(program: Command): void {
     .action(async (opts) => {
       const adapter = getAdapter(opts.harness);
       if (!adapter) {
-        fail(`Unknown harness "${opts.harness}"`, {
-          available: listAdapterNames(),
-        });
+        fail(
+          `Unknown harness "${opts.harness}"`,
+          {
+            available: listAdapterNames(),
+          },
+          opts.json
+        );
       }
 
       const targetDir = opts.dir ?? process.cwd();
 
-      // Check if project has been initialized (e.g. .opencode exists or .crewmate exists)
       const opencodeDir = join(targetDir, '.opencode');
       const crewmateDir = join(targetDir, '.crewmate');
       if (!existsSync(opencodeDir) && !existsSync(crewmateDir)) {
-        fail(`Project is not initialized with crewmate. Run 'crewmate init' first.`);
+        fail(
+          `Project is not initialized with crewmate. Run 'crewmate init' first.`,
+          undefined,
+          opts.json
+        );
       }
 
       try {
@@ -115,7 +126,7 @@ export function registerUpdateCommand(program: Command): void {
           opts.json
         );
       } catch (e) {
-        fail((e as Error).message);
+        fail((e as Error).message, undefined, opts.json);
       }
     });
 }

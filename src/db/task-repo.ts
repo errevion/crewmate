@@ -10,12 +10,18 @@ export function generateId(): string {
 }
 
 function rowToTask(row: Record<string, unknown>): Task {
+  let deps: string[] = [];
+  try {
+    deps = JSON.parse(row.dependencies as string);
+  } catch {
+    // corrupted JSON defaults to empty array
+  }
   return {
     id: row.id as string,
     briefId: row.brief_id as string,
     title: row.title as string,
     description: row.description as string,
-    dependencies: JSON.parse(row.dependencies as string),
+    dependencies: deps,
     field: (row.field as string) || null,
     status: row.status as Task['status'],
     createdAt: row.created_at as string,
@@ -121,7 +127,29 @@ export function updateTaskStatus(db: Database.Database, id: string, status: Task
  *
  */
 export function removeTask(db: Database.Database, id: string): void {
-  db.prepare(`DELETE FROM tasks WHERE id = ?`).run(id);
+  const tx = db.transaction(() => {
+    const allTasks = db
+      .prepare(`SELECT id, dependencies FROM tasks WHERE id != ?`)
+      .all(id) as Array<{ id: string; dependencies: string }>;
+
+    for (const t of allTasks) {
+      let deps: string[];
+      try {
+        deps = JSON.parse(t.dependencies);
+      } catch {
+        deps = [];
+      }
+      if (deps.includes(id)) {
+        const filtered = deps.filter((d: string) => d !== id);
+        db.prepare(
+          `UPDATE tasks SET dependencies = ?, updated_at = datetime('now') WHERE id = ?`
+        ).run(JSON.stringify(filtered), t.id);
+      }
+    }
+
+    db.prepare(`DELETE FROM tasks WHERE id = ?`).run(id);
+  });
+  tx();
 }
 
 /**
@@ -129,4 +157,72 @@ export function removeTask(db: Database.Database, id: string): void {
  */
 export function deleteTasksByBrief(db: Database.Database, briefId: string): void {
   db.prepare(`DELETE FROM tasks WHERE brief_id = ?`).run(briefId);
+}
+
+/**
+ * Validates that task dependencies exist, belong to the same brief, and don't create cycles.
+ */
+export function validateDependencies(
+  db: Database.Database,
+  briefId: string,
+  dependencies: string[],
+  taskId?: string
+): { valid: boolean; error?: string } {
+  if (dependencies.length === 0) {
+    return { valid: true };
+  }
+
+  const briefTasks = listTasksByBrief(db, briefId);
+  const taskIds = new Set(briefTasks.map((t) => t.id));
+
+  for (const dep of dependencies) {
+    if (taskId && dep === taskId) {
+      return { valid: false, error: `Task cannot depend on itself: ${dep}` };
+    }
+    if (!taskIds.has(dep)) {
+      return {
+        valid: false,
+        error: `Dependency task not found in this brief: ${dep}`,
+      };
+    }
+  }
+
+  if (taskId) {
+    const graph = new Map<string, string[]>();
+    for (const t of briefTasks) {
+      graph.set(t.id, t.id === taskId ? dependencies : t.dependencies);
+    }
+    if (!taskIds.has(taskId)) {
+      graph.set(taskId, dependencies);
+    }
+
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+
+    function hasCycle(node: string): boolean {
+      if (inStack.has(node)) {
+        return true;
+      }
+      if (visited.has(node)) {
+        return false;
+      }
+      visited.add(node);
+      inStack.add(node);
+      for (const dep of graph.get(node) ?? []) {
+        if (hasCycle(dep)) {
+          return true;
+        }
+      }
+      inStack.delete(node);
+      return false;
+    }
+
+    for (const node of graph.keys()) {
+      if (hasCycle(node)) {
+        return { valid: false, error: 'Dependency cycle detected' };
+      }
+    }
+  }
+
+  return { valid: true };
 }

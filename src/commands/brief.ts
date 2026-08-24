@@ -104,11 +104,11 @@ export function registerBriefCommand(program: Command): void {
     .action((field: string, valueParts: string[], opts: { id?: string; base64?: boolean }) => {
       let value = valueParts.join(' ');
       if (opts.base64) {
-        try {
-          value = Buffer.from(value, 'base64').toString('utf-8');
-        } catch {
+        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+        if (!base64Regex.test(value)) {
           fail('Invalid base64 encoding for field value');
         }
+        value = Buffer.from(value, 'base64').toString('utf-8');
       }
       if (!isValidField(field)) {
         fail(`Unknown field "${field}"`, {
@@ -117,6 +117,10 @@ export function registerBriefCommand(program: Command): void {
       }
 
       const b = resolveOrFail(opts.id);
+
+      if (b.status === 'complete') {
+        fail('Cannot modify a completed brief. Create a new brief or revert status first.');
+      }
 
       let parsed: unknown;
       try {

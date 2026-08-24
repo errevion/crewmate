@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { randomBytes } from 'node:crypto';
+import { resolve, relative } from 'node:path';
 import type { FileLock } from '../models/lock.js';
 
 /**
@@ -13,7 +14,16 @@ export function generateId(): string {
  *
  */
 export function normalizeFilePath(filePath: string): string {
-  return filePath.trim().replace(/\\/g, '/');
+  const trimmed = filePath.trim();
+  if (!trimmed) {
+    return '';
+  }
+  const resolved = resolve(trimmed);
+  const rel = relative(process.cwd(), resolved);
+  const normalized = rel.replace(/\\/g, '/');
+  return process.platform === 'win32' || process.platform === 'darwin'
+    ? normalized.toLowerCase()
+    : normalized;
 }
 
 function rowToLock(row: Record<string, unknown>): FileLock {
@@ -62,13 +72,16 @@ export function acquireLocks(
     return { ok: true, locked: [] };
   }
 
+  db.prepare(
+    `DELETE FROM file_locks WHERE expires_at IS NOT NULL AND expires_at < datetime('now')`
+  ).run();
+
   const findLockStmt = db.prepare(`SELECT * FROM file_locks WHERE file_path = ?`);
   const insertLockStmt = db.prepare(
-    `INSERT INTO file_locks (id, task_id, file_path) VALUES (?, ?, ?)`
+    `INSERT INTO file_locks (id, task_id, file_path, expires_at) VALUES (?, ?, ?, datetime('now', '+5 minutes'))`
   );
 
   const tx = db.transaction(() => {
-    // 1. Check all paths for conflicts with OTHER tasks
     for (const filePath of normalizedPaths) {
       const existing = findLockStmt.get(filePath) as Record<string, unknown> | undefined;
       if (existing && existing.task_id !== taskId) {
@@ -80,13 +93,16 @@ export function acquireLocks(
       }
     }
 
-    // 2. Insert locks for paths not yet locked by this task
     const newlyLocked: string[] = [];
     for (const filePath of normalizedPaths) {
       const existing = findLockStmt.get(filePath) as Record<string, unknown> | undefined;
       if (!existing) {
         insertLockStmt.run(generateId(), taskId, filePath);
         newlyLocked.push(filePath);
+      } else {
+        db.prepare(
+          `UPDATE file_locks SET expires_at = datetime('now', '+5 minutes') WHERE id = ?`
+        ).run(existing.id);
       }
     }
 
@@ -96,7 +112,7 @@ export function acquireLocks(
     };
   });
 
-  return tx();
+  return tx.immediate();
 }
 
 /**
