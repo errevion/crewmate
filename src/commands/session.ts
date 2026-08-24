@@ -57,9 +57,14 @@ export function registerSessionCommand(program: Command): void {
     .action((opts: { brief?: string; harness: string; pid?: string; status: string }) => {
       const briefId = resolveTargetBrief(opts.brief);
       const pidNum = opts.pid ? parseInt(opts.pid, 10) : null;
-      const status = (
-        ['active', 'idle', 'stopped'].includes(opts.status) ? opts.status : 'active'
-      ) as SessionStatus;
+      if (pidNum !== null && (!Number.isFinite(pidNum) || pidNum <= 0)) {
+        fail(`Invalid PID: ${opts.pid}`);
+      }
+      const validStatuses = ['active', 'idle', 'stopped'];
+      if (!validStatuses.includes(opts.status)) {
+        fail(`Invalid status: ${opts.status}. Must be one of: ${validStatuses.join(', ')}`);
+      }
+      const status = opts.status as SessionStatus;
 
       const session = recordHeartbeat(getDb(), briefId, opts.harness, pidNum, status);
       out({ ok: true, session });

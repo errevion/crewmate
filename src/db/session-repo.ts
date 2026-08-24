@@ -34,42 +34,46 @@ export function recordHeartbeat(
   pid: number | null,
   status: SessionStatus = 'active'
 ): SessionLiveness {
-  const existing = db
-    .prepare<[string, string]>(
-      `SELECT * FROM session_liveness WHERE brief_id = ? AND harness = ? ORDER BY last_heartbeat_at DESC LIMIT 1`
-    )
-    .get(briefId, harness) as SessionLivenessRow | undefined;
-
   const now = new Date().toISOString();
 
-  if (existing) {
-    db.prepare<[string, number | null, string, string]>(
-      `UPDATE session_liveness SET status = ?, pid = ?, last_heartbeat_at = ? WHERE id = ?`
-    ).run(status, pid ?? existing.pid, now, existing.id);
+  const tx = db.transaction(() => {
+    const existing = db
+      .prepare<[string, string]>(
+        `SELECT * FROM session_liveness WHERE brief_id = ? AND harness = ? ORDER BY last_heartbeat_at DESC LIMIT 1`
+      )
+      .get(briefId, harness) as SessionLivenessRow | undefined;
+
+    if (existing) {
+      db.prepare<[string, number | null, string, string]>(
+        `UPDATE session_liveness SET status = ?, pid = ?, last_heartbeat_at = ? WHERE id = ?`
+      ).run(status, pid ?? existing.pid, now, existing.id);
+
+      return {
+        ...mapRow(existing),
+        status,
+        pid: pid ?? existing.pid,
+        lastHeartbeatAt: now,
+      };
+    }
+
+    const id = nanoid(8);
+    db.prepare<[string, string, string, number | null, string, string, string]>(
+      `INSERT INTO session_liveness (id, brief_id, harness, pid, status, last_heartbeat_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, briefId, harness, pid, status, now, now);
 
     return {
-      ...mapRow(existing),
+      id,
+      briefId,
+      harness,
+      pid,
       status,
-      pid: pid ?? existing.pid,
       lastHeartbeatAt: now,
+      createdAt: now,
     };
-  }
+  });
 
-  const id = nanoid(8);
-  db.prepare<[string, string, string, number | null, string, string, string]>(
-    `INSERT INTO session_liveness (id, brief_id, harness, pid, status, last_heartbeat_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, briefId, harness, pid, status, now, now);
-
-  return {
-    id,
-    briefId,
-    harness,
-    pid,
-    status,
-    lastHeartbeatAt: now,
-    createdAt: now,
-  };
+  return tx.immediate();
 }
 
 /**

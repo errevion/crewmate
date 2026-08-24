@@ -117,19 +117,10 @@ export function registerEventCommand(program: Command): void {
 
         const now = Date.now();
         const duplicate = recentEvents.find((e) => {
-          const age = now - new Date(e.createdAt).getTime();
+          const createdAtUtc = e.createdAt.endsWith('Z') ? e.createdAt : e.createdAt + 'Z';
+          const age = now - new Date(createdAtUtc).getTime();
           if (age > 4000) {
             return false;
-          }
-          if (opts.type === 'dispatched') {
-            // Match same message or same target agent
-            const target = opts.message
-              .toLowerCase()
-              .match(/\b(frontman|scout|planner|executor)\b/)?.[1];
-            const existingTarget = e.message
-              .toLowerCase()
-              .match(/\b(frontman|scout|planner|executor)\b/)?.[1];
-            return e.message === opts.message.trim() || (target && target === existingTarget);
           }
           return e.message === opts.message.trim();
         });
@@ -203,7 +194,11 @@ export function registerEventCommand(program: Command): void {
           taskId: opts.task,
           actor: opts.actor ? (opts.actor as EventActor) : undefined,
           type: opts.type ? (opts.type as EventType) : undefined,
-          limit: opts.limit ? parseInt(opts.limit, 10) : undefined,
+          limit: opts.limit
+            ? Number.isFinite(parseInt(opts.limit, 10))
+              ? parseInt(opts.limit, 10)
+              : undefined
+            : undefined,
         });
 
         out({

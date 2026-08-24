@@ -55,6 +55,9 @@ export function parseFieldValue(field: BriefField, raw: string): unknown {
   }
 
   if (field === 'goal') {
+    if (!raw.trim()) {
+      throw new Error('Goal cannot be empty');
+    }
     return raw;
   }
 
@@ -82,6 +85,11 @@ export function parseFieldValue(field: BriefField, raw: string): unknown {
         throw new Error(
           `Invalid structure for field "${field}". Expected an array of strings: ${FIELD_FORMAT_HINTS[field]}`
         );
+      }
+      for (const item of parsed) {
+        if (typeof item !== 'string') {
+          throw new Error(`Invalid element in "${field}": expected string, got ${typeof item}`);
+        }
       }
     } else if (field === 'scope') {
       if (
@@ -139,6 +147,19 @@ export function parseFieldValue(field: BriefField, raw: string): unknown {
           `Invalid structure for field "deliverables". Expected format: ${FIELD_FORMAT_HINTS.deliverables}`
         );
       }
+      for (const item of parsed) {
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+          throw new Error(
+            `Invalid element in "deliverables": each item must be an object with "type" and "format"`
+          );
+        }
+      }
+    } else if (field === 'qualityStandards') {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error(
+          `Invalid structure for field "qualityStandards". Expected format: ${FIELD_FORMAT_HINTS.qualityStandards}`
+        );
+      }
     }
 
     return parsed;
@@ -179,7 +200,27 @@ export function getRequiredFieldStatuses(brief: Brief): Record<string, 'set' | '
 export function getMissingRequiredFields(brief: Brief): BriefField[] {
   return REQUIRED_FIELDS.filter((field) => {
     const value = brief[field];
-    return value === null || value === undefined;
+    if (value === null || value === undefined) {
+      return true;
+    }
+    if (typeof value === 'string' && !value.trim()) {
+      return true;
+    }
+    if (Array.isArray(value) && value.length === 0) {
+      return true;
+    }
+    if (field === 'scope' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      const scopeVal = value as unknown as Record<string, unknown>;
+      if (
+        Array.isArray(scopeVal.included) &&
+        Array.isArray(scopeVal.excluded) &&
+        (scopeVal.included as unknown[]).length === 0 &&
+        (scopeVal.excluded as unknown[]).length === 0
+      ) {
+        return true;
+      }
+    }
+    return false;
   });
 }
 

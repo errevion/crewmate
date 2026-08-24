@@ -775,10 +775,10 @@ function runDashboard(opts: WatchOptions): void {
 
   pollDb();
 
-  const pollTimer = setInterval(
-    pollDb,
-    Math.max(200, parseInt(opts.interval ?? String(DEFAULT_INTERVAL_MS), 10))
-  );
+  const parsedInterval = parseInt(opts.interval ?? String(DEFAULT_INTERVAL_MS), 10);
+  const safeInterval =
+    Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : DEFAULT_INTERVAL_MS;
+  const pollTimer = setInterval(pollDb, Math.max(200, safeInterval));
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
   function openTaskListModal(): void {

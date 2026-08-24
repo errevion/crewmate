@@ -7,7 +7,7 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS briefs (
       id TEXT PRIMARY KEY,
-      work_type TEXT,
+      work_type TEXT CHECK(work_type IS NULL OR work_type IN ('software', 'infrastructure', 'data', 'documentation', 'audit')),
       goal TEXT,
       scope TEXT,
       functional_requirements TEXT,
@@ -20,7 +20,7 @@ export function runMigrations(db: Database.Database): void {
       dependencies TEXT,
       risks TEXT,
       deliverables TEXT,
-      status TEXT NOT NULL DEFAULT 'draft',
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'complete')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -29,12 +29,12 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id           TEXT PRIMARY KEY,
-      brief_id     TEXT NOT NULL REFERENCES briefs(id),
+      brief_id     TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
       title        TEXT NOT NULL,
       description  TEXT NOT NULL,
       dependencies TEXT NOT NULL DEFAULT '[]',
       field        TEXT,
-      status       TEXT NOT NULL DEFAULT 'pending',
+      status       TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed')),
       created_at   TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -43,18 +43,19 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS file_locks (
       id         TEXT PRIMARY KEY,
-      task_id    TEXT NOT NULL REFERENCES tasks(id),
+      task_id    TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
       file_path  TEXT NOT NULL UNIQUE,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT
     );
   `);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS execution_artifacts (
       id         TEXT PRIMARY KEY,
-      task_id    TEXT NOT NULL REFERENCES tasks(id),
-      brief_id   TEXT NOT NULL REFERENCES briefs(id),
-      type       TEXT NOT NULL,
+      task_id    TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      brief_id   TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      type       TEXT NOT NULL CHECK(type IN ('fact', 'decision', 'api_contract', 'constraint', 'note', 'log')),
       content    TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -63,10 +64,10 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS execution_events (
       id         TEXT PRIMARY KEY,
-      brief_id   TEXT NOT NULL REFERENCES briefs(id),
-      task_id    TEXT REFERENCES tasks(id),
-      actor      TEXT NOT NULL,
-      type       TEXT NOT NULL,
+      brief_id   TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      task_id    TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+      actor      TEXT NOT NULL CHECK(actor IN ('frontman', 'scout', 'planner', 'executor')),
+      type       TEXT NOT NULL CHECK(type IN ('dispatched', 'started', 'locked', 'artifact', 'completed', 'error')),
       message    TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -79,8 +80,8 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS frontman_activities (
       id            TEXT PRIMARY KEY,
-      brief_id      TEXT NOT NULL REFERENCES briefs(id),
-      activity_type TEXT NOT NULL,
+      brief_id      TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      activity_type TEXT NOT NULL CHECK(activity_type IN ('questioning', 'awaiting_response', 'analyzing', 'planning', 'orchestrating', 'reviewing', 'idle')),
       message       TEXT,
       metadata      TEXT,
       started_at    TEXT NOT NULL DEFAULT (datetime('now')),
@@ -98,10 +99,10 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_liveness (
       id                TEXT PRIMARY KEY,
-      brief_id          TEXT NOT NULL REFERENCES briefs(id),
+      brief_id          TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
       harness           TEXT NOT NULL,
       pid               INTEGER,
-      status            TEXT NOT NULL DEFAULT 'active',
+      status            TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'idle', 'stopped')),
       last_heartbeat_at TEXT NOT NULL DEFAULT (datetime('now')),
       created_at        TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -113,4 +114,22 @@ export function runMigrations(db: Database.Database): void {
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_session_liveness_last_heartbeat ON session_liveness (last_heartbeat_at)`
   );
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_brief_id ON tasks (brief_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_file_locks_task_id ON file_locks (task_id)`);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_brief_id ON execution_artifacts (brief_id)`
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_task_id ON execution_artifacts (task_id)`
+  );
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_session_liveness_brief_harness ON session_liveness (brief_id, harness)`
+  );
+
+  try {
+    db.exec(`ALTER TABLE file_locks ADD COLUMN expires_at TEXT`);
+  } catch {
+    // column already exists
+  }
 }

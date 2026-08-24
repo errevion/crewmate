@@ -108,9 +108,12 @@ export function listEvents(db: Database.Database, filter?: ListEventsFilter): Ex
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const limitClause = filter?.limit ? ` LIMIT ${Math.max(0, Math.floor(filter.limit))}` : '';
+  const safeLimit =
+    filter?.limit && Number.isFinite(filter.limit) && filter.limit > 0
+      ? ` LIMIT ${Math.floor(filter.limit)}`
+      : '';
   const stmt = db.prepare(
-    `SELECT * FROM execution_events ${whereClause} ORDER BY created_at DESC, rowid DESC${limitClause}`
+    `SELECT * FROM execution_events ${whereClause} ORDER BY created_at DESC, rowid DESC${safeLimit}`
   );
   const rows = stmt.all(...params) as Record<string, unknown>[];
   return rows.map(rowToEvent);

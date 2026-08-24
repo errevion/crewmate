@@ -43,18 +43,20 @@ export function setActivity(
     metadata?: Record<string, unknown> | null;
   }
 ): FrontmanActivity {
-  // End any open activities for this brief first
-  db.prepare(
-    `UPDATE frontman_activities SET ended_at = datetime('now') WHERE brief_id = ? AND ended_at IS NULL`
-  ).run(briefId);
-
   const id = generateActivityId();
   const metadataJson = options?.metadata ? JSON.stringify(options.metadata) : null;
   const message = options?.message ?? null;
 
-  db.prepare(
-    `INSERT INTO frontman_activities (id, brief_id, activity_type, message, metadata) VALUES (?, ?, ?, ?, ?)`
-  ).run(id, briefId, activityType, message, metadataJson);
+  const tx = db.transaction(() => {
+    db.prepare(
+      `UPDATE frontman_activities SET ended_at = datetime('now') WHERE brief_id = ? AND ended_at IS NULL`
+    ).run(briefId);
+
+    db.prepare(
+      `INSERT INTO frontman_activities (id, brief_id, activity_type, message, metadata) VALUES (?, ?, ?, ?, ?)`
+    ).run(id, briefId, activityType, message, metadataJson);
+  });
+  tx();
 
   const row = db.prepare(`SELECT * FROM frontman_activities WHERE id = ?`).get(id) as
     Record<string, unknown> | undefined;
@@ -119,9 +121,12 @@ export function listActivities(
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const limitClause = filter?.limit ? ` LIMIT ${Math.max(0, Math.floor(filter.limit))}` : '';
+  const safeLimit =
+    filter?.limit && Number.isFinite(filter.limit) && filter.limit > 0
+      ? ` LIMIT ${Math.floor(filter.limit)}`
+      : '';
   const stmt = db.prepare(
-    `SELECT * FROM frontman_activities ${whereClause} ORDER BY started_at DESC, rowid DESC${limitClause}`
+    `SELECT * FROM frontman_activities ${whereClause} ORDER BY started_at DESC, rowid DESC${safeLimit}`
   );
   const rows = stmt.all(...params) as Record<string, unknown>[];
   return rows.map(rowToActivity);

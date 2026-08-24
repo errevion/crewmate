@@ -358,7 +358,10 @@ describe('crewmate brief', () => {
       // Set all required fields
       await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'goal', 'Build something'], { cwd: tmpDir });
-      await runCli(['brief', 'set', 'scope', '{"included":[],"excluded":[]}'], { cwd: tmpDir });
+      await runCli(
+        ['brief', 'set', 'scope', '{"included":["feature A"],"excluded":["feature B"]}'],
+        { cwd: tmpDir }
+      );
       await runCli(['brief', 'set', 'functionalRequirements', '["feat1"]'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'acceptanceCriteria', '["criterion1"]'], { cwd: tmpDir });
 
@@ -393,9 +396,12 @@ describe('crewmate brief', () => {
 
       await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'goal', 'Test'], { cwd: tmpDir });
-      await runCli(['brief', 'set', 'scope', '{"included":[],"excluded":[]}'], { cwd: tmpDir });
-      await runCli(['brief', 'set', 'functionalRequirements', '[]'], { cwd: tmpDir });
-      await runCli(['brief', 'set', 'acceptanceCriteria', '[]'], { cwd: tmpDir });
+      await runCli(
+        ['brief', 'set', 'scope', '{"included":["feature A"],"excluded":["feature B"]}'],
+        { cwd: tmpDir }
+      );
+      await runCli(['brief', 'set', 'functionalRequirements', '["req1"]'], { cwd: tmpDir });
+      await runCli(['brief', 'set', 'acceptanceCriteria', '["crit1"]'], { cwd: tmpDir });
 
       await runCli(['brief', 'complete'], { cwd: tmpDir });
 

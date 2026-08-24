@@ -63,8 +63,12 @@ function formatOutput(data: InitCommandOutput): string {
   return JSON.stringify(data);
 }
 
-function fail(error: string, extra?: Omit<ErrorOutput, 'ok' | 'error'>): never {
-  out({ ok: false, error, ...extra });
+function fail(
+  error: string,
+  extra?: Omit<ErrorOutput, 'ok' | 'error'>,
+  jsonOnly: boolean = false
+): never {
+  out({ ok: false, error, ...extra }, jsonOnly);
   process.exit(1);
 }
 
@@ -83,9 +87,13 @@ export function registerInitCommand(program: Command): void {
     .action(async (opts) => {
       const adapter = getAdapter(opts.harness);
       if (!adapter) {
-        fail(`Unknown harness "${opts.harness}"`, {
-          available: listAdapterNames(),
-        });
+        fail(
+          `Unknown harness "${opts.harness}"`,
+          {
+            available: listAdapterNames(),
+          },
+          opts.json
+        );
       }
 
       const targetDir = opts.dir ?? process.cwd();
@@ -101,7 +109,7 @@ export function registerInitCommand(program: Command): void {
           opts.json
         );
       } catch (e) {
-        fail((e as Error).message);
+        fail((e as Error).message, undefined, opts.json);
       }
     });
 }

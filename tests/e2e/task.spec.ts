@@ -71,7 +71,7 @@ describe('crewmate task', () => {
           '--description',
           'Second task',
           '--dependencies',
-          JSON.stringify([taskId1]),
+          taskId1 as string,
           '--field',
           'functionalRequirements',
         ],

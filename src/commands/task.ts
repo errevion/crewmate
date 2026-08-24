@@ -1,12 +1,14 @@
 import type { Command } from 'commander';
 import { getDb } from '../db/connection.js';
 import { TASK_STATUSES } from '../models/task.js';
+import { BRIEF_FIELDS } from '../models/brief.js';
 import {
   createTask,
   getTaskById,
   listTasksByBrief,
   updateTaskStatus,
   removeTask,
+  validateDependencies,
 } from '../db/task-repo.js';
 import { getBriefById as getBrief } from '../db/brief-repo.js';
 
@@ -92,7 +94,10 @@ export function registerTaskCommand(program: Command): void {
     .option('--dependencies <deps...>', 'Array of task IDs that this task depends on', [])
     .option('--field <field>', 'Brief field this task addresses', '')
     .action((briefId, opts) => {
-      if (!opts.title || !opts.description) {
+      if (!opts.title || !opts.title.trim()) {
+        fail('--title and --description are required');
+      }
+      if (!opts.description || !opts.description.trim()) {
         fail('--title and --description are required');
       }
 
@@ -110,7 +115,18 @@ export function registerTaskCommand(program: Command): void {
         fail(`Invalid dependencies JSON: ${e}`);
       }
 
+      if (dependencies.length > 0) {
+        const depCheck = validateDependencies(getDb(), briefId, dependencies);
+        if (!depCheck.valid) {
+          fail(depCheck.error || 'Invalid dependencies');
+        }
+      }
+
       const field = opts.field ? opts.field : null;
+      if (field && !(BRIEF_FIELDS as readonly string[]).includes(field)) {
+        fail(`Invalid field "${field}". Must be one of: ${BRIEF_FIELDS.join(', ')}`);
+      }
+
       const task = createTask(getDb(), briefId, opts.title, opts.description, {
         dependencies,
         field,
@@ -200,11 +216,26 @@ export function registerTaskCommand(program: Command): void {
         fail(`Task not found: ${taskId}`);
       }
 
-      updateTaskStatus(getDb(), taskId, opts.status as (typeof TASK_STATUSES)[number]);
+      const newStatus = opts.status as (typeof TASK_STATUSES)[number];
+      const VALID_TRANSITIONS: Record<string, string[]> = {
+        pending: ['in_progress'],
+        in_progress: ['completed', 'pending'],
+        completed: [],
+      };
+
+      const allowed = VALID_TRANSITIONS[task.status] ?? [];
+      if (newStatus !== task.status && !allowed.includes(newStatus)) {
+        fail(
+          `Invalid status transition: ${task.status} -> ${newStatus}. Allowed: ${allowed.join(', ') || 'none'}`
+        );
+      }
+
+      updateTaskStatus(getDb(), taskId, newStatus);
       out({
         ok: true,
         id: task.id,
         status: opts.status,
+        title: task.title,
       });
     });
 
