@@ -194,29 +194,39 @@ export function buildSnapshot(
     .filter((e) => e.actor === 'frontman' && e.type === 'dispatched')
     .filter((e) => {
       const target = parseDispatchTarget(e.message);
+      const dispatchIdx = events.findIndex((x) => x.id === e.id);
+      // Events that occurred after this dispatch are at index < dispatchIdx (newest first)
+      const subsequentEvents = dispatchIdx > 0 ? events.slice(0, dispatchIdx) : [];
 
       if (e.taskId) {
         const task = tasksById.get(e.taskId);
         if (task && task.status === 'completed') {
           return false;
         }
-        const hasCompletedEvent = events.some(
-          (evt) => evt.taskId === e.taskId && evt.type === 'completed'
+        const hasTerminalEvent = subsequentEvents.some(
+          (evt) => evt.taskId === e.taskId && (evt.type === 'completed' || evt.type === 'error')
         );
-        if (hasCompletedEvent) {
+        if (hasTerminalEvent) {
+          return false;
+        }
+      } else if (target === 'scout' || target === 'planner') {
+        // Singleton subagents (scout or planner)
+        // If target has finished (emitted completed or error after dispatch), it's done
+        const hasTerminalEvent = subsequentEvents.some(
+          (evt) => evt.actor === target && (evt.type === 'completed' || evt.type === 'error')
+        );
+        if (hasTerminalEvent) {
           return false;
         }
       } else {
-        // Non-task dispatches (e.g. scout or planner)
-        // If target has finished (emitted completed after dispatch), it's done
-        const dispatchTime = new Date(e.createdAt).getTime();
-        const hasCompletedEvent = events.some(
+        // Executor without taskId: match completed or error events that also lack a taskId
+        const hasTerminalEvent = subsequentEvents.some(
           (evt) =>
-            evt.actor === target &&
-            evt.type === 'completed' &&
-            new Date(evt.createdAt).getTime() >= dispatchTime
+            evt.actor === 'executor' &&
+            !evt.taskId &&
+            (evt.type === 'completed' || evt.type === 'error')
         );
-        if (hasCompletedEvent) {
+        if (hasTerminalEvent) {
           return false;
         }
       }
@@ -230,7 +240,12 @@ export function buildSnapshot(
 
   for (const evt of dispatchedEvents) {
     const target = parseDispatchTarget(evt.message);
-    const key = evt.taskId ? `${target}:${evt.taskId}` : target;
+    const key =
+      target === 'scout' || target === 'planner'
+        ? target
+        : evt.taskId
+          ? `${target}:${evt.taskId}`
+          : `${target}:${evt.id}`;
     if (!seenTargets.has(key)) {
       seenTargets.add(key);
       deduplicatedDispatches.push(evt);
@@ -269,8 +284,11 @@ export function buildSnapshot(
     } else if (ageMs > 8000) {
       sessionStatus = 'offline';
       isSessionActive = false;
+    } else if (session.status === 'idle') {
+      sessionStatus = 'idle';
+      isSessionActive = false;
     } else {
-      sessionStatus = session.status === 'idle' ? 'idle' : 'active';
+      sessionStatus = 'active';
       isSessionActive = true;
     }
   }

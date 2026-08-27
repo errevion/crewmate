@@ -208,6 +208,94 @@ describe('workflow snapshot', () => {
     expect(executorEdges?.[0].taskId).toBe('task-1');
   });
 
+  it('should support multiple concurrent executor dispatches for parallel tasks', () => {
+    db.prepare(`UPDATE tasks SET status = 'in_progress' WHERE id = 'task-1'`).run();
+    db.prepare(`UPDATE tasks SET status = 'in_progress' WHERE id = 'task-2'`).run();
+
+    // Dispatch two executors in parallel
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1', {
+      taskId: 'task-1',
+    });
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 2', {
+      taskId: 'task-2',
+    });
+
+    const snapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(snapshot).not.toBeNull();
+    const executorEdges = snapshot?.dispatchEdges.filter((e) => e.target === 'executor');
+    expect(executorEdges?.length).toBe(2);
+    expect(executorEdges?.map((e) => e.taskId)).toEqual(
+      expect.arrayContaining(['task-1', 'task-2'])
+    );
+
+    // When Task 1 completes, Task 2 dispatch edge remains active
+    db.prepare(`UPDATE tasks SET status = 'completed' WHERE id = 'task-1'`).run();
+    createEvent(db, 'brief-1', 'executor', 'completed', 'Completed Task 1', { taskId: 'task-1' });
+
+    const afterTask1Done = buildSnapshot({ briefId: 'brief-1' }, db);
+    const remainingEdges = afterTask1Done?.dispatchEdges.filter((e) => e.target === 'executor');
+    expect(remainingEdges?.length).toBe(1);
+    expect(remainingEdges?.[0].taskId).toBe('task-2');
+  });
+
+  it('should show multiple executor edges even when dispatches lack taskId', () => {
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task A');
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task B');
+
+    const snapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(snapshot).not.toBeNull();
+    const executorEdges = snapshot?.dispatchEdges.filter((e) => e.target === 'executor');
+    expect(executorEdges?.length).toBe(2);
+  });
+
+  it('should clear dispatch edges when an error event occurs', () => {
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1', {
+      taskId: 'task-1',
+    });
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 2', {
+      taskId: 'task-2',
+    });
+
+    const activeSnapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(activeSnapshot?.dispatchEdges.length).toBe(2);
+
+    // Error on task-1 (e.g. interruption or failure)
+    createEvent(db, 'brief-1', 'executor', 'error', 'Interrupted executor for task-1', {
+      taskId: 'task-1',
+    });
+
+    const afterErrorSnapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(afterErrorSnapshot?.dispatchEdges.length).toBe(1);
+    expect(afterErrorSnapshot?.dispatchEdges[0].taskId).toBe('task-2');
+  });
+
+  it('should not show stale parallel dispatch edges after interruption and continuation', () => {
+    // 1. Two parallel tasks running before interruption
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1', {
+      taskId: 'task-1',
+    });
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 2', {
+      taskId: 'task-2',
+    });
+
+    // 2. Interruption occurs: both are flushed with error events
+    createEvent(db, 'brief-1', 'executor', 'error', 'Interrupted executor for task-1', {
+      taskId: 'task-1',
+    });
+    createEvent(db, 'brief-1', 'executor', 'error', 'Interrupted executor for task-2', {
+      taskId: 'task-2',
+    });
+
+    // 3. User continues and Frontman dispatches only 1 task
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1', {
+      taskId: 'task-1',
+    });
+
+    const resumedSnapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(resumedSnapshot?.dispatchEdges.length).toBe(1);
+    expect(resumedSnapshot?.dispatchEdges[0].taskId).toBe('task-1');
+  });
+
   it('should mark in_progress tasks as interrupted and suppress active edges when session is stopped', () => {
     // Start task 1
     db.prepare(`UPDATE tasks SET status = 'in_progress' WHERE id = 'task-1'`).run();
@@ -223,6 +311,22 @@ describe('workflow snapshot', () => {
     expect(snapshot).not.toBeNull();
     expect(snapshot?.isSessionActive).toBe(false);
     expect(snapshot?.sessionStatus).toBe('stopped');
+    expect(snapshot?.dispatchEdges.length).toBe(0);
+    expect(snapshot?.tasks.find((t) => t.id === 'task-1')?.interrupted).toBe(true);
+  });
+
+  it('should mark in_progress tasks as interrupted and suppress active edges when session is idle (user interrupted)', () => {
+    db.prepare(`UPDATE tasks SET status = 'in_progress' WHERE id = 'task-1'`).run();
+    createEvent(db, 'brief-1', 'frontman', 'dispatched', 'Dispatched executor for Task 1', {
+      taskId: 'task-1',
+    });
+
+    recordHeartbeat(db, 'brief-1', 'opencode', process.pid, 'idle');
+
+    const snapshot = buildSnapshot({ briefId: 'brief-1' }, db);
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.isSessionActive).toBe(false);
+    expect(snapshot?.sessionStatus).toBe('idle');
     expect(snapshot?.dispatchEdges.length).toBe(0);
     expect(snapshot?.tasks.find((t) => t.id === 'task-1')?.interrupted).toBe(true);
   });

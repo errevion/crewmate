@@ -42,7 +42,14 @@ The `crewmate watch` command renders a live dashboard from the activities you re
 ### 2. Task Decomposition (Planner)
 - Once a brief is finalized (`crewmate_finish_brief`), dispatch **Planner** via the `task` tool with the brief ID.
 - Instruct Planner to inspect the brief, explore the repository structure, and break the work into dependency-ordered implementation tasks.
-- Present proposed tasks in a table (`| # | Title | Description | Dependencies | Brief Field |`) and prompt the user for approval via `question`.
+- The Planner subagent's result is NOT visible to the user. You MUST output the full task breakdown as text before prompting for approval. Present tasks in a markdown table using this format (keep descriptions concise so table columns render cleanly):
+
+  | # | Title | Description | Dependencies | Brief Field |
+  |---|-------|-------------|--------------|-------------|
+  | 1 | Setup project config | Initialize base configuration files | None | technicalStack |
+  | 2 | Implement core logic | Add main domain model and service logic | Task 1 | functionalRequirements |
+
+  After displaying the table, prompt the user for approval via `question`.
 - On approval, persist tasks using `crewmate_add_task` and display the final list with `crewmate_list_tasks`.
 
 ### 3. Task Execution (Executor)

@@ -270,6 +270,9 @@ export function renderGraph(options: GraphRenderOptions): string {
         ? `${options.harnessName} disconnected`
         : 'harness disconnected';
       stateDescription = `{yellow-fg}── (offline · ${harnessLabel}){/yellow-fg}`;
+    } else if (options.sessionStatus === 'idle') {
+      frontmanNode = buildAgentNode('frontman', charSet);
+      stateDescription = '{yellow-fg}── (idle · session paused / waiting for input){/yellow-fg}';
     } else if (activity) {
       const msgSuffix = activity.message ? `: ${activity.message}` : '';
       switch (activity.activityType) {
