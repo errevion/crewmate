@@ -4,6 +4,7 @@ import { runMigrations } from '../src/db/migrations.js';
 import { createBrief, setField, markComplete } from '../src/db/brief-repo.js';
 import { createTask, updateTaskStatus } from '../src/db/task-repo.js';
 import { setActivity } from '../src/db/activity-repo.js';
+import { recordHeartbeat } from '../src/db/session-repo.js';
 import { buildSnapshot } from '../src/utils/snapshot.js';
 import { formatBriefDetails, formatTaskDetails, formatTime } from '../src/commands/watch.js';
 import type { Brief } from '../src/models/brief.js';
@@ -53,6 +54,16 @@ describe('Workflow Snapshot Frontman State Derivation', () => {
     setActivity(db, briefId, 'idle');
     const snapshot = buildSnapshot({ briefId }, db);
     expect(snapshot?.frontmanState).toBe('idle');
+  });
+
+  it('derives idle state and inactive status when session is idle (user interrupted)', () => {
+    setActivity(db, briefId, 'orchestrating');
+    recordHeartbeat(db, briefId, 'opencode', process.pid, 'idle');
+
+    const snapshot = buildSnapshot({ briefId }, db);
+    expect(snapshot?.frontmanState).toBe('idle');
+    expect(snapshot?.sessionStatus).toBe('idle');
+    expect(snapshot?.isSessionActive).toBe(false);
   });
 
   it('falls back to draft brief status when no activity record exists (backward compatibility)', () => {

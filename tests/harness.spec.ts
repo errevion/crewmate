@@ -123,6 +123,9 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('"Dispatched planner to decompose the brief into tasks"');
     expect(CREWMATE_PLUGIN).toContain('Dispatched executor for');
     expect(CREWMATE_PLUGIN).toContain('isDuplicate');
+    expect(CREWMATE_PLUGIN).toContain('taskId && e.taskId === taskId');
+    expect(CREWMATE_PLUGIN).toContain('!taskId && !e.taskId && e.message === msg');
+    expect(CREWMATE_PLUGIN).toContain('args.prompt.match');
   });
 
   it('should include tool.execute.after hook for automatic status and lock event recording', () => {
@@ -144,6 +147,15 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('event.type === "session.error"');
     expect(CREWMATE_PLUGIN).toContain('Finished codebase exploration');
     expect(CREWMATE_PLUGIN).toContain('Finished task breakdown');
+    expect(CREWMATE_PLUGIN).toContain('parentSessionId');
+    expect(CREWMATE_PLUGIN).toContain('sessionIdle');
+    expect(CREWMATE_PLUGIN).toContain('Interrupted');
+    expect(CREWMATE_PLUGIN).toContain(
+      '"task",\n                  "update",\n                  tracked.taskId,\n                  "--status",\n                  "pending"'
+    );
+    expect(CREWMATE_PLUGIN).toContain(
+      '"lock",\n                  "release",\n                  tracked.taskId'
+    );
   });
 
   it('should include heartbeat and dispose hook for session liveness tracking', () => {

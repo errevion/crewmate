@@ -635,7 +635,9 @@ function runDashboard(opts: WatchOptions): void {
     const sessionTag =
       s.sessionStatus === 'stopped' || s.sessionStatus === 'offline'
         ? ' · {yellow-fg}(harness offline){/yellow-fg}'
-        : '';
+        : s.sessionStatus === 'idle'
+          ? ' · {yellow-fg}(session paused){/yellow-fg}'
+          : '';
     header.setContent(
       [
         `Brief {bold}{cyan-fg}${s.briefId}{/cyan-fg}{/bold} · status: ${status}${sessionTag} · events: {cyan-fg}${s.eventCount}{/cyan-fg}`,
@@ -666,7 +668,10 @@ function runDashboard(opts: WatchOptions): void {
       const marker = statusLine(t.status, t.interrupted);
       let suffix = '';
       if (t.interrupted) {
-        suffix = ' {yellow-fg}(paused · harness offline){/yellow-fg}';
+        suffix =
+          s.sessionStatus === 'idle'
+            ? ' {yellow-fg}(paused · session idle){/yellow-fg}'
+            : ' {yellow-fg}(paused · harness offline){/yellow-fg}';
       } else if (t.status === 'in_progress') {
         suffix = ` {yellow-fg}(${SPINNERS[spinnerFrame % SPINNERS.length]} running){/yellow-fg}`;
       } else if (t.blocked) {

@@ -128,6 +128,8 @@ interface TrackedSubagentSession {
 
 const CrewmatePlugin: Plugin = async ({ directory }: any) => {
   const targetDir = typeof directory === "string" && directory.trim() ? directory : process.cwd()
+  let parentSessionId: string | null = null
+  let sessionIdle = false
   const sessionAgentMap = new Map<string, TrackedSubagentSession>()
   const pendingDispatches = new Map<string, { agent: string; taskId?: string; dispatchedAt: number }>()
 
@@ -136,7 +138,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
   runCrewmate(targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
 
   const heartbeatInterval = setInterval(() => {
-    runCrewmate(targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
+    const currentStatus = sessionIdle ? "idle" : "active"
+    runCrewmate(targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", currentStatus]).catch(() => {})
   }, 4000)
 
   return {
@@ -642,13 +645,28 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
     "tool.execute.before": async (input: any, output: any) => {
       try {
+        if (sessionIdle) {
+          sessionIdle = false
+          await runCrewmate(targetDir, [
+            "session",
+            "heartbeat",
+            "--pid",
+            String(pid),
+            "--status",
+            "active",
+          ]).catch(() => {})
+        }
         const toolName = input?.tool
         const callID = input?.callID
         const args = output?.args || input?.args || {}
         if (toolName === "task" && args) {
           const subagent = String(args.subagent_type || args.agent || "").toLowerCase()
           if (["scout", "planner", "executor"].includes(subagent)) {
-            const taskId = args.task_id || args.taskId
+            let taskId = args.task_id || args.taskId
+            if (!taskId && subagent === "executor" && typeof args.prompt === "string") {
+              const match = args.prompt.match(/(?:taskId|task_id|task\\s+id|task)\\s*[:=]?\\s*([0-9a-f]{8})\\b/i) || args.prompt.match(/\\b([0-9a-f]{8})\\b/i)
+              if (match) taskId = match[1]
+            }
             let msg = \`Dispatched \${subagent}\`
             if (subagent === "scout") {
               msg = "Dispatched scout to explore the codebase"
@@ -687,7 +705,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
                 const age = Date.now() - new Date(e.createdAt).getTime()
                 if (age > 4000) return false
                 if (taskId && e.taskId === taskId) return true
-                return e.message === msg || e.message.toLowerCase().includes(subagent)
+                if (!taskId && !e.taskId && e.message === msg) return true
+                return false
               })
 
             if (!isDuplicate) {
@@ -803,6 +822,9 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
         if (event.type === "session.created") {
           const sessionInfo = event.properties?.info
+          if (sessionInfo?.id && !sessionInfo?.parentID) {
+            parentSessionId = sessionInfo.id
+          }
           if (sessionInfo?.parentID && sessionInfo?.id && !sessionAgentMap.has(sessionInfo.id)) {
             // Find most recently dispatched pending task as fallback correlation
             let bestCallId: string | null = null
@@ -854,6 +876,55 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
               cmdParts.push("--task", tracked.taskId)
             }
             await runCrewmate(targetDir, cmdParts).catch(() => {})
+          } else if (sessionID && (sessionID === parentSessionId || !parentSessionId)) {
+            // Parent session went idle (user interrupted or waiting for user prompt)
+            sessionIdle = true
+
+            // Flush any remaining active subagents that never completed (interrupted)
+            for (const [, tracked] of sessionAgentMap.entries()) {
+              const msg = \`Interrupted \${tracked.agent}\${tracked.taskId ? \` for task \${tracked.taskId}\` : ""}\`
+              const cmdParts = [
+                "event",
+                "add",
+                "--actor",
+                tracked.agent,
+                "--type",
+                "error",
+                "--message",
+                msg,
+              ]
+              if (tracked.taskId) {
+                cmdParts.push("--task", tracked.taskId)
+              }
+              await runCrewmate(targetDir, cmdParts).catch(() => {})
+
+              // Revert interrupted task back to pending and release locks
+              if (tracked.taskId) {
+                await runCrewmate(targetDir, [
+                  "task",
+                  "update",
+                  tracked.taskId,
+                  "--status",
+                  "pending",
+                ]).catch(() => {})
+                await runCrewmate(targetDir, [
+                  "lock",
+                  "release",
+                  tracked.taskId,
+                ]).catch(() => {})
+              }
+            }
+            sessionAgentMap.clear()
+            pendingDispatches.clear()
+
+            await runCrewmate(targetDir, [
+              "session",
+              "heartbeat",
+              "--pid",
+              String(pid),
+              "--status",
+              "idle",
+            ]).catch(() => {})
           }
         }
 
@@ -881,6 +952,22 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
               cmdParts.push("--task", tracked.taskId)
             }
             await runCrewmate(targetDir, cmdParts).catch(() => {})
+
+            // Revert failed task back to pending and release locks
+            if (tracked.taskId) {
+              await runCrewmate(targetDir, [
+                "task",
+                "update",
+                tracked.taskId,
+                "--status",
+                "pending",
+              ]).catch(() => {})
+              await runCrewmate(targetDir, [
+                "lock",
+                "release",
+                tracked.taskId,
+              ]).catch(() => {})
+            }
           }
         }
       } catch {
