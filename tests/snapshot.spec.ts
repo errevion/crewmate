@@ -6,9 +6,17 @@ import { createTask, updateTaskStatus } from '../src/db/task-repo.js';
 import { setActivity } from '../src/db/activity-repo.js';
 import { recordHeartbeat } from '../src/db/session-repo.js';
 import { buildSnapshot } from '../src/utils/snapshot.js';
-import { formatBriefDetails, formatTaskDetails, formatTime } from '../src/commands/watch.js';
+import {
+  formatBriefDetails,
+  formatTaskDetails,
+  formatEventDetails,
+  formatLockDetails,
+  formatTime,
+} from '../src/commands/watch.js';
 import type { Brief } from '../src/models/brief.js';
 import type { Task } from '../src/models/task.js';
+import type { ExecutionEvent } from '../src/models/event.js';
+import type { FileLock } from '../src/models/lock.js';
 
 describe('Workflow Snapshot Frontman State Derivation', () => {
   let db: Database.Database;
@@ -292,5 +300,94 @@ describe('formatTaskDetails', () => {
     expect(formatted).toContain('pending');
     expect(formatted).toContain('(no description provided)');
     expect(formatted).toContain('(none)');
+  });
+});
+
+describe('formatEventDetails', () => {
+  it('handles empty events list gracefully', () => {
+    const formatted = formatEventDetails([]);
+    expect(formatted).toContain('No execution events recorded yet');
+  });
+
+  it('formats execution events list with task mappings and timestamps', () => {
+    const task: Task = {
+      id: 'task-123',
+      briefId: 'brief-abc',
+      title: 'Setup Database',
+      description: 'Setup SQLite schema',
+      dependencies: [],
+      field: 'technicalStack',
+      status: 'completed',
+      createdAt: '2026-08-21T00:00:00Z',
+      updatedAt: '2026-08-21T00:05:00Z',
+    };
+
+    const events: ExecutionEvent[] = [
+      {
+        id: 'evt-1',
+        briefId: 'brief-abc',
+        taskId: 'task-123',
+        actor: 'executor',
+        type: 'started',
+        message: 'Started executing Setup Database',
+        createdAt: '2026-08-21T00:01:00Z',
+      },
+      {
+        id: 'evt-2',
+        briefId: 'brief-abc',
+        taskId: 'task-123',
+        actor: 'executor',
+        type: 'completed',
+        message: 'Finished executing Setup Database',
+        createdAt: '2026-08-21T00:05:00Z',
+      },
+    ];
+
+    const formatted = formatEventDetails(events, [task]);
+    expect(formatted).toContain('Total Events Recorded:');
+    expect(formatted).toContain('2');
+    expect(formatted).toContain('executor');
+    expect(formatted).toContain('started');
+    expect(formatted).toContain('completed');
+    expect(formatted).toContain('Setup Database');
+    expect(formatted).toContain('Started executing Setup Database');
+    expect(formatted).toContain('Finished executing Setup Database');
+  });
+});
+
+describe('formatLockDetails', () => {
+  it('handles empty locks list gracefully', () => {
+    const formatted = formatLockDetails([]);
+    expect(formatted).toContain('No active file locks');
+  });
+
+  it('formats active file locks list with task mappings', () => {
+    const task: Task = {
+      id: 'task-auth',
+      briefId: 'brief-abc',
+      title: 'Implement Auth Handler',
+      description: 'Add token auth',
+      dependencies: [],
+      field: 'functionalRequirements',
+      status: 'in_progress',
+      createdAt: '2026-08-21T00:00:00Z',
+      updatedAt: '2026-08-21T00:05:00Z',
+    };
+
+    const locks: FileLock[] = [
+      {
+        id: 'lock-1',
+        taskId: 'task-auth',
+        filePath: 'src/routes/auth.ts',
+        createdAt: '2026-08-21T00:02:00Z',
+      },
+    ];
+
+    const formatted = formatLockDetails(locks, [task]);
+    expect(formatted).toContain('Active File Locks:');
+    expect(formatted).toContain('1');
+    expect(formatted).toContain('src/routes/auth.ts');
+    expect(formatted).toContain('task-auth');
+    expect(formatted).toContain('Implement Auth Handler');
   });
 });

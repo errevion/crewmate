@@ -9,6 +9,9 @@ import type { Brief, Deliverable } from '../models/brief.js';
 import { getDb } from '../db/connection.js';
 import { getTaskById, listTasksByBrief } from '../db/task-repo.js';
 import type { Task } from '../models/task.js';
+import { listLocks } from '../db/lock-repo.js';
+import { listEvents } from '../db/event-repo.js';
+import type { FileLock } from '../models/lock.js';
 
 // Resolve blessed default export for CJS/ESM interop
 const blessed = ((blessedModule as unknown as { default?: typeof blessedModule }).default ||
@@ -406,6 +409,104 @@ export function formatTaskDetails(
 }
 
 /**
+ * Formats a list of file locks into a tagged string for display in the fullscreen overlay modal
+ *
+ * @param locks Array of file locks
+ * @param allTasks Optional list or map of all tasks for resolving task titles
+ * @returns Tagged string representation of the file locks
+ */
+export function formatLockDetails(
+  locks: FileLock[],
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  if (!locks || locks.length === 0) {
+    return '{yellow-fg}No active file locks.{/yellow-fg}\n\nLocks are automatically acquired by Executor agents during parallel execution.';
+  }
+
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const lines: string[] = [];
+  lines.push(`{bold}{cyan-fg}Active File Locks:{/cyan-fg}{/bold} ${locks.length}`);
+  lines.push('');
+
+  for (let i = 0; i < locks.length; i++) {
+    const lock = locks[i];
+    const task = tasksMap.get(lock.taskId);
+    const taskTitle = task ? task.title : '(unknown task)';
+    lines.push(`{bold}${i + 1}. ${lock.filePath}{/bold}`);
+    lines.push(`   {cyan-fg}Task ID:{/cyan-fg} ${lock.taskId} · {bold}${taskTitle}{/bold}`);
+    lines.push(`   {gray-fg}Acquired at:{/gray-fg} ${lock.createdAt}`);
+    if (i < locks.length - 1) {
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Formats a list of execution events into a tagged string for display in the fullscreen overlay modal
+ *
+ * @param events Array of execution events
+ * @param allTasks Optional list or map of all tasks for resolving task titles
+ * @returns Tagged string representation of execution events
+ */
+export function formatEventDetails(
+  events: ExecutionEvent[],
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  if (!events || events.length === 0) {
+    return '{yellow-fg}No execution events recorded yet.{/yellow-fg}';
+  }
+
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const lines: string[] = [];
+  lines.push(`{bold}{cyan-fg}Total Events Recorded:{/cyan-fg}{/bold} ${events.length}`);
+  lines.push('');
+
+  for (let i = 0; i < events.length; i++) {
+    const evt = events[i];
+    const time = formatTime(evt.createdAt);
+    const color =
+      evt.type === 'completed'
+        ? 'green'
+        : evt.type === 'error'
+          ? 'red'
+          : evt.type === 'dispatched'
+            ? 'cyan'
+            : 'white';
+
+    let taskSuffix = '';
+    if (evt.taskId) {
+      const task = tasksMap.get(evt.taskId);
+      const title = task ? task.title : evt.taskId;
+      taskSuffix = ` · {gray-fg}task:{/gray-fg} {bold}${truncate(title, 36)}{/bold}`;
+    }
+
+    lines.push(
+      `{gray-fg}[${time}]{/gray-fg} {bold}${evt.actor}{/bold} {${color}-fg}${evt.type}{/${color}-fg}${taskSuffix}`
+    );
+    lines.push(`  ${evt.message}`);
+    if (i < events.length - 1) {
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Registers the watch command on commander program
  */
 export function registerWatchCommand(program: Command): void {
@@ -511,7 +612,7 @@ function runDashboard(opts: WatchOptions): void {
     parent: screen,
     top: 5,
     left: '60%',
-    width: '40%',
+    right: 0,
     height: '45%',
     label: ' Events ',
     border: { type: 'line' },
@@ -524,11 +625,24 @@ function runDashboard(opts: WatchOptions): void {
     parent: screen,
     top: '50%',
     left: 0,
-    width: '100%',
+    width: '60%',
     bottom: 2,
     label: ' Activity ',
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: 'yellow' } },
+    tags: true,
+    wrap: false,
+  });
+
+  const locksBoard = blessed.box({
+    parent: screen,
+    top: '50%',
+    left: '60%',
+    right: 0,
+    bottom: 2,
+    label: ' Active File Locks ',
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: 'magenta' } },
     tags: true,
     wrap: false,
   });
@@ -539,7 +653,7 @@ function runDashboard(opts: WatchOptions): void {
     left: 0,
     width: '100%',
     height: 2,
-    content: ' q / Ctrl-C: quit · b: brief details · t: task details ',
+    content: ' q / Ctrl-C: quit · b: brief · t: tasks · e: events · l: file locks ',
     style: { fg: 'gray' },
     tags: true,
   });
@@ -559,6 +673,50 @@ function runDashboard(opts: WatchOptions): void {
     scrollbar: {
       ch: '│',
       style: { fg: 'cyan' },
+    },
+    keys: true,
+    vi: true,
+    mouse: true,
+    hidden: true,
+  });
+
+  const eventModal = blessed.box({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Execution Events ',
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: 'green' }, bg: 'black' },
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'green' },
+    },
+    keys: true,
+    vi: true,
+    mouse: true,
+    hidden: true,
+  });
+
+  const lockModal = blessed.box({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Active File Locks ',
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: 'magenta' }, bg: 'black' },
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'magenta' },
     },
     keys: true,
     vi: true,
@@ -745,6 +903,20 @@ function runDashboard(opts: WatchOptions): void {
     eventFeed.setContent(lines.join('\n'));
   }
 
+  function renderLocks(s: WorkflowSnapshot): void {
+    const tasksById = new Map(s.tasks.map((t) => [t.id, t]));
+    const lines: string[] = [];
+    for (const lock of s.locks.slice(0, 10)) {
+      const task = tasksById.get(lock.taskId);
+      const title = task ? truncate(task.title, 20) : lock.taskId;
+      lines.push(`• {bold}${truncate(lock.filePath, 26)}{/bold} {gray-fg}(${title}){/gray-fg}`);
+    }
+    if (lines.length === 0) {
+      lines.push('{gray-fg}No active file locks.{/gray-fg}');
+    }
+    locksBoard.setContent(lines.join('\n'));
+  }
+
   function renderActivity(s: WorkflowSnapshot): void {
     const graphContent = renderGraph({
       edges: s.dispatchEdges,
@@ -768,10 +940,25 @@ function runDashboard(opts: WatchOptions): void {
     renderTaskBoard(snapshot);
     renderEventFeed(snapshot);
     renderActivity(snapshot);
+    renderLocks(snapshot);
 
     if (!briefModal.hidden) {
       const brief = resolveBrief(opts.brief);
       briefModal.setContent(formatBriefDetails(brief));
+    }
+
+    if (!eventModal.hidden) {
+      const brief = resolveBrief(opts.brief);
+      const events = brief ? listEvents(getDb(), { briefId: brief.id, limit: 100 }) : [];
+      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+      eventModal.setContent(formatEventDetails(events, allTasks));
+    }
+
+    if (!lockModal.hidden) {
+      const locks = listLocks(getDb());
+      const brief = resolveBrief(opts.brief);
+      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+      lockModal.setContent(formatLockDetails(locks, allTasks));
     }
 
     if (!taskDetailModal.hidden && selectedTaskId) {
@@ -811,8 +998,10 @@ function runDashboard(opts: WatchOptions): void {
   const pollTimer = setInterval(pollDb, Math.max(200, safeInterval));
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
-  const MAIN_FOOTER = ' q / Ctrl-C: quit · b: brief details · t: task details ';
+  const MAIN_FOOTER = ' q / Ctrl-C: quit · b: brief · t: tasks · e: events · l: file locks ';
   const BRIEF_FOOTER = ' q / Ctrl-C: quit · b / Esc: close brief · ↑/↓/k/j/PgUp/PgDn: scroll ';
+  const EVENT_FOOTER = ' q / Ctrl-C: quit · e / Esc: close events · ↑/↓/k/j/PgUp/PgDn: scroll ';
+  const LOCK_FOOTER = ' q / Ctrl-C: quit · l / Esc: close file locks · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const TASK_LIST_FOOTER =
     ' q / Ctrl-C: quit · Enter: view task · t / Esc: close tasks · ↑/↓/k/j: navigate ';
   const TASK_DETAIL_FOOTER =
@@ -825,12 +1014,25 @@ function runDashboard(opts: WatchOptions): void {
       footer.setContent(TASK_LIST_FOOTER);
     } else if (!briefModal.hidden) {
       footer.setContent(BRIEF_FOOTER);
+    } else if (!eventModal.hidden) {
+      footer.setContent(EVENT_FOOTER);
+    } else if (!lockModal.hidden) {
+      footer.setContent(LOCK_FOOTER);
     } else {
       footer.setContent(MAIN_FOOTER);
     }
   }
 
   function openTaskListModal(): void {
+    if (!briefModal.hidden) {
+      briefModal.hide();
+    }
+    if (!eventModal.hidden) {
+      eventModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
+    }
     const brief = resolveBrief(opts.brief);
     if (!brief) {
       taskListModal.setItems(['{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}']);
@@ -886,6 +1088,12 @@ function runDashboard(opts: WatchOptions): void {
     if (!briefModal.hidden) {
       briefModal.hide();
     }
+    if (!eventModal.hidden) {
+      eventModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
+    }
     openTaskListModal();
   }
 
@@ -895,6 +1103,12 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!taskDetailModal.hidden) {
       taskDetailModal.hide();
+    }
+    if (!eventModal.hidden) {
+      eventModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
     }
     if (briefModal.hidden) {
       const brief = resolveBrief(opts.brief);
@@ -911,12 +1125,80 @@ function runDashboard(opts: WatchOptions): void {
     }
   }
 
+  function toggleEventModal(): void {
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+    }
+    if (!briefModal.hidden) {
+      briefModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
+    }
+    if (eventModal.hidden) {
+      const brief = resolveBrief(opts.brief);
+      const events = brief ? listEvents(getDb(), { briefId: brief.id, limit: 100 }) : [];
+      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+      eventModal.setContent(formatEventDetails(events, allTasks));
+      eventModal.scrollTo(0);
+      eventModal.show();
+      eventModal.focus();
+      updateFooter();
+      screen.render();
+    } else {
+      eventModal.hide();
+      updateFooter();
+      screen.render();
+    }
+  }
+
+  function toggleLockModal(): void {
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+    }
+    if (!briefModal.hidden) {
+      briefModal.hide();
+    }
+    if (!eventModal.hidden) {
+      eventModal.hide();
+    }
+    if (lockModal.hidden) {
+      const locks = listLocks(getDb());
+      const brief = resolveBrief(opts.brief);
+      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+      lockModal.setContent(formatLockDetails(locks, allTasks));
+      lockModal.scrollTo(0);
+      lockModal.show();
+      lockModal.focus();
+      updateFooter();
+      screen.render();
+    } else {
+      lockModal.hide();
+      updateFooter();
+      screen.render();
+    }
+  }
+
   screen.key(['b', 'B'], () => {
     toggleBriefModal();
   });
 
   screen.key(['t', 'T'], () => {
     toggleTaskListModal();
+  });
+
+  screen.key(['e', 'E'], () => {
+    toggleEventModal();
+  });
+
+  screen.key(['l', 'L'], () => {
+    toggleLockModal();
   });
 
   screen.key(['escape'], () => {
@@ -933,6 +1215,18 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!briefModal.hidden) {
       briefModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
+    if (!eventModal.hidden) {
+      eventModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
       updateFooter();
       screen.render();
       return;
@@ -959,6 +1253,12 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!briefModal.hidden) {
       briefModal.scroll(-1);
       screen.render();
+    } else if (!eventModal.hidden) {
+      eventModal.scroll(-1);
+      screen.render();
+    } else if (!lockModal.hidden) {
+      lockModal.scroll(-1);
+      screen.render();
     }
   });
 
@@ -968,6 +1268,12 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
     } else if (!briefModal.hidden) {
       briefModal.scroll(1);
+      screen.render();
+    } else if (!eventModal.hidden) {
+      eventModal.scroll(1);
+      screen.render();
+    } else if (!lockModal.hidden) {
+      lockModal.scroll(1);
       screen.render();
     }
   });
@@ -979,6 +1285,12 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!briefModal.hidden) {
       briefModal.scroll(-5);
       screen.render();
+    } else if (!eventModal.hidden) {
+      eventModal.scroll(-5);
+      screen.render();
+    } else if (!lockModal.hidden) {
+      lockModal.scroll(-5);
+      screen.render();
     }
   });
 
@@ -988,6 +1300,12 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
     } else if (!briefModal.hidden) {
       briefModal.scroll(5);
+      screen.render();
+    } else if (!eventModal.hidden) {
+      eventModal.scroll(5);
+      screen.render();
+    } else if (!lockModal.hidden) {
+      lockModal.scroll(5);
       screen.render();
     }
   });
