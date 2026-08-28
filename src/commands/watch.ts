@@ -284,8 +284,33 @@ export function formatBriefDetails(brief: Brief | null): string {
   lines.push(
     '{bold}{yellow-fg}── Quality Standards ─────────────────────────────{/yellow-fg}{/bold}'
   );
-  if (brief.qualityStandards) {
-    lines.push(`  ${JSON.stringify(brief.qualityStandards, null, 2).replace(/\n/g, '\n  ')}`);
+  if (brief.qualityStandards && typeof brief.qualityStandards === 'object') {
+    const qs = brief.qualityStandards as unknown as Record<string, unknown>;
+    const categories: Array<{ label: string; key: string }> = [
+      { label: 'Performance', key: 'performance' },
+      { label: 'Security', key: 'security' },
+      { label: 'Accessibility', key: 'accessibility' },
+    ];
+    let hasEntries = false;
+    for (const cat of categories) {
+      const data = qs[cat.key];
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const entries = Object.entries(data as Record<string, unknown>);
+        if (entries.length > 0) {
+          hasEntries = true;
+          lines.push(`  {bold}${cat.label}:{/bold}`);
+          for (const [k, v] of entries) {
+            lines.push(`    • ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`);
+          }
+        }
+      } else if (data && typeof data === 'string' && data.trim().length > 0) {
+        hasEntries = true;
+        lines.push(`  {bold}${cat.label}:{/bold} ${data}`);
+      }
+    }
+    if (!hasEntries) {
+      lines.push('  {gray-fg}(empty quality standards){/gray-fg}');
+    }
   } else {
     lines.push('  {gray-fg}(not set){/gray-fg}');
   }
@@ -508,7 +533,7 @@ function runDashboard(opts: WatchOptions): void {
     wrap: false,
   });
 
-  blessed.box({
+  const footer = blessed.box({
     parent: screen,
     bottom: 0,
     left: 0,
@@ -521,11 +546,11 @@ function runDashboard(opts: WatchOptions): void {
 
   const briefModal = blessed.box({
     parent: screen,
-    top: 'center',
-    left: 'center',
-    width: '90%',
-    height: '90%',
-    label: ' Brief Details (Press b or Esc to close, ↑/↓/PgUp/PgDn to scroll) ',
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Brief Details ',
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: 'cyan' }, bg: 'black' },
     tags: true,
@@ -543,11 +568,11 @@ function runDashboard(opts: WatchOptions): void {
 
   const taskListModal = blessed.list({
     parent: screen,
-    top: 'center',
-    left: 'center',
-    width: '80%',
-    height: '70%',
-    label: ' Select Task (Press Enter to view, Esc/t to close, ↑/↓ to navigate) ',
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Tasks ',
     border: { type: 'line' },
     style: {
       fg: 'white',
@@ -576,11 +601,11 @@ function runDashboard(opts: WatchOptions): void {
 
   const taskDetailModal = blessed.box({
     parent: screen,
-    top: 'center',
-    left: 'center',
-    width: '90%',
-    height: '90%',
-    label: ' Task Details (Press Esc to return to list, ↑/↓/PgUp/PgDn to scroll) ',
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Task Details ',
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: 'blue' }, bg: 'black' },
     tags: true,
@@ -786,6 +811,25 @@ function runDashboard(opts: WatchOptions): void {
   const pollTimer = setInterval(pollDb, Math.max(200, safeInterval));
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
+  const MAIN_FOOTER = ' q / Ctrl-C: quit · b: brief details · t: task details ';
+  const BRIEF_FOOTER = ' q / Ctrl-C: quit · b / Esc: close brief · ↑/↓/k/j/PgUp/PgDn: scroll ';
+  const TASK_LIST_FOOTER =
+    ' q / Ctrl-C: quit · Enter: view task · t / Esc: close tasks · ↑/↓/k/j: navigate ';
+  const TASK_DETAIL_FOOTER =
+    ' q / Ctrl-C: quit · Esc: back to task list · t: close tasks · ↑/↓/k/j/PgUp/PgDn: scroll ';
+
+  function updateFooter(): void {
+    if (!taskDetailModal.hidden) {
+      footer.setContent(TASK_DETAIL_FOOTER);
+    } else if (!taskListModal.hidden) {
+      footer.setContent(TASK_LIST_FOOTER);
+    } else if (!briefModal.hidden) {
+      footer.setContent(BRIEF_FOOTER);
+    } else {
+      footer.setContent(MAIN_FOOTER);
+    }
+  }
+
   function openTaskListModal(): void {
     const brief = resolveBrief(opts.brief);
     if (!brief) {
@@ -802,6 +846,7 @@ function runDashboard(opts: WatchOptions): void {
     }
     taskListModal.show();
     taskListModal.focus();
+    updateFooter();
     screen.render();
   }
 
@@ -815,6 +860,7 @@ function runDashboard(opts: WatchOptions): void {
     taskListModal.hide();
     taskDetailModal.show();
     taskDetailModal.focus();
+    updateFooter();
     screen.render();
   }
 
@@ -833,6 +879,7 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!taskListModal.hidden) {
       taskListModal.hide();
+      updateFooter();
       screen.render();
       return;
     }
@@ -855,9 +902,11 @@ function runDashboard(opts: WatchOptions): void {
       briefModal.scrollTo(0);
       briefModal.show();
       briefModal.focus();
+      updateFooter();
       screen.render();
     } else {
       briefModal.hide();
+      updateFooter();
       screen.render();
     }
   }
@@ -878,11 +927,13 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!taskListModal.hidden) {
       taskListModal.hide();
+      updateFooter();
       screen.render();
       return;
     }
     if (!briefModal.hidden) {
       briefModal.hide();
+      updateFooter();
       screen.render();
       return;
     }
@@ -908,9 +959,6 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!briefModal.hidden) {
       briefModal.scroll(-1);
       screen.render();
-    } else if (!taskListModal.hidden) {
-      taskListModal.up(1);
-      screen.render();
     }
   });
 
@@ -920,9 +968,6 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
     } else if (!briefModal.hidden) {
       briefModal.scroll(1);
-      screen.render();
-    } else if (!taskListModal.hidden) {
-      taskListModal.down(1);
       screen.render();
     }
   });
