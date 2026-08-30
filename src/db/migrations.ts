@@ -119,22 +119,6 @@ export function runMigrations(db: Database.Database): void {
     `CREATE INDEX IF NOT EXISTS idx_session_liveness_last_heartbeat ON session_liveness (last_heartbeat_at)`
   );
 
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_brief_id ON tasks (brief_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_file_locks_task_id ON file_locks (task_id)`);
-  db.exec(
-    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_brief_id ON execution_artifacts (brief_id)`
-  );
-  db.exec(
-    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_task_id ON execution_artifacts (task_id)`
-  );
-  db.exec(
-    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_status ON execution_artifacts (status)`
-  );
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_execution_artifacts_type ON execution_artifacts (type)`);
-  db.exec(
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_session_liveness_brief_harness ON session_liveness (brief_id, harness)`
-  );
-
   try {
     db.exec(`ALTER TABLE file_locks ADD COLUMN expires_at TEXT`);
   } catch {
@@ -166,4 +150,20 @@ export function runMigrations(db: Database.Database): void {
   } catch {
     // column already exists
   }
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_brief_id ON tasks (brief_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_file_locks_task_id ON file_locks (task_id)`);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_brief_id ON execution_artifacts (brief_id)`
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_task_id ON execution_artifacts (task_id)`
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_status ON execution_artifacts (status)`
+  );
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_execution_artifacts_type ON execution_artifacts (type)`);
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_session_liveness_brief_harness ON session_liveness (brief_id, harness)`
+  );
 }
