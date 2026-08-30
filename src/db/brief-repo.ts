@@ -56,14 +56,29 @@ export function createBrief(db: Database.Database = getDb()): Brief {
 }
 
 /**
- * Retrieves the most recently created brief from the database
+ * Retrieves all briefs ordered by updated_at / created_at descending
+ *
+ * @param db Database connection (defaults to the shared connection)
+ * @returns Array of brief objects
+ */
+export function listBriefs(db: Database.Database = getDb()): Brief[] {
+  const rows = db
+    .prepare('SELECT * FROM briefs ORDER BY COALESCE(updated_at, created_at) DESC, rowid DESC')
+    .all() as Record<string, unknown>[];
+  return rows.map(rowToBrief);
+}
+
+/**
+ * Retrieves the most recently created or updated brief from the database
  *
  * @param db Database connection (defaults to the shared connection)
  * @returns The latest brief object, or null if no briefs exist
  */
 export function getLatestBrief(db: Database.Database = getDb()): Brief | null {
   const row = db
-    .prepare('SELECT * FROM briefs ORDER BY created_at DESC, rowid DESC LIMIT 1')
+    .prepare(
+      'SELECT * FROM briefs ORDER BY COALESCE(updated_at, created_at) DESC, rowid DESC LIMIT 1'
+    )
     .get() as Record<string, unknown> | undefined;
   return row ? rowToBrief(row) : null;
 }

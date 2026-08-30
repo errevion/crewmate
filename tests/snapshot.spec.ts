@@ -1,15 +1,24 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../src/db/migrations.js';
-import { createBrief, setField, markComplete } from '../src/db/brief-repo.js';
+import {
+  createBrief,
+  setField,
+  markComplete,
+  listBriefs,
+  getLatestBrief,
+} from '../src/db/brief-repo.js';
 import { createTask, updateTaskStatus } from '../src/db/task-repo.js';
 import { setActivity } from '../src/db/activity-repo.js';
 import { recordHeartbeat } from '../src/db/session-repo.js';
 import { buildSnapshot } from '../src/utils/snapshot.js';
 import {
   formatBriefDetails,
+  formatBriefListItem,
   formatTaskDetails,
   formatEventDetails,
+  formatEventListItem,
+  formatSingleEventDetail,
   formatLockDetails,
   formatTime,
 } from '../src/commands/watch.js';
@@ -109,6 +118,241 @@ describe('Workflow Snapshot Frontman State Derivation', () => {
     expect(snapshot?.tasks).toEqual([]);
     expect(snapshot?.events).toEqual([]);
     expect(snapshot?.frontmanState).toBe('idle');
+  });
+});
+
+describe('Frontman agent prompt rule adherence', () => {
+  it('verifies that .opencode/agents/frontman.md contains immediate state transition rules', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { resolve } = await import('node:path');
+    const frontmanPath = resolve(process.cwd(), '../.opencode/agents/frontman.md');
+    const content = await readFile(frontmanPath, 'utf-8');
+
+    // Rule: Transition away from questioning / awaiting_response immediately on receiving input
+    expect(content).toMatch(/Immediately/i);
+    expect(content).toContain('questioning');
+    expect(content).toContain('awaiting_response');
+    expect(content).toContain('analyzing');
+    expect(content).toContain('planning');
+    expect(content).toContain('orchestrating');
+    expect(content).toContain('reviewing');
+    expect(content).toContain('idle');
+    expect(content).toMatch(/Do not linger in `questioning` \/ `awaiting_response`/);
+  });
+
+  it('verifies that .opencode/agents/frontman.md enforces streaming markdown tables before concise question prompts', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { resolve } = await import('node:path');
+    const frontmanPath = resolve(process.cwd(), '../.opencode/agents/frontman.md');
+    const content = await readFile(frontmanPath, 'utf-8');
+
+    // Rule: Question UX Formatting & chat stream
+    expect(content).toContain('Question UX Formatting');
+    expect(content).toMatch(/Stream all main markdown tables/);
+    expect(content).toMatch(/chat feed first/);
+    expect(content).toMatch(
+      /concise questions and selectable options inside the `question` tool prompt/
+    );
+    expect(content).toMatch(
+      /Never dump large markdown tables or lengthy content directly into the `question` tool prompt/
+    );
+  });
+});
+
+describe('listBriefs and getLatestBrief ordering', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    runMigrations(db);
+  });
+
+  it('listBriefs returns all briefs ordered by updated_at or created_at descending', () => {
+    const brief1 = createBrief(db);
+    const brief2 = createBrief(db);
+    const brief3 = createBrief(db);
+
+    // Explicitly update timestamps to test ordering deterministically
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 10:00:00',
+      '2026-08-30 10:00:00',
+      brief1.id
+    );
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 10:01:00',
+      '2026-08-30 10:01:00',
+      brief2.id
+    );
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 10:02:00',
+      '2026-08-30 10:02:00',
+      brief3.id
+    );
+
+    // Update brief1 to make it the most recently updated
+    db.prepare('UPDATE briefs SET updated_at = ? WHERE id = ?').run(
+      '2026-08-30 10:05:00',
+      brief1.id
+    );
+
+    const briefs = listBriefs(db);
+    expect(briefs).toHaveLength(3);
+    expect(briefs[0].id).toBe(brief1.id);
+    expect(briefs[1].id).toBe(brief3.id);
+    expect(briefs[2].id).toBe(brief2.id);
+
+    const latest = getLatestBrief(db);
+    expect(latest?.id).toBe(brief1.id);
+  });
+
+  it('returns empty array / null when no briefs exist', () => {
+    expect(listBriefs(db)).toEqual([]);
+    expect(getLatestBrief(db)).toBeNull();
+  });
+
+  it('orders by COALESCE(updated_at, created_at) DESC and breaks ties with rowid DESC', () => {
+    const b1 = createBrief(db);
+    const b2 = createBrief(db);
+    const b3 = createBrief(db);
+
+    // Set identical timestamps
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 12:00:00',
+      '2026-08-30 12:00:00',
+      b1.id
+    );
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 12:00:00',
+      '2026-08-30 12:00:00',
+      b2.id
+    );
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 12:00:00',
+      '2026-08-30 12:00:00',
+      b3.id
+    );
+
+    const briefs = listBriefs(db);
+    expect(briefs[0].id).toBe(b3.id);
+    expect(briefs[1].id).toBe(b2.id);
+    expect(briefs[2].id).toBe(b1.id);
+    expect(getLatestBrief(db)?.id).toBe(b3.id);
+  });
+
+  it('falls back to created_at when updated_at matches or across multiple briefs', () => {
+    const b1 = createBrief(db);
+    const b2 = createBrief(db);
+    const b3 = createBrief(db);
+
+    // b1 has older created_at with updated_at equal to created_at
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 08:00:00',
+      '2026-08-30 08:00:00',
+      b1.id
+    );
+    // b2 has newer created_at with updated_at equal to created_at
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 09:00:00',
+      '2026-08-30 09:00:00',
+      b2.id
+    );
+    // b3 has oldest created_at but newer updated_at
+    db.prepare('UPDATE briefs SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2026-08-30 07:00:00',
+      '2026-08-30 10:00:00',
+      b3.id
+    );
+
+    const briefs = listBriefs(db);
+    expect(briefs[0].id).toBe(b3.id); // 10:00:00 (updated_at)
+    expect(briefs[1].id).toBe(b2.id); // 09:00:00 (created_at fallback/equality)
+    expect(briefs[2].id).toBe(b1.id); // 08:00:00 (created_at fallback/equality)
+    expect(getLatestBrief(db)?.id).toBe(b3.id);
+  });
+});
+
+describe('formatBriefListItem', () => {
+  it('formats completed brief with goal truncation, tags, and formatted timestamp', () => {
+    const brief: Brief = {
+      id: 'brief123',
+      status: 'complete',
+      workType: 'software',
+      goal: 'Build an ultra comprehensive real-time dashboard for AI agent execution workflows with interactive modals',
+      scope: null,
+      functionalRequirements: null,
+      acceptanceCriteria: null,
+      technicalStack: null,
+      constraints: null,
+      deliverables: null,
+      dependencies: null,
+      risks: null,
+      existingCodebase: null,
+      referenceMaterials: null,
+      qualityStandards: null,
+      createdAt: '2026-08-30T10:00:00Z',
+      updatedAt: '2026-08-30T15:30:45Z',
+    };
+
+    const formatted = formatBriefListItem(brief);
+    expect(formatted).toContain('{green-fg}[complete]{/green-fg}');
+    expect(formatted).toContain('{bold}brief123{/bold}');
+    expect(formatted).toContain('…');
+    expect(formatted).toContain(formatTime('2026-08-30T15:30:45Z'));
+    expect(formatted).not.toContain('interactive modals');
+  });
+
+  it('formats draft brief with empty goal gracefully', () => {
+    const brief: Brief = {
+      id: 'draft456',
+      status: 'draft',
+      workType: null,
+      goal: null,
+      scope: null,
+      functionalRequirements: null,
+      acceptanceCriteria: null,
+      technicalStack: null,
+      constraints: null,
+      deliverables: null,
+      dependencies: null,
+      risks: null,
+      existingCodebase: null,
+      referenceMaterials: null,
+      qualityStandards: null,
+      createdAt: '2026-08-30T09:15:00Z',
+      updatedAt: '2026-08-30T09:15:00Z',
+    };
+
+    const formatted = formatBriefListItem(brief);
+    expect(formatted).toContain('{yellow-fg}[draft]{/yellow-fg}');
+    expect(formatted).toContain('{bold}draft456{/bold}');
+    expect(formatted).toContain('(no goal)');
+    expect(formatted).toContain(formatTime('2026-08-30T09:15:00Z'));
+  });
+
+  it('collapses multiple whitespace in goal and uses createdAt if updatedAt is null', () => {
+    const brief: Brief = {
+      id: 'ws789',
+      status: 'draft',
+      workType: null,
+      goal: '   multi \n\n line   and \t spaced   goal   ',
+      scope: null,
+      functionalRequirements: null,
+      acceptanceCriteria: null,
+      technicalStack: null,
+      constraints: null,
+      deliverables: null,
+      dependencies: null,
+      risks: null,
+      existingCodebase: null,
+      referenceMaterials: null,
+      qualityStandards: null,
+      createdAt: '2026-08-30T08:00:00Z',
+      updatedAt: '',
+    };
+
+    const formatted = formatBriefListItem(brief);
+    expect(formatted).toContain('multi line and spaced goal');
+    expect(formatted).toContain(formatTime('2026-08-30T08:00:00Z'));
   });
 });
 
@@ -389,5 +633,240 @@ describe('formatLockDetails', () => {
     expect(formatted).toContain('src/routes/auth.ts');
     expect(formatted).toContain('task-auth');
     expect(formatted).toContain('Implement Auth Handler');
+  });
+});
+
+describe('formatEventListItem', () => {
+  it('formats event with task metadata correctly', () => {
+    const task: Task = {
+      id: 'task-100',
+      briefId: 'brief-abc',
+      title: 'Run database migrations and seed default records',
+      description: 'setup db',
+      dependencies: [],
+      field: 'technicalStack',
+      status: 'in_progress',
+      createdAt: '2026-08-21T00:00:00Z',
+      updatedAt: '2026-08-21T00:01:00Z',
+    };
+
+    const evt: ExecutionEvent = {
+      id: 'evt-101',
+      briefId: 'brief-abc',
+      taskId: 'task-100',
+      actor: 'executor',
+      type: 'started',
+      message: 'Started executing migration task now',
+      createdAt: '2026-08-21T12:30:00Z',
+    };
+
+    const formatted = formatEventListItem(evt, [task]);
+    expect(formatted).toContain('executor');
+    expect(formatted).toContain('[STARTED]');
+    expect(formatted).toContain('Started executing migration task now');
+    expect(formatted).toContain('task:');
+    expect(formatted).toContain('Run database migrations');
+  });
+
+  it('formats brief-level event without task metadata', () => {
+    const evt: ExecutionEvent = {
+      id: 'evt-brief-1',
+      briefId: 'brief-abc',
+      taskId: null,
+      actor: 'frontman',
+      type: 'dispatched',
+      message: 'Brief planning completed and ready for execution',
+      createdAt: '2026-08-21T12:00:00Z',
+    };
+
+    const formatted = formatEventListItem(evt);
+    expect(formatted).toContain('frontman');
+    expect(formatted).toContain('[DISPATCHED]');
+    expect(formatted).toContain('Brief planning completed and ready for execution');
+    expect(formatted).toContain('scope:');
+    expect(formatted).toContain('brief');
+  });
+
+  it('handles empty / minimal event message and normalizes whitespace', () => {
+    const evt: ExecutionEvent = {
+      id: 'evt-min',
+      briefId: 'brief-abc',
+      taskId: null,
+      actor: 'scout',
+      type: 'started',
+      message: '   multiple    spaces    and \n newlines   ',
+      createdAt: '2026-08-21T12:00:00Z',
+    };
+
+    const formatted = formatEventListItem(evt);
+    expect(formatted).toContain('scout');
+    expect(formatted).toContain('[STARTED]');
+    expect(formatted).toContain('multiple spaces and newlines');
+  });
+
+  it('truncates long message preview in list view', () => {
+    const veryLongMessage =
+      'This is an extremely long message detailing the complete execution log of compiling typescript source files and verifying all output artifacts and snapshots in the pipeline';
+    const evt: ExecutionEvent = {
+      id: 'evt-long',
+      briefId: 'brief-abc',
+      taskId: null,
+      actor: 'executor',
+      type: 'completed',
+      message: veryLongMessage,
+      createdAt: '2026-08-21T12:00:00Z',
+    };
+
+    const formatted = formatEventListItem(evt);
+    expect(formatted).toContain('…');
+    expect(formatted).not.toContain('snapshots in the pipeline');
+    expect(formatted.length).toBeLessThan(veryLongMessage.length + 50);
+  });
+});
+
+describe('formatSingleEventDetail', () => {
+  it('handles null event gracefully', () => {
+    const formatted = formatSingleEventDetail(null);
+    expect(formatted).toContain('No event selected');
+  });
+
+  it('renders full untruncated message and all metadata for task-scoped event', () => {
+    const task: Task = {
+      id: 'task-abc',
+      briefId: 'brief-xyz',
+      title: 'Very Long Task Title For Testing Detail Rendering',
+      description: 'Desc',
+      dependencies: [],
+      field: 'functionalRequirements',
+      status: 'in_progress',
+      createdAt: '2026-08-21T00:00:00Z',
+      updatedAt: '2026-08-21T00:01:00Z',
+    };
+
+    const fullMessage =
+      'First line of detailed log output\nSecond line with special symbols: {foo: "bar"}\nThird line preserving full untruncated diagnostics without any clipping or ellipses.';
+
+    const evt: ExecutionEvent = {
+      id: 'evt-detail-12345',
+      briefId: 'brief-xyz',
+      taskId: 'task-abc',
+      actor: 'executor',
+      type: 'completed',
+      message: fullMessage,
+      createdAt: '2026-08-21T15:45:00Z',
+    };
+
+    const formatted = formatSingleEventDetail(evt, [task]);
+    expect(formatted).toContain('Event ID:');
+    expect(formatted).toContain('evt-detail-12345');
+    expect(formatted).toContain('Actor:');
+    expect(formatted).toContain('executor');
+    expect(formatted).toContain('COMPLETED');
+    expect(formatted).toContain('Brief ID:');
+    expect(formatted).toContain('brief-xyz');
+    expect(formatted).toContain('Task:');
+    expect(formatted).toContain('task-abc');
+    expect(formatted).toContain('Very Long Task Title For Testing Detail Rendering');
+    expect(formatted).toContain('Timestamp:');
+    expect(formatted).toContain('2026-08-21T15:45:00Z');
+    expect(formatted).toContain('local:');
+    expect(formatted).toContain('── Message & Details ─────────────────────────────');
+    expect(formatted).toContain('First line of detailed log output');
+    expect(formatted).toContain('Second line with special symbols: {foo: "bar"}');
+    expect(formatted).toContain(
+      'Third line preserving full untruncated diagnostics without any clipping or ellipses.'
+    );
+    expect(formatted).not.toContain('…');
+  });
+
+  it('renders brief-level event scope and empty message placeholder', () => {
+    const evt: ExecutionEvent = {
+      id: 'evt-detail-brief',
+      briefId: 'brief-xyz',
+      taskId: null,
+      actor: 'planner',
+      type: 'error',
+      message: '',
+      createdAt: '2026-08-21T16:00:00Z',
+    };
+
+    const formatted = formatSingleEventDetail(evt);
+    expect(formatted).toContain('Event ID:');
+    expect(formatted).toContain('evt-detail-brief');
+    expect(formatted).toContain('Actor:');
+    expect(formatted).toContain('planner');
+    expect(formatted).toContain('ERROR');
+    expect(formatted).toContain('Scope:');
+    expect(formatted).toContain('{bold}brief-level{/bold} (workflow level event)');
+    expect(formatted).toContain('(no message content)');
+  });
+
+  it('applies color tags according to event types', () => {
+    const types: Array<ExecutionEvent['type']> = ['completed', 'error', 'dispatched', 'started'];
+    for (const type of types) {
+      const evt: ExecutionEvent = {
+        id: `evt-${type}`,
+        briefId: 'b1',
+        taskId: null,
+        actor: 'executor',
+        type,
+        message: `Testing ${type}`,
+        createdAt: '2026-08-21T00:00:00Z',
+      };
+      const formatted = formatSingleEventDetail(evt);
+      expect(formatted).toContain(type.toUpperCase());
+    }
+  });
+
+  it('verifies event viewer detail modal formatting includes full messages, local and ISO timestamps, actor tags, type badges, and brief/task IDs', () => {
+    const task: Task = {
+      id: 'task-test-42',
+      briefId: 'brief-root-99',
+      title: 'Database Schema Migration Engine',
+      description: 'Run migrations safely',
+      dependencies: [],
+      field: 'technicalStack',
+      status: 'completed',
+      createdAt: '2026-08-30T10:00:00Z',
+      updatedAt: '2026-08-30T10:05:00Z',
+    };
+
+    const multiLineMessage = `Migration batch 001 started.\nTable 'frontman_activities' created successfully.\nIndexes applied on brief_id and started_at.`;
+
+    const evt: ExecutionEvent = {
+      id: 'evt-full-meta-001',
+      briefId: 'brief-root-99',
+      taskId: 'task-test-42',
+      actor: 'executor',
+      type: 'completed',
+      message: multiLineMessage,
+      createdAt: '2026-08-30T10:05:30.123Z',
+    };
+
+    const formatted = formatSingleEventDetail(evt, [task]);
+
+    // Full untruncated message
+    expect(formatted).toContain('Migration batch 001 started.');
+    expect(formatted).toContain("Table 'frontman_activities' created successfully.");
+    expect(formatted).toContain('Indexes applied on brief_id and started_at.');
+    expect(formatted).not.toContain('…');
+
+    // ISO timestamp
+    expect(formatted).toContain('2026-08-30T10:05:30.123Z');
+
+    // Local timestamp
+    const expectedLocalTime = formatTime('2026-08-30T10:05:30.123Z');
+    expect(formatted).toContain(`(local: ${expectedLocalTime})`);
+
+    // Actor tag
+    expect(formatted).toContain('{bold}executor{/bold}');
+
+    // Type badge with green color tag
+    expect(formatted).toContain('{bold}{green-fg}COMPLETED{/green-fg}{/bold}');
+
+    // Brief and Task IDs
+    expect(formatted).toContain('brief-root-99');
+    expect(formatted).toContain('task-test-42');
+    expect(formatted).toContain('Database Schema Migration Engine');
   });
 });

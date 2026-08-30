@@ -4,7 +4,7 @@ import { buildSnapshot, type WorkflowSnapshot } from '../utils/snapshot.js';
 import { renderGraph } from '../utils/graph.js';
 import { SPINNERS } from '../utils/ascii.js';
 import type { ExecutionEvent } from '../models/event.js';
-import { resolveBrief } from '../db/brief-repo.js';
+import { listBriefs, resolveBrief } from '../db/brief-repo.js';
 import type { Brief, Deliverable } from '../models/brief.js';
 import { getDb } from '../db/connection.js';
 import { getTaskById, listTasksByBrief } from '../db/task-repo.js';
@@ -69,6 +69,24 @@ function toStringArray(val: unknown): string[] {
     return [val.trim()];
   }
   return [];
+}
+
+/**
+ * Formats a brief for the brief selector list item
+ *
+ * @param brief The brief to format
+ * @returns Tagged string representation for the brief list item
+ */
+export function formatBriefListItem(brief: Brief): string {
+  const statusBadge =
+    brief.status === 'complete'
+      ? '{green-fg}[complete]{/green-fg}'
+      : '{yellow-fg}[draft]{/yellow-fg}';
+
+  const goalText = brief.goal ? truncate(brief.goal.replace(/\s+/g, ' ').trim(), 40) : '(no goal)';
+  const time = formatTime(brief.updatedAt || brief.createdAt);
+
+  return `${statusBadge} {bold}${brief.id}{/bold} ${goalText} {gray-fg}[${time}]{/gray-fg}`;
 }
 
 /**
@@ -510,6 +528,114 @@ export function formatEventDetails(
 }
 
 /**
+ * Formats an event for the selectable event list item
+ *
+ * @param evt The execution event to format
+ * @param allTasks Optional list or map of all tasks for resolving task titles
+ * @returns Tagged string representation for the event list item
+ */
+export function formatEventListItem(
+  evt: ExecutionEvent,
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const color =
+    evt.type === 'completed'
+      ? 'green'
+      : evt.type === 'error'
+        ? 'red'
+        : evt.type === 'dispatched'
+          ? 'cyan'
+          : evt.type === 'started'
+            ? 'yellow'
+            : 'white';
+
+  const time = formatTime(evt.createdAt);
+
+  const taskSuffix = evt.taskId
+    ? ` · {gray-fg}task:{/gray-fg} {bold}${truncate(tasksMap.get(evt.taskId)?.title ?? evt.taskId, 32)}{/bold}`
+    : ' · {gray-fg}scope:{/gray-fg} {bold}brief{/bold}';
+
+  return `{gray-fg}[${time}]{/gray-fg} {bold}${evt.actor}{/bold} {${color}-fg}[${evt.type.toUpperCase()}]{/${color}-fg} ${truncate(evt.message.replace(/\s+/g, ' ').trim(), 50)}${taskSuffix}`;
+}
+
+/**
+ * Formats a single execution event into full structured view for the event detail modal
+ *
+ * @param evt The execution event to format, or null if not found
+ * @param allTasks Optional list or map of all tasks for resolving task titles
+ * @returns Tagged string representation of the single execution event
+ */
+export function formatSingleEventDetail(
+  evt: ExecutionEvent | null,
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  if (!evt) {
+    return '{yellow-fg}No event selected.{/yellow-fg}';
+  }
+
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const lines: string[] = [];
+  const color =
+    evt.type === 'completed'
+      ? 'green'
+      : evt.type === 'error'
+        ? 'red'
+        : evt.type === 'dispatched'
+          ? 'cyan'
+          : evt.type === 'started'
+            ? 'yellow'
+            : 'white';
+
+  lines.push(`{bold}{cyan-fg}Event ID:{/cyan-fg}{/bold}   ${evt.id}`);
+  lines.push(`{bold}{cyan-fg}Actor:{/cyan-fg}{/bold}      {bold}${evt.actor}{/bold}`);
+  lines.push(
+    `{bold}{cyan-fg}Type:{/cyan-fg}{/bold}       {bold}{${color}-fg}${evt.type.toUpperCase()}{/${color}-fg}{/bold}`
+  );
+  lines.push(`{bold}{cyan-fg}Brief ID:{/cyan-fg}{/bold}   ${evt.briefId}`);
+
+  if (evt.taskId) {
+    const task = tasksMap.get(evt.taskId);
+    const title = task ? task.title : evt.taskId;
+    lines.push(`{bold}{cyan-fg}Task:{/cyan-fg}{/bold}       ${evt.taskId} · {bold}${title}{/bold}`);
+  } else {
+    lines.push(
+      `{bold}{cyan-fg}Scope:{/cyan-fg}{/bold}      {bold}brief-level{/bold} (workflow level event)`
+    );
+  }
+
+  const localTime = formatTime(evt.createdAt);
+  lines.push(
+    `{bold}{cyan-fg}Timestamp:{/cyan-fg}{/bold}  ${evt.createdAt} {gray-fg}(local: ${localTime}){/gray-fg}`
+  );
+  lines.push('');
+
+  // Event Message Body
+  lines.push(
+    '{bold}{yellow-fg}── Message & Details ─────────────────────────────{/yellow-fg}{/bold}'
+  );
+  if (evt.message && evt.message.trim().length > 0) {
+    lines.push(evt.message);
+  } else {
+    lines.push('  {gray-fg}(no message content){/gray-fg}');
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Formats an artifact for the artifact selector list item
  */
 export function formatArtifactListItem(
@@ -853,12 +979,45 @@ function runDashboard(opts: WatchOptions): void {
     left: 0,
     width: '100%',
     height: 2,
-    content: ' q / Ctrl-C: quit · b: brief · t: tasks · e: events · l: file locks ',
+    content: ' q / Ctrl-C: quit · b: briefs · t: tasks · a: artifacts · e: events · l: file locks ',
     style: { fg: 'gray' },
     tags: true,
   });
 
-  const briefModal = blessed.box({
+  const briefListModal = blessed.list({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Briefs (Enter: select active brief · v: view details) ',
+    border: { type: 'line' },
+    style: {
+      fg: 'white',
+      border: { fg: 'cyan' },
+      bg: 'black',
+      selected: {
+        bg: 'cyan',
+        fg: 'black',
+        bold: true,
+      },
+      item: {
+        fg: 'white',
+      },
+    },
+    tags: true,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollable: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'cyan' },
+    },
+    hidden: true,
+  });
+
+  const briefDetailModal = blessed.box({
     parent: screen,
     top: 0,
     left: 0,
@@ -880,13 +1039,46 @@ function runDashboard(opts: WatchOptions): void {
     hidden: true,
   });
 
-  const eventModal = blessed.box({
+  const eventListModal = blessed.list({
     parent: screen,
     top: 0,
     left: 0,
     width: '100%',
     bottom: 2,
-    label: ' Execution Events ',
+    label: ' Execution Events (Enter: view details) ',
+    border: { type: 'line' },
+    style: {
+      fg: 'white',
+      border: { fg: 'green' },
+      bg: 'black',
+      selected: {
+        bg: 'green',
+        fg: 'black',
+        bold: true,
+      },
+      item: {
+        fg: 'white',
+      },
+    },
+    tags: true,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollable: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'green' },
+    },
+    hidden: true,
+  });
+
+  const eventDetailModal = blessed.box({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Event Details ',
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: 'green' }, bg: 'black' },
     tags: true,
@@ -1036,10 +1228,15 @@ function runDashboard(opts: WatchOptions): void {
 
   let spinnerFrame = 0;
   let currentSnapshot: WorkflowSnapshot | null = null;
+  let currentBriefId: string | undefined = opts.brief;
+  let currentBriefs: Brief[] = [];
+  let selectedBriefId: string | null = null;
   let currentTasks: Task[] = [];
   let selectedTaskId: string | null = null;
   let currentArtifacts: ExecutionArtifact[] = [];
   let selectedArtifactId: string | null = null;
+  let currentEvents: ExecutionEvent[] = [];
+  let selectedEventId: string | null = null;
 
   function eventColor(type: ExecutionEvent['type']): string {
     switch (type) {
@@ -1187,7 +1384,7 @@ function runDashboard(opts: WatchOptions): void {
   }
 
   function pollDb(): void {
-    const snapshot = buildSnapshot({ briefId: opts.brief, allowEmpty: true });
+    const snapshot = buildSnapshot({ briefId: currentBriefId, allowEmpty: true });
     if (!snapshot) {
       return;
     }
@@ -1199,34 +1396,53 @@ function runDashboard(opts: WatchOptions): void {
     renderActivity(snapshot);
     renderLocks(snapshot);
 
-    if (!briefModal.hidden) {
-      const brief = resolveBrief(opts.brief);
-      briefModal.setContent(formatBriefDetails(brief));
+    if (!briefListModal.hidden) {
+      currentBriefs = listBriefs(getDb());
+      if (currentBriefs.length > 0) {
+        briefListModal.setItems(currentBriefs.map(formatBriefListItem));
+      }
     }
 
-    if (!eventModal.hidden) {
-      const brief = resolveBrief(opts.brief);
+    if (!briefDetailModal.hidden) {
+      const brief = resolveBrief(selectedBriefId ?? currentBriefId);
+      briefDetailModal.setContent(formatBriefDetails(brief));
+    }
+
+    if (!eventDetailModal.hidden && selectedEventId) {
+      const brief = resolveBrief(currentBriefId);
       const events = brief ? listEvents(getDb(), { briefId: brief.id, limit: 100 }) : [];
+      const event = events.find((e) => e.id === selectedEventId) ?? null;
       const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
-      eventModal.setContent(formatEventDetails(events, allTasks));
+      eventDetailModal.setContent(formatSingleEventDetail(event, allTasks));
+    }
+
+    if (!eventListModal.hidden) {
+      const brief = resolveBrief(currentBriefId);
+      if (brief) {
+        currentEvents = listEvents(getDb(), { briefId: brief.id, limit: 100 });
+        const allTasks = listTasksByBrief(getDb(), brief.id);
+        if (currentEvents.length > 0) {
+          eventListModal.setItems(currentEvents.map((e) => formatEventListItem(e, allTasks)));
+        }
+      }
     }
 
     if (!lockModal.hidden) {
       const locks = listLocks(getDb());
-      const brief = resolveBrief(opts.brief);
+      const brief = resolveBrief(currentBriefId);
       const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
       lockModal.setContent(formatLockDetails(locks, allTasks));
     }
 
     if (!taskDetailModal.hidden && selectedTaskId) {
       const task = getTaskById(getDb(), selectedTaskId);
-      const brief = resolveBrief(opts.brief);
+      const brief = resolveBrief(currentBriefId);
       const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
       taskDetailModal.setContent(formatTaskDetails(task, allTasks));
     }
 
     if (!taskListModal.hidden) {
-      const brief = resolveBrief(opts.brief);
+      const brief = resolveBrief(currentBriefId);
       if (brief) {
         currentTasks = listTasksByBrief(getDb(), brief.id);
         if (currentTasks.length > 0) {
@@ -1237,13 +1453,13 @@ function runDashboard(opts: WatchOptions): void {
 
     if (!artifactDetailModal.hidden && selectedArtifactId) {
       const artifact = getArtifactById(getDb(), selectedArtifactId);
-      const brief = resolveBrief(opts.brief);
+      const brief = resolveBrief(currentBriefId);
       const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
       artifactDetailModal.setContent(formatArtifactDetail(artifact, allTasks));
     }
 
     if (!artifactListModal.hidden) {
-      const brief = resolveBrief(opts.brief);
+      const brief = resolveBrief(currentBriefId);
       if (brief) {
         currentArtifacts = listArtifacts(getDb(), { briefId: brief.id, status: 'all' });
         const allTasks = listTasksByBrief(getDb(), brief.id);
@@ -1276,13 +1492,19 @@ function runDashboard(opts: WatchOptions): void {
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
   const MAIN_FOOTER =
-    ' q / Ctrl-C: quit · b: brief · t: tasks · a: artifacts · e: events · l: file locks ';
-  const BRIEF_FOOTER = ' q / Ctrl-C: quit · b / Esc: close brief · ↑/↓/k/j/PgUp/PgDn: scroll ';
+    ' q / Ctrl-C: quit · b: briefs · t: tasks · a: artifacts · e: events · l: file locks ';
+  const BRIEF_LIST_FOOTER =
+    ' q / Ctrl-C: quit · Enter: select · v: view details · b / Esc: close · ↑/↓/k/j: navigate ';
+  const BRIEF_DETAIL_FOOTER =
+    ' q / Ctrl-C: quit · Esc: back to brief list · b: close · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const ARTIFACT_LIST_FOOTER =
     ' q / Ctrl-C: quit · Enter: view artifact · a / Esc: close artifacts · ↑/↓/k/j: navigate ';
   const ARTIFACT_DETAIL_FOOTER =
     ' q / Ctrl-C: quit · Esc: back to artifact list · a: close artifacts · ↑/↓/k/j/PgUp/PgDn: scroll ';
-  const EVENT_FOOTER = ' q / Ctrl-C: quit · e / Esc: close events · ↑/↓/k/j/PgUp/PgDn: scroll ';
+  const EVENT_LIST_FOOTER =
+    ' q / Ctrl-C: quit · Enter: view event · e / Esc: close events · ↑/↓/k/j: navigate ';
+  const EVENT_DETAIL_FOOTER =
+    ' q / Ctrl-C: quit · Esc: back to event list · e: close events · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const LOCK_FOOTER = ' q / Ctrl-C: quit · l / Esc: close file locks · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const TASK_LIST_FOOTER =
     ' q / Ctrl-C: quit · Enter: view task · t / Esc: close tasks · ↑/↓/k/j: navigate ';
@@ -1298,10 +1520,14 @@ function runDashboard(opts: WatchOptions): void {
       footer.setContent(ARTIFACT_DETAIL_FOOTER);
     } else if (!artifactListModal.hidden) {
       footer.setContent(ARTIFACT_LIST_FOOTER);
-    } else if (!briefModal.hidden) {
-      footer.setContent(BRIEF_FOOTER);
-    } else if (!eventModal.hidden) {
-      footer.setContent(EVENT_FOOTER);
+    } else if (!eventDetailModal.hidden) {
+      footer.setContent(EVENT_DETAIL_FOOTER);
+    } else if (!eventListModal.hidden) {
+      footer.setContent(EVENT_LIST_FOOTER);
+    } else if (!briefDetailModal.hidden) {
+      footer.setContent(BRIEF_DETAIL_FOOTER);
+    } else if (!briefListModal.hidden) {
+      footer.setContent(BRIEF_LIST_FOOTER);
     } else if (!lockModal.hidden) {
       footer.setContent(LOCK_FOOTER);
     } else {
@@ -1309,9 +1535,15 @@ function runDashboard(opts: WatchOptions): void {
     }
   }
 
-  function openTaskListModal(): void {
-    if (!briefModal.hidden) {
-      briefModal.hide();
+  function openBriefListModal(): void {
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
+    }
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
     }
     if (!artifactListModal.hidden) {
       artifactListModal.hide();
@@ -1319,13 +1551,90 @@ function runDashboard(opts: WatchOptions): void {
     if (!artifactDetailModal.hidden) {
       artifactDetailModal.hide();
     }
-    if (!eventModal.hidden) {
-      eventModal.hide();
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
     }
     if (!lockModal.hidden) {
       lockModal.hide();
     }
-    const brief = resolveBrief(opts.brief);
+    currentBriefs = listBriefs(getDb());
+    if (currentBriefs.length === 0) {
+      briefListModal.setItems(['{yellow-fg}(no briefs created yet — run /brief init){/yellow-fg}']);
+    } else {
+      briefListModal.setItems(currentBriefs.map(formatBriefListItem));
+      const activeIdx = currentBriefs.findIndex(
+        (b) => b.id === (currentBriefId ?? currentBriefs[0]?.id)
+      );
+      briefListModal.select(activeIdx >= 0 ? activeIdx : 0);
+    }
+    briefListModal.show();
+    briefListModal.focus();
+    updateFooter();
+    screen.render();
+  }
+
+  function showBriefDetail(briefId: string): void {
+    selectedBriefId = briefId;
+    const brief = resolveBrief(briefId);
+    briefDetailModal.setContent(formatBriefDetails(brief));
+    briefDetailModal.scrollTo(0);
+    briefListModal.hide();
+    briefDetailModal.show();
+    briefDetailModal.focus();
+    updateFooter();
+    screen.render();
+  }
+
+  function switchActiveBrief(briefId: string): void {
+    currentBriefId = briefId;
+    briefListModal.hide();
+    briefDetailModal.hide();
+    pollDb();
+    updateFooter();
+    screen.render();
+  }
+
+  briefListModal.on('select', (_item, index) => {
+    const brief = currentBriefs[index];
+    if (brief) {
+      switchActiveBrief(brief.id);
+    }
+  });
+
+  briefListModal.key(['v', 'V'], () => {
+    const selectedIdx = (briefListModal as unknown as { selected?: number }).selected ?? 0;
+    const brief = currentBriefs[selectedIdx];
+    if (brief) {
+      showBriefDetail(brief.id);
+    }
+  });
+
+  function openTaskListModal(): void {
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+    }
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
+    }
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
+    }
+    const brief = resolveBrief(currentBriefId);
     if (!brief) {
       taskListModal.setItems(['{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}']);
       currentTasks = [];
@@ -1347,7 +1656,7 @@ function runDashboard(opts: WatchOptions): void {
   function showTaskDetail(taskId: string): void {
     selectedTaskId = taskId;
     const task = getTaskById(getDb(), taskId);
-    const brief = resolveBrief(opts.brief);
+    const brief = resolveBrief(currentBriefId);
     const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
     taskDetailModal.setContent(formatTaskDetails(task, allTasks));
     taskDetailModal.scrollTo(0);
@@ -1366,8 +1675,11 @@ function runDashboard(opts: WatchOptions): void {
   });
 
   function openArtifactListModal(): void {
-    if (!briefModal.hidden) {
-      briefModal.hide();
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+    }
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
     }
     if (!taskListModal.hidden) {
       taskListModal.hide();
@@ -1378,13 +1690,16 @@ function runDashboard(opts: WatchOptions): void {
     if (!artifactDetailModal.hidden) {
       artifactDetailModal.hide();
     }
-    if (!eventModal.hidden) {
-      eventModal.hide();
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
     }
     if (!lockModal.hidden) {
       lockModal.hide();
     }
-    const brief = resolveBrief(opts.brief);
+    const brief = resolveBrief(currentBriefId);
     if (!brief) {
       artifactListModal.setItems([
         '{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}',
@@ -1413,7 +1728,7 @@ function runDashboard(opts: WatchOptions): void {
   function showArtifactDetail(artifactId: string): void {
     selectedArtifactId = artifactId;
     const artifact = getArtifactById(getDb(), artifactId);
-    const brief = resolveBrief(opts.brief);
+    const brief = resolveBrief(currentBriefId);
     const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
     artifactDetailModal.setContent(formatArtifactDetail(artifact, allTasks));
     artifactDetailModal.scrollTo(0);
@@ -1431,6 +1746,73 @@ function runDashboard(opts: WatchOptions): void {
     }
   });
 
+  function openEventListModal(): void {
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+    }
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
+    }
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
+    }
+    const brief = resolveBrief(currentBriefId);
+    if (!brief) {
+      eventListModal.setItems(['{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}']);
+      currentEvents = [];
+    } else {
+      currentEvents = listEvents(getDb(), { briefId: brief.id, limit: 100 });
+      const allTasks = listTasksByBrief(getDb(), brief.id);
+      if (currentEvents.length === 0) {
+        eventListModal.setItems(['{yellow-fg}(no execution events recorded yet){/yellow-fg}']);
+      } else {
+        eventListModal.setItems(currentEvents.map((e) => formatEventListItem(e, allTasks)));
+        eventListModal.select(0);
+      }
+    }
+    eventListModal.show();
+    eventListModal.focus();
+    updateFooter();
+    screen.render();
+  }
+
+  function showEventDetail(eventId: string): void {
+    selectedEventId = eventId;
+    const brief = resolveBrief(currentBriefId);
+    const events = brief ? listEvents(getDb(), { briefId: brief.id, limit: 100 }) : [];
+    const event = events.find((e) => e.id === eventId) ?? null;
+    const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+    eventDetailModal.setContent(formatSingleEventDetail(event, allTasks));
+    eventDetailModal.scrollTo(0);
+    eventListModal.hide();
+    eventDetailModal.show();
+    eventDetailModal.focus();
+    updateFooter();
+    screen.render();
+  }
+
+  eventListModal.on('select', (_item, index) => {
+    const event = currentEvents[index];
+    if (event) {
+      showEventDetail(event.id);
+    }
+  });
+
   function toggleTaskListModal(): void {
     if (!taskDetailModal.hidden) {
       taskDetailModal.hide();
@@ -1443,8 +1825,11 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
       return;
     }
-    if (!briefModal.hidden) {
-      briefModal.hide();
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+    }
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
     }
     if (!artifactListModal.hidden) {
       artifactListModal.hide();
@@ -1452,8 +1837,11 @@ function runDashboard(opts: WatchOptions): void {
     if (!artifactDetailModal.hidden) {
       artifactDetailModal.hide();
     }
-    if (!eventModal.hidden) {
-      eventModal.hide();
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
     }
     if (!lockModal.hidden) {
       lockModal.hide();
@@ -1462,6 +1850,17 @@ function runDashboard(opts: WatchOptions): void {
   }
 
   function toggleBriefModal(): void {
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
+      openBriefListModal();
+      return;
+    }
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
     if (!taskListModal.hidden) {
       taskListModal.hide();
     }
@@ -1474,25 +1873,16 @@ function runDashboard(opts: WatchOptions): void {
     if (!artifactDetailModal.hidden) {
       artifactDetailModal.hide();
     }
-    if (!eventModal.hidden) {
-      eventModal.hide();
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
     }
     if (!lockModal.hidden) {
       lockModal.hide();
     }
-    if (briefModal.hidden) {
-      const brief = resolveBrief(opts.brief);
-      briefModal.setContent(formatBriefDetails(brief));
-      briefModal.scrollTo(0);
-      briefModal.show();
-      briefModal.focus();
-      updateFooter();
-      screen.render();
-    } else {
-      briefModal.hide();
-      updateFooter();
-      screen.render();
-    }
+    openBriefListModal();
   }
 
   function toggleArtifactModal(): void {
@@ -1513,11 +1903,17 @@ function runDashboard(opts: WatchOptions): void {
     if (!taskDetailModal.hidden) {
       taskDetailModal.hide();
     }
-    if (!briefModal.hidden) {
-      briefModal.hide();
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
     }
-    if (!eventModal.hidden) {
-      eventModal.hide();
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
+    }
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
     }
     if (!lockModal.hidden) {
       lockModal.hide();
@@ -1526,14 +1922,28 @@ function runDashboard(opts: WatchOptions): void {
   }
 
   function toggleEventModal(): void {
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
+      openEventListModal();
+      return;
+    }
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
     if (!taskListModal.hidden) {
       taskListModal.hide();
     }
     if (!taskDetailModal.hidden) {
       taskDetailModal.hide();
     }
-    if (!briefModal.hidden) {
-      briefModal.hide();
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+    }
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
     }
     if (!artifactListModal.hidden) {
       artifactListModal.hide();
@@ -1544,21 +1954,7 @@ function runDashboard(opts: WatchOptions): void {
     if (!lockModal.hidden) {
       lockModal.hide();
     }
-    if (eventModal.hidden) {
-      const brief = resolveBrief(opts.brief);
-      const events = brief ? listEvents(getDb(), { briefId: brief.id, limit: 100 }) : [];
-      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
-      eventModal.setContent(formatEventDetails(events, allTasks));
-      eventModal.scrollTo(0);
-      eventModal.show();
-      eventModal.focus();
-      updateFooter();
-      screen.render();
-    } else {
-      eventModal.hide();
-      updateFooter();
-      screen.render();
-    }
+    openEventListModal();
   }
 
   function toggleLockModal(): void {
@@ -1568,8 +1964,11 @@ function runDashboard(opts: WatchOptions): void {
     if (!taskDetailModal.hidden) {
       taskDetailModal.hide();
     }
-    if (!briefModal.hidden) {
-      briefModal.hide();
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+    }
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
     }
     if (!artifactListModal.hidden) {
       artifactListModal.hide();
@@ -1577,12 +1976,15 @@ function runDashboard(opts: WatchOptions): void {
     if (!artifactDetailModal.hidden) {
       artifactDetailModal.hide();
     }
-    if (!eventModal.hidden) {
-      eventModal.hide();
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
     }
     if (lockModal.hidden) {
       const locks = listLocks(getDb());
-      const brief = resolveBrief(opts.brief);
+      const brief = resolveBrief(currentBriefId);
       const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
       lockModal.setContent(formatLockDetails(locks, allTasks));
       lockModal.scrollTo(0);
@@ -1640,14 +2042,24 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
       return;
     }
-    if (!briefModal.hidden) {
-      briefModal.hide();
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
+      openEventListModal();
+      return;
+    }
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
       updateFooter();
       screen.render();
       return;
     }
-    if (!eventModal.hidden) {
-      eventModal.hide();
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
+      openBriefListModal();
+      return;
+    }
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
       updateFooter();
       screen.render();
       return;
@@ -1680,11 +2092,11 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!artifactDetailModal.hidden) {
       artifactDetailModal.scroll(-1);
       screen.render();
-    } else if (!briefModal.hidden) {
-      briefModal.scroll(-1);
+    } else if (!eventDetailModal.hidden) {
+      eventDetailModal.scroll(-1);
       screen.render();
-    } else if (!eventModal.hidden) {
-      eventModal.scroll(-1);
+    } else if (!briefDetailModal.hidden) {
+      briefDetailModal.scroll(-1);
       screen.render();
     } else if (!lockModal.hidden) {
       lockModal.scroll(-1);
@@ -1699,11 +2111,11 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!artifactDetailModal.hidden) {
       artifactDetailModal.scroll(1);
       screen.render();
-    } else if (!briefModal.hidden) {
-      briefModal.scroll(1);
+    } else if (!eventDetailModal.hidden) {
+      eventDetailModal.scroll(1);
       screen.render();
-    } else if (!eventModal.hidden) {
-      eventModal.scroll(1);
+    } else if (!briefDetailModal.hidden) {
+      briefDetailModal.scroll(1);
       screen.render();
     } else if (!lockModal.hidden) {
       lockModal.scroll(1);
@@ -1718,11 +2130,11 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!artifactDetailModal.hidden) {
       artifactDetailModal.scroll(-5);
       screen.render();
-    } else if (!briefModal.hidden) {
-      briefModal.scroll(-5);
+    } else if (!eventDetailModal.hidden) {
+      eventDetailModal.scroll(-5);
       screen.render();
-    } else if (!eventModal.hidden) {
-      eventModal.scroll(-5);
+    } else if (!briefDetailModal.hidden) {
+      briefDetailModal.scroll(-5);
       screen.render();
     } else if (!lockModal.hidden) {
       lockModal.scroll(-5);
@@ -1737,11 +2149,11 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!artifactDetailModal.hidden) {
       artifactDetailModal.scroll(5);
       screen.render();
-    } else if (!briefModal.hidden) {
-      briefModal.scroll(5);
+    } else if (!eventDetailModal.hidden) {
+      eventDetailModal.scroll(5);
       screen.render();
-    } else if (!eventModal.hidden) {
-      eventModal.scroll(5);
+    } else if (!briefDetailModal.hidden) {
+      briefDetailModal.scroll(5);
       screen.render();
     } else if (!lockModal.hidden) {
       lockModal.scroll(5);
