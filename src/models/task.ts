@@ -1,6 +1,4 @@
-/**
- * Task entity definition
- */
+import type { ArtifactType } from './artifact.js';
 
 export const TASK_STATUSES = ['pending', 'in_progress', 'completed'] as const;
 
@@ -14,6 +12,7 @@ export interface Task {
   description: string;
   dependencies: string[]; // array of task IDs
   field: string | null; // brief field this addresses (optional)
+  artifactRequirements: ArtifactType[]; // array of required artifact types
   status: 'pending' | 'in_progress' | 'completed';
   createdAt: string;
   updatedAt: string;
@@ -26,6 +25,7 @@ export const TASK_FIELDS = [
   'description',
   'dependencies',
   'field',
+  'artifactRequirements',
   'status',
   'createdAt',
   'updatedAt',
@@ -44,6 +44,7 @@ export const FIELD_TO_COLUMN: Record<string, string> = {
   description: 'description',
   dependencies: 'dependencies',
   field: 'field',
+  artifactRequirements: 'artifact_requirements',
   status: 'status',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
@@ -55,4 +56,4 @@ export const COLUMN_TO_FIELD: Record<string, string> = Object.fromEntries(
 );
 
 // Fields stored as JSON strings in SQLite
-export const JSON_FIELDS = ['dependencies'] as const;
+export const JSON_FIELDS = ['dependencies', 'artifact_requirements'] as const;

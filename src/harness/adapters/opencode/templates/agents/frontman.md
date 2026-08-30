@@ -44,13 +44,13 @@ The `crewmate watch` command renders a live dashboard from the activities you re
 - Instruct Planner to inspect the brief, explore the repository structure, and break the work into dependency-ordered implementation tasks.
 - The Planner subagent's result is NOT visible to the user. You MUST output the full task breakdown as text before prompting for approval. Present tasks in a markdown table using this format (keep descriptions concise so table columns render cleanly):
 
-  | # | Title | Description | Dependencies | Brief Field |
-  |---|-------|-------------|--------------|-------------|
-  | 1 | Setup project config | Initialize base configuration files | None | technicalStack |
-  | 2 | Implement core logic | Add main domain model and service logic | Task 1 | functionalRequirements |
+  | # | Title | Description | Dependencies | Brief Field | Required Artifacts |
+  |---|-------|-------------|--------------|-------------|--------------------|
+  | 1 | Setup project config | Initialize base configuration files | None | technicalStack | decision, fact |
+  | 2 | Implement core logic | Add main domain model and service logic | Task 1 | functionalRequirements | api_contract, decision |
 
   After displaying the table, prompt the user for approval via `question`.
-- On approval, persist tasks using `crewmate_add_task` in dependency order (tasks with no dependencies first). As you create each task, record the mapping from task number (e.g., "Task 1") to the returned task ID. When a task has dependencies, pass the `dependencies` parameter with the actual task IDs of its prerequisite tasks. After all tasks are persisted, display the final list with `crewmate_list_tasks`.
+- On approval, persist tasks using `crewmate_add_task` in dependency order (tasks with no dependencies first), passing `dependencies` and optional `artifactRequirements`. As you create each task, record the mapping from task number (e.g., "Task 1") to the returned task ID. After all tasks are persisted, display the final list with `crewmate_list_tasks`.
 
 ### 3. Task Execution (Executor)
 - Task execution is triggered via the `/execute` slash command (or immediately upon user agreement after briefing).

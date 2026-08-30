@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { randomBytes } from 'node:crypto';
 import type { Task } from '../models/task.js';
+import type { ArtifactType } from '../models/artifact.js';
 
 /**
  *
@@ -16,6 +17,16 @@ function rowToTask(row: Record<string, unknown>): Task {
   } catch {
     // corrupted JSON defaults to empty array
   }
+
+  let reqs: ArtifactType[] = [];
+  try {
+    if (row.artifact_requirements) {
+      reqs = JSON.parse(row.artifact_requirements as string);
+    }
+  } catch {
+    // corrupted JSON defaults to empty array
+  }
+
   return {
     id: row.id as string,
     briefId: row.brief_id as string,
@@ -23,6 +34,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     description: row.description as string,
     dependencies: deps,
     field: (row.field as string) || null,
+    artifactRequirements: reqs,
     status: row.status as Task['status'],
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -41,6 +53,7 @@ export function buildTask(
   options?: {
     dependencies?: string[];
     field?: string | null;
+    artifactRequirements?: ArtifactType[];
     status?: Task['status'];
     createdAt?: string;
     updatedAt?: string;
@@ -53,6 +66,7 @@ export function buildTask(
     description,
     dependencies: options?.dependencies ?? [],
     field: options?.field ?? null,
+    artifactRequirements: options?.artifactRequirements ?? [],
     status: options?.status ?? 'pending',
     createdAt: options?.createdAt ?? new Date().toISOString(),
     updatedAt: options?.updatedAt ?? new Date().toISOString(),
@@ -70,11 +84,12 @@ export function createTask(
   options?: {
     dependencies?: string[];
     field?: string | null;
+    artifactRequirements?: ArtifactType[];
   }
 ): Task {
   const id = generateId();
   db.prepare(
-    `INSERT INTO tasks (id, brief_id, title, description, dependencies, field, status) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO tasks (id, brief_id, title, description, dependencies, field, artifact_requirements, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     briefId,
@@ -82,6 +97,7 @@ export function createTask(
     description,
     JSON.stringify(options?.dependencies ?? []),
     options?.field ?? null,
+    JSON.stringify(options?.artifactRequirements ?? []),
     'pending'
   );
 

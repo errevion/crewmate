@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import { getDb } from '../db/connection.js';
 import { TASK_STATUSES } from '../models/task.js';
 import { BRIEF_FIELDS } from '../models/brief.js';
+import { ARTIFACT_TYPES, type ArtifactType } from '../models/artifact.js';
 import {
   createTask,
   getTaskById,
@@ -11,11 +12,13 @@ import {
   validateDependencies,
 } from '../db/task-repo.js';
 import { getBriefById as getBrief } from '../db/brief-repo.js';
+import { checkTaskArtifactCompliance } from '../db/artifact-repo.js';
 
 interface AddTaskResult {
   ok: true;
   id: string;
   title: string;
+  artifactRequirements: string[];
 }
 
 interface ListTasksResult {
@@ -27,6 +30,7 @@ interface ListTasksResult {
     dependencies: string[];
     status: string;
     field: string | null;
+    artifactRequirements: string[];
   }>;
 }
 
@@ -39,6 +43,7 @@ interface GetTaskResult {
     description: string;
     dependencies: string[];
     field: string | null;
+    artifactRequirements: string[];
     status: string;
     createdAt: string;
     updatedAt: string;
@@ -84,7 +89,7 @@ function fail(message: string): never {
 export function registerTaskCommand(program: Command): void {
   const taskGroup = program.command('task').description('Manage tasks within a brief');
 
-  // task add --brief <id> --title <t> --description <d> [--dependencies <ids>] [--field <f>]
+  // task add <brief-id> --title <t> --description <d> [--dependencies <ids>] [--field <f>] [--artifact-requirements <types...>]
   taskGroup
     .command('add')
     .description('Add a new task to a brief')
@@ -93,6 +98,11 @@ export function registerTaskCommand(program: Command): void {
     .option('--description <description>', 'Task description (required)', '')
     .option('--dependencies <deps...>', 'Array of task IDs that this task depends on', [])
     .option('--field <field>', 'Brief field this task addresses', '')
+    .option(
+      '--artifact-requirements <reqs...>',
+      `Required artifact types on completion (${ARTIFACT_TYPES.join(' | ')})`,
+      []
+    )
     .action((briefId, opts) => {
       if (!opts.title || !opts.title.trim()) {
         fail('--title and --description are required');
@@ -127,15 +137,29 @@ export function registerTaskCommand(program: Command): void {
         fail(`Invalid field "${field}". Must be one of: ${BRIEF_FIELDS.join(', ')}`);
       }
 
+      const artifactRequirements: ArtifactType[] = [];
+      if (opts.artifactRequirements && Array.isArray(opts.artifactRequirements)) {
+        for (const req of opts.artifactRequirements) {
+          if (!ARTIFACT_TYPES.includes(req as ArtifactType)) {
+            fail(
+              `Invalid artifact requirement: ${req}. Must be one of: ${ARTIFACT_TYPES.join(', ')}`
+            );
+          }
+          artifactRequirements.push(req as ArtifactType);
+        }
+      }
+
       const task = createTask(getDb(), briefId, opts.title, opts.description, {
         dependencies,
         field,
+        artifactRequirements,
       });
 
       out({
         ok: true,
         id: task.id,
         title: task.title,
+        artifactRequirements: task.artifactRequirements,
       });
     });
 
@@ -165,6 +189,7 @@ export function registerTaskCommand(program: Command): void {
           dependencies: t.dependencies,
           status: t.status,
           field: t.field,
+          artifactRequirements: t.artifactRequirements,
         })),
       });
     });
@@ -189,6 +214,7 @@ export function registerTaskCommand(program: Command): void {
           description: task.description,
           dependencies: task.dependencies,
           field: task.field,
+          artifactRequirements: task.artifactRequirements,
           status: task.status,
           createdAt: task.createdAt,
           updatedAt: task.updatedAt,
@@ -196,12 +222,13 @@ export function registerTaskCommand(program: Command): void {
       });
     });
 
-  // task update <taskId> --status <s>
+  // task update <taskId> --status <s> [--skip-artifact-check]
   taskGroup
     .command('update')
-    .description('Update a task')
+    .description('Update a task status')
     .argument('<task-id>', 'The task ID to update')
     .option('--status <status>', 'New status (pending | in_progress | completed)', '')
+    .option('--skip-artifact-check', 'Skip artifact verification on completion', false)
     .action((taskId, opts) => {
       if (!opts.status) {
         fail('--status is required');
@@ -228,6 +255,14 @@ export function registerTaskCommand(program: Command): void {
         fail(
           `Invalid status transition: ${task.status} -> ${newStatus}. Allowed: ${allowed.join(', ') || 'none'}`
         );
+      }
+
+      // Hard Completion Gate: Check artifact compliance before marking as completed
+      if (newStatus === 'completed' && !opts.skipArtifactCheck) {
+        const compliance = checkTaskArtifactCompliance(getDb(), taskId);
+        if (!compliance.compliant) {
+          fail(compliance.error || 'Cannot complete task: artifact requirements not satisfied');
+        }
       }
 
       updateTaskStatus(getDb(), taskId, newStatus);

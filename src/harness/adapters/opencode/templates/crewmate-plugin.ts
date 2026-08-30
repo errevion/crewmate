@@ -132,6 +132,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
   let sessionIdle = false
   const sessionAgentMap = new Map<string, TrackedSubagentSession>()
   const pendingDispatches = new Map<string, { agent: string; taskId?: string; dispatchedAt: number }>()
+  const completedTaskSet = new Set<string>()
 
   // Send initial session heartbeat
   const pid = process.pid
@@ -293,7 +294,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
         description: [
           "Add a new task to a brief.",
           "REQUIRED: briefId, description.",
-          "Optional: title (short summary; if omitted, derived from description), dependencies (array of task IDs), field (brief field name).",
+          "Optional: title (short summary; if omitted, derived from description), dependencies (array of task IDs), field (brief field name), artifactRequirements (array of artifact types: fact, decision, api_contract, constraint, note, log).",
         ].join(" "),
         args: {
           briefId: z.string().min(1).describe("REQUIRED: The brief ID to link this task to"),
@@ -307,6 +308,10 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             .optional()
             .describe("Optional: Array of task IDs that this task depends on"),
           field: z.string().optional().describe("Optional: Brief field this task addresses"),
+          artifactRequirements: z
+            .array(z.enum(["fact", "decision", "api_contract", "constraint", "note", "log"]))
+            .optional()
+            .describe("Optional: Required artifact types that must be recorded before completing this task"),
         },
         async execute(args, context) {
           const taskTitle = args.title && args.title.trim().length > 0
@@ -319,6 +324,9 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             cmdParts.push("--dependencies", ...args.dependencies)
           }
           if (args.field) cmdParts.push("--field", args.field)
+          if (args.artifactRequirements && args.artifactRequirements.length > 0) {
+            cmdParts.push("--artifact-requirements", ...args.artifactRequirements)
+          }
           
           const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
@@ -449,35 +457,44 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
       crewmate_add_artifact: tool({
         description: [
-          "Add an execution artifact / incremental knowledge fact for a task.",
-          "REQUIRED: taskId, type (fact | decision | api_contract | constraint | note | log), content.",
-          "Optional: briefId.",
+          "Add an execution artifact / incremental knowledge fact for a task or brief.",
+          "Optional: taskId (omit for brief-level facts/constraints discovered during briefing).",
+          "REQUIRED: type (fact | decision | api_contract | constraint | note | log), content (plain string or structured JSON).",
+          "Optional: briefId, tags.",
         ].join(" "),
         args: {
-          taskId: z.string().min(1).describe("REQUIRED: The task ID creating this artifact"),
           type: z
             .enum(["fact", "decision", "api_contract", "constraint", "note", "log"])
             .describe("REQUIRED: Artifact category"),
-          content: z.string().min(1).describe("REQUIRED: Artifact text, contract, decision, or note"),
+          content: z.string().min(1).describe("REQUIRED: Artifact text, contract, decision, or JSON payload"),
+          taskId: z.string().optional().describe("Optional: The task ID creating this artifact (omit for brief-level findings)"),
           briefId: z.string().optional().describe("Optional: Brief ID"),
+          tags: z.array(z.string()).optional().describe("Optional: Categorization tags"),
         },
         async execute(args, context) {
           const cmdParts = [
             "artifact",
             "add",
-            args.taskId,
+          ]
+          if (args.taskId) {
+            cmdParts.push(args.taskId)
+          }
+          cmdParts.push(
             "--type",
             args.type,
             "--content",
             args.content,
-          ]
+          )
           if (args.briefId) {
             cmdParts.push("--brief", args.briefId)
+          }
+          if (args.tags && args.tags.length > 0) {
+            cmdParts.push("--tags", ...args.tags)
           }
           const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
-            title: \`Added \${args.type} artifact for task \${args.taskId}\`,
+            title: \`Added \${args.type} artifact\${args.taskId ? \` for task \${args.taskId}\` : ""}\`,
             output: JSON.stringify(json),
           }
         },
@@ -485,20 +502,27 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
       crewmate_list_artifacts: tool({
         description:
-          "List incremental knowledge artifacts (facts, decisions, api_contracts, constraints). Optional: briefId, taskId, type.",
+          "List incremental knowledge artifacts (facts, decisions, api_contracts, constraints). Optional: briefId, taskId, forTask, type, status.",
         args: {
           briefId: z.string().optional().describe("Optional: Brief ID filter"),
           taskId: z.string().optional().describe("Optional: Task ID filter"),
+          forTask: z.string().optional().describe("Optional: Smart DAG filter — returns relevant ancestor artifacts and brief-level constraints for a task"),
           type: z
             .enum(["fact", "decision", "api_contract", "constraint", "note", "log"])
             .optional()
             .describe("Optional: Artifact category filter"),
+          status: z
+            .enum(["active", "superseded", "invalidated", "all"])
+            .optional()
+            .describe("Optional: Artifact status filter (default: active)"),
         },
         async execute(args, context) {
           const cmdParts = ["artifact", "list"]
           if (args.briefId) cmdParts.push("--brief", args.briefId)
           if (args.taskId) cmdParts.push("--task", args.taskId)
+          if (args.forTask) cmdParts.push("--for-task", args.forTask)
           if (args.type) cmdParts.push("--type", args.type)
+          if (args.status) cmdParts.push("--status", args.status)
 
           const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
@@ -678,6 +702,42 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
               msg = \`Dispatched executor for \${firstLine}\`
             }
 
+            if (subagent === "executor" && taskId) {
+              // Fetch relevant upstream artifacts and inject into executor prompt
+              const upstream = await runCrewmate(targetDir, [
+                "artifact",
+                "list",
+                "--for-task",
+                taskId,
+                "--status",
+                "active",
+              ]).catch(() => null)
+
+              if (upstream?.ok && Array.isArray(upstream.artifacts) && upstream.artifacts.length > 0) {
+                const lines = upstream.artifacts.map((a: any) => {
+                  let payloadSummary = a.content
+                  try {
+                    const parsed = JSON.parse(a.content)
+                    if (parsed.statement) payloadSummary = parsed.statement
+                    else if (parsed.choice) payloadSummary = \`\${parsed.choice} (\${parsed.rationale || ""})\`
+                    else if (parsed.signature) payloadSummary = \`\${parsed.filePath ? \`[\${parsed.filePath}] \` : ""}\${parsed.signature}\`
+                    else if (parsed.rule) payloadSummary = \`[\${parsed.severity || "must"}] \${parsed.rule}\`
+                    else if (parsed.summary) payloadSummary = parsed.summary
+                  } catch {
+                    // plain text
+                  }
+                  return \`- [\${a.type.toUpperCase()}] \${payloadSummary}\`
+                })
+
+                const injection = \`\\n\\n<prior_knowledge_artifacts>\\nArchitectural contracts and constraints from previous tasks/briefing (must adhere to):\\n\${lines.join("\\n")}\\n</prior_knowledge_artifacts>\`
+                if (output?.args && typeof output.args.prompt === "string") {
+                  output.args.prompt += injection
+                } else if (input?.args && typeof input.args.prompt === "string") {
+                  input.args.prompt += injection
+                }
+              }
+            }
+
             if (callID) {
               pendingDispatches.set(callID, {
                 agent: subagent,
@@ -765,6 +825,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
               \`Started task \${taskTitle}\`,
             ]).catch(() => {})
           } else if (status === "completed") {
+            completedTaskSet.add(taskId)
             const taskTitle = parsedOutput?.title || taskId
             await runCrewmate(targetDir, [
               "event",
@@ -853,29 +914,35 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             const tracked = sessionAgentMap.get(sessionID)!
             sessionAgentMap.delete(sessionID)
 
-            let msg = \`Completed \${tracked.agent}\`
-            if (tracked.agent === "scout") {
-              msg = "Finished codebase exploration"
-            } else if (tracked.agent === "planner") {
-              msg = "Finished task breakdown"
-            } else if (tracked.agent === "executor") {
-              msg = tracked.taskId ? \`Completed executor for task \${tracked.taskId}\` : "Completed task implementation"
-            }
+            // If executor already emitted completed event via crewmate_update_task, skip duplicate session.idle event
+            const alreadyCompleted = tracked.taskId && completedTaskSet.has(tracked.taskId)
+            if (alreadyCompleted && tracked.taskId) {
+              completedTaskSet.delete(tracked.taskId)
+            } else {
+              let msg = \`Completed \${tracked.agent}\`
+              if (tracked.agent === "scout") {
+                msg = "Finished codebase exploration"
+              } else if (tracked.agent === "planner") {
+                msg = "Finished task breakdown"
+              } else if (tracked.agent === "executor") {
+                msg = tracked.taskId ? \`Completed executor for task \${tracked.taskId}\` : "Completed task implementation"
+              }
 
-            const cmdParts = [
-              "event",
-              "add",
-              "--actor",
-              tracked.agent,
-              "--type",
-              "completed",
-              "--message",
-              msg,
-            ]
-            if (tracked.taskId) {
-              cmdParts.push("--task", tracked.taskId)
+              const cmdParts = [
+                "event",
+                "add",
+                "--actor",
+                tracked.agent,
+                "--type",
+                "completed",
+                "--message",
+                msg,
+              ]
+              if (tracked.taskId) {
+                cmdParts.push("--task", tracked.taskId)
+              }
+              await runCrewmate(targetDir, cmdParts).catch(() => {})
             }
-            await runCrewmate(targetDir, cmdParts).catch(() => {})
           } else if (sessionID && (sessionID === parentSessionId || !parentSessionId)) {
             // Parent session went idle (user interrupted or waiting for user prompt)
             sessionIdle = true

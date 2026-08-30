@@ -96,6 +96,94 @@ describe('crewmate event CLI', () => {
     expect(output.events[0].type).toBe('completed');
   });
 
+  it('should deduplicate lifecycle completed events for the same task with different wording', async () => {
+    const firstResult = await runCli(
+      [
+        'event',
+        'add',
+        '--actor',
+        'executor',
+        '--type',
+        'completed',
+        '--message',
+        'Completed task Implement auth',
+        '--task',
+        taskId,
+      ],
+      { cwd: tmpDir }
+    );
+    await expectSuccess(firstResult);
+    const firstOut = parseJsonOutput(firstResult.stdout);
+
+    // Second event emitted by session.idle or agent manually with differing message
+    const secondResult = await runCli(
+      [
+        'event',
+        'add',
+        '--actor',
+        'executor',
+        '--type',
+        'completed',
+        '--message',
+        `Completed executor for task ${taskId}`,
+        '--task',
+        taskId,
+      ],
+      { cwd: tmpDir }
+    );
+    await expectSuccess(secondResult);
+    const secondOut = parseJsonOutput(secondResult.stdout);
+
+    // Should return existing event ID without creating duplicate
+    expect(secondOut.id).toBe(firstOut.id);
+
+    const listResult = await runCli(['event', 'list', '--task', taskId, '--type', 'completed'], {
+      cwd: tmpDir,
+    });
+    await expectSuccess(listResult);
+    const listOut = parseJsonOutput(listResult.stdout);
+    expect(listOut.events.length).toBe(1);
+  });
+
+  it('should deduplicate singleton scout and planner completion events', async () => {
+    const scout1 = await runCli(
+      [
+        'event',
+        'add',
+        '--brief',
+        briefId,
+        '--actor',
+        'scout',
+        '--type',
+        'completed',
+        '--message',
+        'Finished codebase exploration',
+      ],
+      { cwd: tmpDir }
+    );
+    await expectSuccess(scout1);
+    const scout1Out = parseJsonOutput(scout1.stdout);
+
+    const scout2 = await runCli(
+      [
+        'event',
+        'add',
+        '--brief',
+        briefId,
+        '--actor',
+        'scout',
+        '--type',
+        'completed',
+        '--message',
+        'Scout exploration complete',
+      ],
+      { cwd: tmpDir }
+    );
+    await expectSuccess(scout2);
+    const scout2Out = parseJsonOutput(scout2.stdout);
+    expect(scout2Out.id).toBe(scout1Out.id);
+  });
+
   it('should validate actor and type enums', async () => {
     const badActor = await runCli(
       [

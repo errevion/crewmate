@@ -37,6 +37,7 @@ export interface TaskView {
   status: Task['status'];
   dependencies: string[];
   field: string | null;
+  artifactRequirements: Task['artifactRequirements'];
   ready: boolean;
   blocked: boolean;
   interrupted?: boolean;
@@ -166,6 +167,7 @@ export function buildSnapshot(
       status: t.status,
       dependencies: t.dependencies,
       field: t.field,
+      artifactRequirements: t.artifactRequirements ?? [],
       ready,
       blocked: t.status === 'pending' && !ready,
     };

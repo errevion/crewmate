@@ -106,23 +106,52 @@ export function registerEventCommand(program: Command): void {
 
         const briefId = resolveTargetBrief(opts);
 
-        // Deduplication guardrail: avoid duplicate recent events of identical actor + type (especially dispatches)
+        // Semantic Deduplication guardrail: avoid duplicate lifecycle events across automated hooks & manual calls
         const recentEvents = listEvents(getDb(), {
           briefId,
           taskId: opts.task,
           actor: opts.actor as EventActor,
           type: opts.type as EventType,
-          limit: 3,
+          limit: 5,
         });
 
         const now = Date.now();
         const duplicate = recentEvents.find((e) => {
           const createdAtUtc = e.createdAt.endsWith('Z') ? e.createdAt : e.createdAt + 'Z';
           const age = now - new Date(createdAtUtc).getTime();
-          if (age > 4000) {
-            return false;
+
+          // Identical message within 10 seconds is always duplicate
+          if (age < 10000 && e.message === opts.message.trim()) {
+            return true;
           }
-          return e.message === opts.message.trim();
+
+          // Same task lifecycle completion/start within 30 seconds is duplicate even with differing wording
+          if (opts.type === 'completed' || opts.type === 'started') {
+            if (opts.task && e.taskId === opts.task && age < 30000) {
+              return true;
+            }
+            // For singleton subagents (scout or planner without taskId)
+            if (
+              !opts.task &&
+              !e.taskId &&
+              (opts.actor === 'scout' || opts.actor === 'planner') &&
+              age < 30000
+            ) {
+              return true;
+            }
+          }
+
+          // Same task lock within 10 seconds
+          if (opts.type === 'locked' && opts.task && e.taskId === opts.task && age < 10000) {
+            return true;
+          }
+
+          // Dispatches for the same task within 15 seconds
+          if (opts.type === 'dispatched' && opts.task && e.taskId === opts.task && age < 15000) {
+            return true;
+          }
+
+          return false;
         });
 
         if (duplicate) {
