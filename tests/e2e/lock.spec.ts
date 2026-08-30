@@ -110,7 +110,7 @@ describe('crewmate lock & artifact CLI', () => {
       const addOutput = parseJsonOutput(addResult.stdout);
       expect(addOutput.ok).toBe(true);
       expect(addOutput.type).toBe('decision');
-      expect(addOutput.content).toBe('Chose SQLite for metadata storage');
+      expect(addOutput.content).toContain('Chose SQLite for metadata storage');
       expect(addOutput.briefId).toBe(briefId);
 
       const listResult = await runCli(['artifact', 'list', '--brief', briefId], { cwd: tmpDir });
@@ -118,7 +118,28 @@ describe('crewmate lock & artifact CLI', () => {
       const listOutput = parseJsonOutput(listResult.stdout);
       expect(listOutput.ok).toBe(true);
       expect(listOutput.artifacts.length).toBe(1);
-      expect(listOutput.artifacts[0].content).toBe('Chose SQLite for metadata storage');
+      expect(listOutput.artifacts[0].content).toContain('Chose SQLite for metadata storage');
+    });
+
+    it('should support brief-level artifacts without taskId (e.g. from Scout)', async () => {
+      const scoutResult = await runCli(
+        [
+          'artifact',
+          'add',
+          '--brief',
+          briefId,
+          '--type',
+          'fact',
+          '--content',
+          JSON.stringify({ statement: 'Project uses TypeScript 5.4 with ESM', scope: 'project' }),
+        ],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(scoutResult);
+      const scoutOutput = parseJsonOutput(scoutResult.stdout);
+      expect(scoutOutput.ok).toBe(true);
+      expect(scoutOutput.taskId).toBeNull();
+      expect(scoutOutput.type).toBe('fact');
     });
 
     it('should validate artifact types', async () => {

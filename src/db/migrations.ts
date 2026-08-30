@@ -28,15 +28,16 @@ export function runMigrations(db: Database.Database): void {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
-      id           TEXT PRIMARY KEY,
-      brief_id     TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
-      title        TEXT NOT NULL,
-      description  TEXT NOT NULL,
-      dependencies TEXT NOT NULL DEFAULT '[]',
-      field        TEXT,
-      status       TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed')),
-      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      id                    TEXT PRIMARY KEY,
+      brief_id              TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      title                 TEXT NOT NULL,
+      description           TEXT NOT NULL,
+      dependencies          TEXT NOT NULL DEFAULT '[]',
+      field                 TEXT,
+      artifact_requirements TEXT NOT NULL DEFAULT '[]',
+      status                TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed')),
+      created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
@@ -52,12 +53,15 @@ export function runMigrations(db: Database.Database): void {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS execution_artifacts (
-      id         TEXT PRIMARY KEY,
-      task_id    TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-      brief_id   TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
-      type       TEXT NOT NULL CHECK(type IN ('fact', 'decision', 'api_contract', 'constraint', 'note', 'log')),
-      content    TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      id            TEXT PRIMARY KEY,
+      task_id       TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+      brief_id      TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      type          TEXT NOT NULL CHECK(type IN ('fact', 'decision', 'api_contract', 'constraint', 'note', 'log')),
+      content       TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'invalidated')),
+      superseded_by TEXT REFERENCES execution_artifacts(id) ON DELETE SET NULL,
+      tags          TEXT NOT NULL DEFAULT '[]',
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
@@ -124,11 +128,41 @@ export function runMigrations(db: Database.Database): void {
     `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_task_id ON execution_artifacts (task_id)`
   );
   db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_status ON execution_artifacts (status)`
+  );
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_execution_artifacts_type ON execution_artifacts (type)`);
+  db.exec(
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_session_liveness_brief_harness ON session_liveness (brief_id, harness)`
   );
 
   try {
     db.exec(`ALTER TABLE file_locks ADD COLUMN expires_at TEXT`);
+  } catch {
+    // column already exists
+  }
+
+  try {
+    db.exec(`ALTER TABLE tasks ADD COLUMN artifact_requirements TEXT NOT NULL DEFAULT '[]'`);
+  } catch {
+    // column already exists
+  }
+
+  try {
+    db.exec(`ALTER TABLE execution_artifacts ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`);
+  } catch {
+    // column already exists
+  }
+
+  try {
+    db.exec(
+      `ALTER TABLE execution_artifacts ADD COLUMN superseded_by TEXT REFERENCES execution_artifacts(id) ON DELETE SET NULL`
+    );
+  } catch {
+    // column already exists
+  }
+
+  try {
+    db.exec(`ALTER TABLE execution_artifacts ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`);
   } catch {
     // column already exists
   }

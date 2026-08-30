@@ -11,7 +11,10 @@ import { getTaskById, listTasksByBrief } from '../db/task-repo.js';
 import type { Task } from '../models/task.js';
 import { listLocks } from '../db/lock-repo.js';
 import { listEvents } from '../db/event-repo.js';
+import { listArtifacts, getArtifactById } from '../db/artifact-repo.js';
 import type { FileLock } from '../models/lock.js';
+import type { ExecutionArtifact, ArtifactType } from '../models/artifact.js';
+import { formatArtifactBody, summarizeArtifactContent } from '../utils/artifact-validation.js';
 
 // Resolve blessed default export for CJS/ESM interop
 const blessed = ((blessedModule as unknown as { default?: typeof blessedModule }).default ||
@@ -507,6 +510,203 @@ export function formatEventDetails(
 }
 
 /**
+ * Formats an artifact for the artifact selector list item
+ */
+export function formatArtifactListItem(
+  a: ExecutionArtifact,
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const typeColor =
+    a.type === 'constraint'
+      ? 'red'
+      : a.type === 'api_contract'
+        ? 'yellow'
+        : a.type === 'decision'
+          ? 'cyan'
+          : a.type === 'fact'
+            ? 'green'
+            : 'white';
+
+  const statusBadge =
+    a.status === 'active'
+      ? '{green-fg}[✓]{/green-fg}'
+      : a.status === 'superseded'
+        ? '{gray-fg}[⟲]{/gray-fg}'
+        : '{red-fg}[✗]{/red-fg}';
+
+  const taskSuffix = a.taskId
+    ? ` · {gray-fg}task:{/gray-fg} {bold}${truncate(tasksMap.get(a.taskId)?.title ?? a.taskId, 32)}{/bold}`
+    : ' · {gray-fg}scope:{/gray-fg} {bold}brief{/bold}';
+
+  const summary = summarizeArtifactContent(a.type, a.content);
+  return `${statusBadge} {bold}{${typeColor}-fg}[${a.type.toUpperCase()}]{/${typeColor}-fg}{/bold} ${truncate(summary, 50)}${taskSuffix}`;
+}
+
+/**
+ * Formats a single artifact into full structured view for the detail modal
+ */
+export function formatArtifactDetail(
+  a: ExecutionArtifact | null,
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  if (!a) {
+    return '{yellow-fg}No artifact selected.{/yellow-fg}';
+  }
+
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const lines: string[] = [];
+  const typeColor =
+    a.type === 'constraint'
+      ? 'red'
+      : a.type === 'api_contract'
+        ? 'yellow'
+        : a.type === 'decision'
+          ? 'cyan'
+          : a.type === 'fact'
+            ? 'green'
+            : 'white';
+
+  lines.push(`{bold}{cyan-fg}Artifact ID:{/cyan-fg}{/bold} ${a.id}`);
+  lines.push(
+    `{bold}{cyan-fg}Category:{/cyan-fg}{/bold}    {bold}{${typeColor}-fg}${a.type.toUpperCase()}{/${typeColor}-fg}{/bold}`
+  );
+
+  let statusText = '{green-fg}active [✓]{/green-fg}';
+  if (a.status === 'superseded') {
+    statusText = `{gray-fg}superseded [⟲]${a.supersededBy ? ` by ${a.supersededBy}` : ''}{/gray-fg}`;
+  } else if (a.status === 'invalidated') {
+    statusText = '{red-fg}invalidated [✗]{/red-fg}';
+  }
+  lines.push(`{bold}{cyan-fg}Status:{/cyan-fg}{/bold}      ${statusText}`);
+  lines.push(`{bold}{cyan-fg}Brief ID:{/cyan-fg}{/bold}    ${a.briefId}`);
+
+  if (a.taskId) {
+    const task = tasksMap.get(a.taskId);
+    const title = task ? task.title : a.taskId;
+    lines.push(`{bold}{cyan-fg}Task:{/cyan-fg}{/bold}        ${a.taskId} · {bold}${title}{/bold}`);
+  } else {
+    lines.push(
+      `{bold}{cyan-fg}Scope:{/cyan-fg}{/bold}       {bold}brief-level{/bold} (discovered during briefing)`
+    );
+  }
+
+  if (a.tags && a.tags.length > 0) {
+    lines.push(`{bold}{cyan-fg}Tags:{/cyan-fg}{/bold}        ${a.tags.join(', ')}`);
+  }
+
+  lines.push(`{bold}{cyan-fg}Recorded:{/cyan-fg}{/bold}    ${a.createdAt}`);
+  lines.push('');
+
+  // Structured Content Body
+  lines.push(
+    '{bold}{yellow-fg}── Content & Details ─────────────────────────────{/yellow-fg}{/bold}'
+  );
+  const body = formatArtifactBody(a.type, a.content);
+  for (const bLine of body) {
+    lines.push(bLine);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Formats a list of execution artifacts into a tagged string for display in the fullscreen overlay modal
+ */
+export function formatArtifactDetails(
+  artifacts: ExecutionArtifact[],
+  allTasks?: Task[] | Map<string, { title: string }>
+): string {
+  if (!artifacts || artifacts.length === 0) {
+    return '{yellow-fg}No execution artifacts recorded yet.{/yellow-fg}';
+  }
+
+  const tasksMap =
+    allTasks instanceof Map
+      ? allTasks
+      : Array.isArray(allTasks)
+        ? new Map(allTasks.map((t) => [t.id, t]))
+        : new Map<string, { title: string }>();
+
+  const lines: string[] = [];
+  lines.push(
+    `{bold}{cyan-fg}Knowledge Base:{/cyan-fg}{/bold} ${artifacts.length} recorded artifact(s)`
+  );
+  lines.push('');
+
+  const CATEGORIES: Array<{
+    type: ArtifactType[];
+    title: string;
+    color: string;
+  }> = [
+    { type: ['constraint'], title: 'Constraints & Boundaries', color: 'red' },
+    { type: ['api_contract'], title: 'API & Interface Contracts', color: 'yellow' },
+    { type: ['decision'], title: 'Architectural Decisions', color: 'cyan' },
+    { type: ['fact'], title: 'System Facts', color: 'green' },
+    { type: ['note', 'log'], title: 'Notes & Logs', color: 'white' },
+  ];
+
+  for (const cat of CATEGORIES) {
+    const catArtifacts = artifacts.filter((a) => cat.type.includes(a.type));
+    if (catArtifacts.length === 0) {
+      continue;
+    }
+
+    lines.push(
+      `{bold}{${cat.color}-fg}── ${cat.title} (${catArtifacts.length}) ──────────────────────────────────{/${cat.color}-fg}{/bold}`
+    );
+
+    for (let i = 0; i < catArtifacts.length; i++) {
+      const a = catArtifacts[i];
+      const time = formatTime(a.createdAt);
+
+      const statusBadge =
+        a.status === 'active'
+          ? '{green-fg}[active]{/green-fg}'
+          : a.status === 'superseded'
+            ? '{gray-fg}[superseded]{/gray-fg}'
+            : '{red-fg}[invalidated]{/red-fg}';
+
+      let taskSuffix = ' · {gray-fg}scope:{/gray-fg} {bold}brief{/bold}';
+      if (a.taskId) {
+        const task = tasksMap.get(a.taskId);
+        const title = task ? task.title : a.taskId;
+        taskSuffix = ` · {gray-fg}task:{/gray-fg} {bold}${truncate(title, 36)}{/bold}`;
+      }
+
+      lines.push(
+        ` {gray-fg}[${time}]{/gray-fg} {bold}${a.type.toUpperCase()}{/bold} ${statusBadge}${taskSuffix}`
+      );
+
+      const bodyLines = formatArtifactBody(a.type, a.content);
+      for (const bLine of bodyLines) {
+        lines.push(`  ${bLine}`);
+      }
+
+      if (i < catArtifacts.length - 1) {
+        lines.push('');
+      }
+    }
+
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Registers the watch command on commander program
  */
 export function registerWatchCommand(program: Command): void {
@@ -724,6 +924,61 @@ function runDashboard(opts: WatchOptions): void {
     hidden: true,
   });
 
+  const artifactListModal = blessed.list({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Knowledge Artifacts (Enter: view details) ',
+    border: { type: 'line' },
+    style: {
+      fg: 'white',
+      border: { fg: 'cyan' },
+      bg: 'black',
+      selected: {
+        bg: 'cyan',
+        fg: 'black',
+        bold: true,
+      },
+      item: {
+        fg: 'white',
+      },
+    },
+    tags: true,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollable: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'cyan' },
+    },
+    hidden: true,
+  });
+
+  const artifactDetailModal = blessed.box({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Artifact Details ',
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: 'cyan' }, bg: 'black' },
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'cyan' },
+    },
+    keys: true,
+    vi: true,
+    mouse: true,
+    hidden: true,
+  });
+
   const taskListModal = blessed.list({
     parent: screen,
     top: 0,
@@ -783,6 +1038,8 @@ function runDashboard(opts: WatchOptions): void {
   let currentSnapshot: WorkflowSnapshot | null = null;
   let currentTasks: Task[] = [];
   let selectedTaskId: string | null = null;
+  let currentArtifacts: ExecutionArtifact[] = [];
+  let selectedArtifactId: string | null = null;
 
   function eventColor(type: ExecutionEvent['type']): string {
     switch (type) {
@@ -978,6 +1235,26 @@ function runDashboard(opts: WatchOptions): void {
       }
     }
 
+    if (!artifactDetailModal.hidden && selectedArtifactId) {
+      const artifact = getArtifactById(getDb(), selectedArtifactId);
+      const brief = resolveBrief(opts.brief);
+      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+      artifactDetailModal.setContent(formatArtifactDetail(artifact, allTasks));
+    }
+
+    if (!artifactListModal.hidden) {
+      const brief = resolveBrief(opts.brief);
+      if (brief) {
+        currentArtifacts = listArtifacts(getDb(), { briefId: brief.id, status: 'all' });
+        const allTasks = listTasksByBrief(getDb(), brief.id);
+        if (currentArtifacts.length > 0) {
+          artifactListModal.setItems(
+            currentArtifacts.map((a) => formatArtifactListItem(a, allTasks))
+          );
+        }
+      }
+    }
+
     screen.render();
   }
 
@@ -998,8 +1275,13 @@ function runDashboard(opts: WatchOptions): void {
   const pollTimer = setInterval(pollDb, Math.max(200, safeInterval));
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
-  const MAIN_FOOTER = ' q / Ctrl-C: quit · b: brief · t: tasks · e: events · l: file locks ';
+  const MAIN_FOOTER =
+    ' q / Ctrl-C: quit · b: brief · t: tasks · a: artifacts · e: events · l: file locks ';
   const BRIEF_FOOTER = ' q / Ctrl-C: quit · b / Esc: close brief · ↑/↓/k/j/PgUp/PgDn: scroll ';
+  const ARTIFACT_LIST_FOOTER =
+    ' q / Ctrl-C: quit · Enter: view artifact · a / Esc: close artifacts · ↑/↓/k/j: navigate ';
+  const ARTIFACT_DETAIL_FOOTER =
+    ' q / Ctrl-C: quit · Esc: back to artifact list · a: close artifacts · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const EVENT_FOOTER = ' q / Ctrl-C: quit · e / Esc: close events · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const LOCK_FOOTER = ' q / Ctrl-C: quit · l / Esc: close file locks · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const TASK_LIST_FOOTER =
@@ -1012,6 +1294,10 @@ function runDashboard(opts: WatchOptions): void {
       footer.setContent(TASK_DETAIL_FOOTER);
     } else if (!taskListModal.hidden) {
       footer.setContent(TASK_LIST_FOOTER);
+    } else if (!artifactDetailModal.hidden) {
+      footer.setContent(ARTIFACT_DETAIL_FOOTER);
+    } else if (!artifactListModal.hidden) {
+      footer.setContent(ARTIFACT_LIST_FOOTER);
     } else if (!briefModal.hidden) {
       footer.setContent(BRIEF_FOOTER);
     } else if (!eventModal.hidden) {
@@ -1026,6 +1312,12 @@ function runDashboard(opts: WatchOptions): void {
   function openTaskListModal(): void {
     if (!briefModal.hidden) {
       briefModal.hide();
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
     }
     if (!eventModal.hidden) {
       eventModal.hide();
@@ -1073,6 +1365,72 @@ function runDashboard(opts: WatchOptions): void {
     }
   });
 
+  function openArtifactListModal(): void {
+    if (!briefModal.hidden) {
+      briefModal.hide();
+    }
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
+    }
+    if (!eventModal.hidden) {
+      eventModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
+    }
+    const brief = resolveBrief(opts.brief);
+    if (!brief) {
+      artifactListModal.setItems([
+        '{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}',
+      ]);
+      currentArtifacts = [];
+    } else {
+      currentArtifacts = listArtifacts(getDb(), { briefId: brief.id, status: 'all' });
+      const allTasks = listTasksByBrief(getDb(), brief.id);
+      if (currentArtifacts.length === 0) {
+        artifactListModal.setItems([
+          '{yellow-fg}(no artifacts recorded yet — run /execute){/yellow-fg}',
+        ]);
+      } else {
+        artifactListModal.setItems(
+          currentArtifacts.map((a) => formatArtifactListItem(a, allTasks))
+        );
+        artifactListModal.select(0);
+      }
+    }
+    artifactListModal.show();
+    artifactListModal.focus();
+    updateFooter();
+    screen.render();
+  }
+
+  function showArtifactDetail(artifactId: string): void {
+    selectedArtifactId = artifactId;
+    const artifact = getArtifactById(getDb(), artifactId);
+    const brief = resolveBrief(opts.brief);
+    const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
+    artifactDetailModal.setContent(formatArtifactDetail(artifact, allTasks));
+    artifactDetailModal.scrollTo(0);
+    artifactListModal.hide();
+    artifactDetailModal.show();
+    artifactDetailModal.focus();
+    updateFooter();
+    screen.render();
+  }
+
+  artifactListModal.on('select', (_item, index) => {
+    const artifact = currentArtifacts[index];
+    if (artifact) {
+      showArtifactDetail(artifact.id);
+    }
+  });
+
   function toggleTaskListModal(): void {
     if (!taskDetailModal.hidden) {
       taskDetailModal.hide();
@@ -1087,6 +1445,12 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!briefModal.hidden) {
       briefModal.hide();
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
     }
     if (!eventModal.hidden) {
       eventModal.hide();
@@ -1103,6 +1467,12 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!taskDetailModal.hidden) {
       taskDetailModal.hide();
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
     }
     if (!eventModal.hidden) {
       eventModal.hide();
@@ -1125,6 +1495,36 @@ function runDashboard(opts: WatchOptions): void {
     }
   }
 
+  function toggleArtifactModal(): void {
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
+      openArtifactListModal();
+      return;
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+    }
+    if (!briefModal.hidden) {
+      briefModal.hide();
+    }
+    if (!eventModal.hidden) {
+      eventModal.hide();
+    }
+    if (!lockModal.hidden) {
+      lockModal.hide();
+    }
+    openArtifactListModal();
+  }
+
   function toggleEventModal(): void {
     if (!taskListModal.hidden) {
       taskListModal.hide();
@@ -1134,6 +1534,12 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!briefModal.hidden) {
       briefModal.hide();
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
     }
     if (!lockModal.hidden) {
       lockModal.hide();
@@ -1165,6 +1571,12 @@ function runDashboard(opts: WatchOptions): void {
     if (!briefModal.hidden) {
       briefModal.hide();
     }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
+    }
     if (!eventModal.hidden) {
       eventModal.hide();
     }
@@ -1193,6 +1605,10 @@ function runDashboard(opts: WatchOptions): void {
     toggleTaskListModal();
   });
 
+  screen.key(['a', 'A'], () => {
+    toggleArtifactModal();
+  });
+
   screen.key(['e', 'E'], () => {
     toggleEventModal();
   });
@@ -1209,6 +1625,17 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!taskListModal.hidden) {
       taskListModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
+      openArtifactListModal();
+      return;
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
       updateFooter();
       screen.render();
       return;
@@ -1250,6 +1677,9 @@ function runDashboard(opts: WatchOptions): void {
     if (!taskDetailModal.hidden) {
       taskDetailModal.scroll(-1);
       screen.render();
+    } else if (!artifactDetailModal.hidden) {
+      artifactDetailModal.scroll(-1);
+      screen.render();
     } else if (!briefModal.hidden) {
       briefModal.scroll(-1);
       screen.render();
@@ -1265,6 +1695,9 @@ function runDashboard(opts: WatchOptions): void {
   screen.key(['down', 'j'], () => {
     if (!taskDetailModal.hidden) {
       taskDetailModal.scroll(1);
+      screen.render();
+    } else if (!artifactDetailModal.hidden) {
+      artifactDetailModal.scroll(1);
       screen.render();
     } else if (!briefModal.hidden) {
       briefModal.scroll(1);
@@ -1282,6 +1715,9 @@ function runDashboard(opts: WatchOptions): void {
     if (!taskDetailModal.hidden) {
       taskDetailModal.scroll(-5);
       screen.render();
+    } else if (!artifactDetailModal.hidden) {
+      artifactDetailModal.scroll(-5);
+      screen.render();
     } else if (!briefModal.hidden) {
       briefModal.scroll(-5);
       screen.render();
@@ -1297,6 +1733,9 @@ function runDashboard(opts: WatchOptions): void {
   screen.key(['pagedown'], () => {
     if (!taskDetailModal.hidden) {
       taskDetailModal.scroll(5);
+      screen.render();
+    } else if (!artifactDetailModal.hidden) {
+      artifactDetailModal.scroll(5);
       screen.render();
     } else if (!briefModal.hidden) {
       briefModal.scroll(5);

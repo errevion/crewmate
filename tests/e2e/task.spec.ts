@@ -234,6 +234,108 @@ describe('crewmate task', () => {
       );
       await expectFailure(updateResult, /Task not found/i);
     });
+
+    it('should reject completed status if no artifacts recorded (Hard Gate)', async () => {
+      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(initResult);
+      const briefOut = parseJsonOutput(initResult.stdout) as Record<string, unknown>;
+      const briefId = briefOut.id;
+
+      const addResult = await runCli(
+        ['task', 'add', briefId, '--title', 'Gate Test', '--description', 'Testing gate'],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(addResult);
+      const taskId = parseJsonOutput(addResult.stdout).id;
+
+      await runCli(['task', 'update', taskId, '--status', 'in_progress'], { cwd: tmpDir });
+
+      // Attempt to mark completed without recording artifacts -> must fail
+      const completeFail = await runCli(['task', 'update', taskId, '--status', 'completed'], {
+        cwd: tmpDir,
+      });
+      await expectFailure(completeFail, /no active knowledge artifacts recorded/i);
+
+      // Record an artifact -> now completion should succeed
+      const artResult = await runCli(
+        [
+          'artifact',
+          'add',
+          taskId,
+          '--type',
+          'decision',
+          '--content',
+          'Recorded architectural decision',
+        ],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(artResult);
+
+      const completeSuccess = await runCli(['task', 'update', taskId, '--status', 'completed'], {
+        cwd: tmpDir,
+      });
+      await expectSuccess(completeSuccess);
+      const output = parseJsonOutput(completeSuccess.stdout);
+      expect(output.ok).toBe(true);
+      expect(output.status).toBe('completed');
+    });
+
+    it('should enforce specific artifact-requirements if configured', async () => {
+      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(initResult);
+      const briefOut = parseJsonOutput(initResult.stdout) as Record<string, unknown>;
+      const briefId = briefOut.id;
+
+      const addResult = await runCli(
+        [
+          'task',
+          'add',
+          briefId,
+          '--title',
+          'Contract Task',
+          '--description',
+          'Must have contract',
+          '--artifact-requirements',
+          'api_contract',
+        ],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(addResult);
+      const taskId = parseJsonOutput(addResult.stdout).id;
+
+      await runCli(['task', 'update', taskId, '--status', 'in_progress'], { cwd: tmpDir });
+
+      // Add only a 'decision' artifact -> should fail because api_contract is required
+      await runCli(
+        ['artifact', 'add', taskId, '--type', 'decision', '--content', 'Some decision'],
+        { cwd: tmpDir }
+      );
+
+      const failResult = await runCli(['task', 'update', taskId, '--status', 'completed'], {
+        cwd: tmpDir,
+      });
+      await expectFailure(failResult, /missing required artifact types: api_contract/i);
+
+      // Add required api_contract artifact
+      await runCli(
+        [
+          'artifact',
+          'add',
+          taskId,
+          '--type',
+          'api_contract',
+          '--content',
+          JSON.stringify({ signature: 'getUser()', filePath: 'user.ts' }),
+        ],
+        { cwd: tmpDir }
+      );
+
+      const passResult = await runCli(['task', 'update', taskId, '--status', 'completed'], {
+        cwd: tmpDir,
+      });
+      await expectSuccess(passResult);
+      expect(parseJsonOutput(passResult.stdout).status).toBe('completed');
+    });
   });
 
   describe('task remove', () => {

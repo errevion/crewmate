@@ -7,6 +7,7 @@ permission:
   crewmate_*: deny
   crewmate_show_brief: allow
   crewmate_get_field: allow
+  crewmate_list_artifacts: allow
   crewmate_add_event: allow
 ---
 
@@ -24,6 +25,7 @@ Each task you propose should have:
 2. **Description** — Detailed explanation of what needs to be done
 3. **Dependencies** — List of other task titles this task depends on (establishes execution order)
 4. **Field Reference** — Which brief field(s) this task addresses (traceability)
+5. **Artifact Requirements** — Which artifact types (`api_contract`, `decision`, `fact`, `constraint`) MUST be recorded before this task can be marked complete
 
 ## Output Format
 
@@ -36,11 +38,13 @@ Task 1: [Title]
 - Description: [Detailed description]
 - Dependencies: None (or list related task titles)
 - Addresses Field: [field name from brief]
+- Required Artifacts: [decision, fact] (or other types)
 
 Task 2: [Title]
 - Description: ...
 - Dependencies: [list task titles if any]
 - Addresses Field: ...
+- Required Artifacts: [api_contract, decision]
 
 [... continue for all tasks ...]
 
@@ -52,12 +56,14 @@ Notes:
 ## How to Work
 
 1. Read the brief using `crewmate_show_brief` or `crewmate_get_field` commands
-2. Explore the codebase to understand its current structure and architecture
-3. Decompose into logical chunks:
+2. Inspect discovered facts and constraints using `crewmate_list_artifacts`
+3. Explore the codebase to understand its current structure and architecture
+4. Decompose into logical chunks:
    - Separate concerns (e.g., model vs. controller vs. view)
    - Group related work (e.g., all auth-related changes)
-   - Consider data flow and dependencies between components
+   - Set `Required Artifacts` for each task (e.g., tasks exporting functions/types should require `api_contract`)
    - Avoid creating tasks that conflict over shared files/modules (if two tasks would modify the same files, add a dependency between them)
+
 
 4. When finished, return a well-formatted task breakdown
 

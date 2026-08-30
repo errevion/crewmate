@@ -45,17 +45,23 @@ Follow these steps strictly:
 - Follow existing codebase conventions and architectural patterns.
 - Run tests and lint checks via `bash` to verify your changes.
 
-### 5. Incremental Knowledge Sharing
+### 5. Mandatory Incremental Knowledge Sharing
+- **CRITICAL**: Task completion is **strictly gated** by artifact recording. You cannot mark your task as `completed` without recording required artifacts.
 - Record significant decisions, new API contracts, or discovered constraints using `crewmate_add_artifact`:
-  - `fact`: Concrete facts about the system state.
   - `decision`: Key architectural or design choices made during implementation.
-  - `api_contract`: Route, interface, or schema signatures exposed for subsequent tasks.
+    Payload: `{ "choice": "...", "rationale": "...", "alternatives": ["..."] }` or text description.
+  - `api_contract`: Route, interface, type, or function signatures exposed for subsequent tasks.
+    Payload: `{ "signature": "...", "filePath": "...", "exportName": "..." }` or signature string.
   - `constraint`: Critical rules or gotchas future tasks must follow.
+    Payload: `{ "rule": "...", "severity": "must"|"should" }` or rule string.
+  - `fact`: Concrete facts discovered about the system state.
+    Payload: `{ "statement": "...", "evidence": "..." }` or fact string.
 
 ### 6. Completion & Cleanup
-- When implementation and tests pass, mark your task status as `completed` using `crewmate_update_task`.
+- When implementation and tests pass and all required artifacts are recorded, mark your task status as `completed` using `crewmate_update_task`. (Note: Do NOT call `crewmate_add_event` for task completion; `crewmate_update_task` automatically logs lifecycle events). If completion is rejected due to missing artifacts, record the missing artifacts first and retry.
 - Release your file locks using `crewmate_release_lock`.
 - Return a concise completion report to Frontman summarizing:
   - Files modified or created.
   - Tests run and results.
   - Key artifacts or contracts established.
+
