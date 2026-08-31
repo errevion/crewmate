@@ -8,7 +8,10 @@ const DB_FILE = 'crewmate.db';
 
 let db: Database.Database | null = null;
 
-function findProjectRoot(startDir: string): string {
+/**
+ *
+ */
+export function findProjectRoot(startDir: string): string {
   let current = resolve(startDir);
 
   while (true) {

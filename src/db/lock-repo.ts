@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { randomBytes } from 'node:crypto';
 import { resolve, relative } from 'node:path';
+import { findProjectRoot } from './connection.js';
 import type { FileLock } from '../models/lock.js';
 
 /**
@@ -19,7 +20,8 @@ export function normalizeFilePath(filePath: string): string {
     return '';
   }
   const resolved = resolve(trimmed);
-  const rel = relative(process.cwd(), resolved);
+  const root = findProjectRoot(process.cwd());
+  const rel = relative(root, resolved);
   const normalized = rel.replace(/\\/g, '/');
   return process.platform === 'win32' || process.platform === 'darwin'
     ? normalized.toLowerCase()
@@ -32,6 +34,7 @@ function rowToLock(row: Record<string, unknown>): FileLock {
     taskId: row.task_id as string,
     filePath: row.file_path as string,
     createdAt: row.created_at as string,
+    expiresAt: (row.expires_at as string) ?? null,
   };
 }
 
@@ -72,16 +75,17 @@ export function acquireLocks(
     return { ok: true, locked: [] };
   }
 
-  db.prepare(
+  const cleanExpiredStmt = db.prepare(
     `DELETE FROM file_locks WHERE expires_at IS NOT NULL AND expires_at < datetime('now')`
-  ).run();
-
+  );
   const findLockStmt = db.prepare(`SELECT * FROM file_locks WHERE file_path = ?`);
   const insertLockStmt = db.prepare(
     `INSERT INTO file_locks (id, task_id, file_path, expires_at) VALUES (?, ?, ?, datetime('now', '+5 minutes'))`
   );
 
   const tx = db.transaction(() => {
+    cleanExpiredStmt.run();
+
     for (const filePath of normalizedPaths) {
       const existing = findLockStmt.get(filePath) as Record<string, unknown> | undefined;
       if (existing && existing.task_id !== taskId) {
@@ -146,13 +150,18 @@ export function releaseLocks(
  * Lists all active file locks, optionally filtered by taskId.
  */
 export function listLocks(db: Database.Database, taskId?: string): FileLock[] {
+  const expiredFilter = `(expires_at IS NULL OR expires_at >= datetime('now'))`;
   if (taskId) {
-    const stmt = db.prepare(`SELECT * FROM file_locks WHERE task_id = ? ORDER BY created_at ASC`);
+    const stmt = db.prepare(
+      `SELECT * FROM file_locks WHERE task_id = ? AND ${expiredFilter} ORDER BY created_at ASC`
+    );
     const rows = stmt.all(taskId) as Record<string, unknown>[];
     return rows.map(rowToLock);
   }
 
-  const stmt = db.prepare(`SELECT * FROM file_locks ORDER BY created_at ASC`);
+  const stmt = db.prepare(
+    `SELECT * FROM file_locks WHERE ${expiredFilter} ORDER BY created_at ASC`
+  );
   const rows = stmt.all() as Record<string, unknown>[];
   return rows.map(rowToLock);
 }

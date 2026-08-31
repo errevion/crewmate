@@ -69,7 +69,7 @@ Notes:
 
 ## Important Considerations
 
-- **Granularity**: Aim for "implementation-level" tasks — concrete enough that a single agent could execute one in a session. Not epics like "Add authentication" or too tiny like "Import bcrypt library". Think "Implement JWT middleware for Express routes."
+- **Granularity**: Aim for "implementation-level" tasks — concrete enough that a single agent could execute one in a session. Not epics like "Add authentication" or too tiny like "Import bcrypt library". Think "Implement JWT middleware for Express routes." Keep titles concise (e.g. 5-10 words) and put complete specifications in descriptions.
   
 - **Parallelism**: Identify which tasks can run independently. If two tasks touch different parts of the codebase, they can be parallelized. If they share files, add a dependency edge.
   

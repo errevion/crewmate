@@ -462,6 +462,12 @@ export function formatLockDetails(
     lines.push(`{bold}${i + 1}. ${lock.filePath}{/bold}`);
     lines.push(`   {cyan-fg}Task ID:{/cyan-fg} ${lock.taskId} · {bold}${taskTitle}{/bold}`);
     lines.push(`   {gray-fg}Acquired at:{/gray-fg} ${lock.createdAt}`);
+    if (lock.expiresAt) {
+      const expiresMs = new Date(lock.expiresAt).getTime() - Date.now();
+      const expiresLabel =
+        expiresMs > 0 ? `in ${Math.ceil(expiresMs / 1000)}s` : '{red-fg}expired{/red-fg}';
+      lines.push(`   {gray-fg}Expires:{/gray-fg} ${lock.expiresAt} (${expiresLabel})`);
+    }
     if (i < locks.length - 1) {
       lines.push('');
     }

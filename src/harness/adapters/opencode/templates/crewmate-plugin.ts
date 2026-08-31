@@ -1,6 +1,7 @@
 // Template file written into target project's .opencode/plugins/crewmate.ts
 export const CREWMATE_PLUGIN = `import { type Plugin, tool } from "@opencode-ai/plugin"
 import spawn from "cross-spawn"
+import { resolve as pathResolve, relative as pathRelative } from "node:path"
 
 const z = tool.schema
 
@@ -133,14 +134,26 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
   const sessionAgentMap = new Map<string, TrackedSubagentSession>()
   const pendingDispatches = new Map<string, { agent: string; taskId?: string; dispatchedAt: number }>()
   const completedTaskSet = new Set<string>()
+  const activeLockedTasks = new Set<string>()
 
   // Send initial session heartbeat
   const pid = process.pid
   runCrewmate(targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", "active"]).catch(() => {})
 
-  const heartbeatInterval = setInterval(() => {
+  const heartbeatInterval = setInterval(async () => {
     const currentStatus = sessionIdle ? "idle" : "active"
     runCrewmate(targetDir, ["session", "heartbeat", "--pid", String(pid), "--status", currentStatus]).catch(() => {})
+
+    // Renew lock leases for all tasks with active locks
+    for (const taskId of activeLockedTasks) {
+      const locksResult = await runCrewmate(targetDir, ["lock", "list", "--task", taskId]).catch(() => null)
+      if (locksResult?.ok && Array.isArray(locksResult.locks) && locksResult.locks.length > 0) {
+        const files = locksResult.locks.map((l: any) => l.filePath)
+        await runCrewmate(targetDir, ["lock", "acquire", taskId, "--files", ...files]).catch(() => {})
+      } else {
+        activeLockedTasks.delete(taskId)
+      }
+    }
   }, 4000)
 
   return {
@@ -293,16 +306,13 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
       crewmate_add_task: tool({
         description: [
           "Add a new task to a brief.",
-          "REQUIRED: briefId, description.",
-          "Optional: title (short summary; if omitted, derived from description), dependencies (array of task IDs), field (brief field name), artifactRequirements (array of artifact types: fact, decision, api_contract, constraint, note, log).",
+          "REQUIRED: briefId, title (concise task summary), description (detailed task implementation instructions).",
+          "Optional: dependencies (array of task IDs), field (brief field name), artifactRequirements (array of artifact types: fact, decision, api_contract, constraint, note, log).",
         ].join(" "),
         args: {
           briefId: z.string().min(1).describe("REQUIRED: The brief ID to link this task to"),
-          description: z.string().min(1).describe("REQUIRED: Task description"),
-          title: z
-            .string()
-            .optional()
-            .describe("Optional: Task title (if omitted, auto-generated from description)"),
+          title: z.string().min(1).describe("REQUIRED: Concise task title / summary"),
+          description: z.string().min(1).describe("REQUIRED: Detailed task description and requirements"),
           dependencies: z
             .array(z.string())
             .optional()
@@ -314,9 +324,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             .describe("Optional: Required artifact types that must be recorded before completing this task"),
         },
         async execute(args, context) {
-          const taskTitle = args.title && args.title.trim().length > 0
-            ? args.title.trim()
-            : args.description.trim().split(/\\r?\\n/)[0].slice(0, 80)
+          const taskTitle = args.title ? args.title.trim() : args.description.trim().split(/\\r?\\n/)[0]
           const taskDescription = args.description.trim()
 
           const cmdParts = ["task", "add", args.briefId, "--title", taskTitle, "--description", taskDescription]
@@ -683,6 +691,48 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
         const toolName = input?.tool
         const callID = input?.callID
         const args = output?.args || input?.args || {}
+
+        // Enforce lock ownership before file-modifying tools
+        if ((toolName === "edit" || toolName === "write") && args) {
+          const filePath = args.filePath || args.file_path || args.path || ""
+          if (typeof filePath === "string" && filePath.trim()) {
+            try {
+              const locksResult = await runCrewmate(targetDir, ["lock", "list"])
+              if (locksResult?.ok && Array.isArray(locksResult.locks)) {
+                const resolved = pathResolve(filePath.trim())
+                const root = targetDir
+                let rel = pathRelative(root, resolved).replace(/\\\\/g, "/")
+                if (process.platform === "win32" || process.platform === "darwin") {
+                  rel = rel.toLowerCase()
+                }
+                const lockForFile = locksResult.locks.find((l: any) => {
+                  const lp = (process.platform === "win32" || process.platform === "darwin")
+                    ? l.filePath.toLowerCase()
+                    : l.filePath
+                  return lp === rel
+                })
+                if (lockForFile) {
+                  const sessionTaskIds = new Set<string>()
+                  for (const tracked of sessionAgentMap.values()) {
+                    if (tracked.taskId) sessionTaskIds.add(tracked.taskId)
+                  }
+                  if (!sessionTaskIds.has(lockForFile.taskId) && activeLockedTasks.size > 0 && !activeLockedTasks.has(lockForFile.taskId)) {
+                    await runCrewmate(targetDir, [
+                      "event", "add",
+                      "--actor", "executor",
+                      "--type", "error",
+                      "--task", lockForFile.taskId,
+                      "--message", \`Lock violation: \${toolName} on \${rel} locked by task \${lockForFile.taskId}\`,
+                    ]).catch(() => {})
+                  }
+                }
+              }
+            } catch {
+              // Lock check should not block execution
+            }
+          }
+        }
+
         if (toolName === "task" && args) {
           const subagent = String(args.subagent_type || args.agent || "").toLowerCase()
           if (["scout", "planner", "executor"].includes(subagent)) {
@@ -846,6 +896,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           const taskId = args.taskId
           const count = args.files.length
           const taskTitle = parsedOutput?.taskTitle || taskId
+          activeLockedTasks.add(taskId)
           await runCrewmate(targetDir, [
             "event",
             "add",
@@ -858,6 +909,12 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             "--message",
             \`Locked \${count} file(s) for task \${taskTitle}\`,
           ]).catch(() => {})
+        }
+
+        if (toolName === "crewmate_release_lock" && args?.taskId) {
+          if (!args.files || args.files.length === 0) {
+            activeLockedTasks.delete(args.taskId)
+          }
         }
       } catch {
         // Guardrail should not break tool execution
@@ -967,6 +1024,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
               // Revert interrupted task back to pending and release locks
               if (tracked.taskId) {
+                activeLockedTasks.delete(tracked.taskId)
                 await runCrewmate(targetDir, [
                   "task",
                   "update",
@@ -983,6 +1041,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             }
             sessionAgentMap.clear()
             pendingDispatches.clear()
+            activeLockedTasks.clear()
 
             await runCrewmate(targetDir, [
               "session",
@@ -1022,6 +1081,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
             // Revert failed task back to pending and release locks
             if (tracked.taskId) {
+              activeLockedTasks.delete(tracked.taskId)
               await runCrewmate(targetDir, [
                 "task",
                 "update",

@@ -22,6 +22,7 @@ interface ListLocksResult {
     taskId: string;
     filePath: string;
     createdAt: string;
+    expiresAt: string | null;
   }>;
 }
 
@@ -117,6 +118,7 @@ export function registerLockCommand(program: Command): void {
           taskId: l.taskId,
           filePath: l.filePath,
           createdAt: l.createdAt,
+          expiresAt: l.expiresAt,
         })),
       });
     });

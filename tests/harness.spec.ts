@@ -109,7 +109,7 @@ describe('harness registry', () => {
     );
     expect(CREWMATE_PLUGIN).not.toContain('JSON.stringify(args.dependencies)');
     expect(CREWMATE_PLUGIN).toContain(
-      'const taskTitle = args.title && args.title.trim().length > 0'
+      'const taskTitle = args.title ? args.title.trim() : args.description.trim().split(/\\r?\\n/)[0]'
     );
     expect(CREWMATE_PLUGIN).toContain('.split(/\\r?\\n/)[0]');
     expect(CREWMATE_PLUGIN).not.toMatch(/split\("\r?\n"\)/);

@@ -10,9 +10,10 @@ export interface FileLock {
   taskId: string;
   filePath: string;
   createdAt: string;
+  expiresAt: string | null;
 }
 
-export const LOCK_FIELDS = ['id', 'taskId', 'filePath', 'createdAt'] as const;
+export const LOCK_FIELDS = ['id', 'taskId', 'filePath', 'createdAt', 'expiresAt'] as const;
 
 /**
  *
@@ -24,6 +25,7 @@ export const LOCK_FIELD_TO_COLUMN: Record<string, string> = {
   taskId: 'task_id',
   filePath: 'file_path',
   createdAt: 'created_at',
+  expiresAt: 'expires_at',
 };
 
 export const LOCK_COLUMN_TO_FIELD: Record<string, string> = Object.fromEntries(

@@ -52,7 +52,7 @@ The `crewmate watch` command renders a live dashboard from the activities you re
   | 2 | Implement core logic | Add main domain model and service logic | Task 1 | functionalRequirements | api_contract, decision |
 
   After displaying the table, prompt the user for approval via `question`.
-- On approval, persist tasks using `crewmate_add_task` in dependency order (tasks with no dependencies first), passing `dependencies` and optional `artifactRequirements`. As you create each task, record the mapping from task number (e.g., "Task 1") to the returned task ID. After all tasks are persisted, display the final list with `crewmate_list_tasks`.
+- On approval, persist tasks using `crewmate_add_task` in dependency order (tasks with no dependencies first). Always provide both `title` (concise summary) and `description` (detailed specifications), passing `dependencies` and optional `artifactRequirements`. As you create each task, record the mapping from task number (e.g., "Task 1") to the returned task ID. After all tasks are persisted, display the final list with `crewmate_list_tasks`.
 
 ### 3. Task Execution (Executor)
 - Task execution is triggered via the `/execute` slash command (or immediately upon user agreement after briefing).

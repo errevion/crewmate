@@ -624,6 +624,7 @@ describe('formatLockDetails', () => {
         taskId: 'task-auth',
         filePath: 'src/routes/auth.ts',
         createdAt: '2026-08-21T00:02:00Z',
+        expiresAt: '2026-08-21T00:07:00Z',
       },
     ];
 
