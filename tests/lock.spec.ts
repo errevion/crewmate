@@ -70,6 +70,21 @@ describe('file locks repository', () => {
       expect(task2Locks.length).toBe(0);
     });
 
+    it('should clear expired locks before rejecting on conflict', () => {
+      // task-1 locks src/a.ts
+      acquireLocks(db, 'task-1', ['src/a.ts']);
+
+      // Manually expire task-1's lock
+      db.prepare(`UPDATE file_locks SET expires_at = datetime('now', '-1 minutes')`).run();
+
+      // task-2 attempts to lock src/a.ts, should succeed because task-1's lock expired
+      const result = acquireLocks(db, 'task-2', ['src/a.ts']);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.locked).toEqual(['src/a.ts']);
+      }
+    });
+
     it('should handle empty file list gracefully', () => {
       const result = acquireLocks(db, 'task-1', []);
       expect(result.ok).toBe(true);
@@ -117,6 +132,23 @@ describe('file locks repository', () => {
       expect(listLocks(db, 'task-1').length).toBe(1);
       expect(listLocks(db, 'task-2').length).toBe(1);
       expect(listLocks(db, 'task-3').length).toBe(0);
+    });
+
+    it('should include expiresAt in lock results', () => {
+      acquireLocks(db, 'task-1', ['src/a.ts']);
+      const locks = listLocks(db, 'task-1');
+      expect(locks.length).toBe(1);
+      expect(locks[0].expiresAt).toBeTruthy();
+    });
+
+    it('should filter out expired locks', () => {
+      acquireLocks(db, 'task-1', ['src/a.ts']);
+
+      // Manually expire the lock
+      db.prepare(`UPDATE file_locks SET expires_at = datetime('now', '-1 minutes')`).run();
+
+      const locks = listLocks(db);
+      expect(locks.length).toBe(0);
     });
   });
 });
