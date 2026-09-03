@@ -5,60 +5,6 @@ import { resolve as pathResolve, relative as pathRelative } from "node:path"
 
 const z = tool.schema
 
-const VALID_FIELDS = [
-  "workType",
-  "goal",
-  "scope",
-  "functionalRequirements",
-  "technicalStack",
-  "constraints",
-  "existingCodebase",
-  "referenceMaterials",
-  "acceptanceCriteria",
-  "qualityStandards",
-  "dependencies",
-  "risks",
-  "deliverables",
-] as const
-
-const VALID_FIELDS_STR = VALID_FIELDS.join(", ")
-
-const FIELD_SCHEMAS = {
-  workType: z.enum(["software", "infrastructure", "data", "documentation", "audit"]),
-  goal: z.string().min(1),
-  scope: z.object({
-    included: z.array(z.string()),
-    excluded: z.array(z.string()),
-  }),
-  functionalRequirements: z.array(z.string()),
-  acceptanceCriteria: z.array(z.string()),
-  technicalStack: z.object({
-    frontend: z.array(z.string()),
-    backend: z.array(z.string()),
-    database: z.array(z.string()),
-    tools: z.array(z.string()),
-  }),
-  constraints: z.object({
-    exclusions: z.array(z.string()),
-    requirements: z.array(z.string()),
-  }),
-  existingCodebase: z.array(z.string()),
-  referenceMaterials: z.array(z.string()),
-  qualityStandards: z.object({
-    performance: z.record(z.string(), z.unknown()),
-    security: z.record(z.string(), z.unknown()),
-    accessibility: z.record(z.string(), z.unknown()),
-  }),
-  dependencies: z.array(z.string()),
-  risks: z.array(z.string()),
-      deliverables: z.array(
-    z.object({
-      type: z.enum(["code", "doc", "report"]),
-      format: z.enum(["file", "repo", "presentation"]),
-    }),
-  ),
-} as const
-
 async function runCrewmate(
   directory: string,
   args: string[],
@@ -178,13 +124,9 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
       }),
 
       crewmate_update_field: tool({
-        description: [
-          "Update a field on the current crewmate brief.",
-          "Simple: workType ('software'|'infrastructure'|'data'|'documentation'|'audit'), goal (string).",
-          "Complex (JSON string): scope {included:[],excluded:[]}, technicalStack {frontend:[],backend:[],database:[],tools:[]}, constraints {exclusions:[],requirements:[]}, deliverables [{type,format}], all other complex fields string[].",
-        ].join(" "),
+        description: "Update a field on the current crewmate brief. Any field name is accepted. Value can be a plain string or JSON string.",
         args: {
-          field: z.enum(VALID_FIELDS),
+          field: z.string().min(1).describe("Field name"),
           value: z.string().describe("Field value (plain string or JSON string)"),
           id: z
             .string()
@@ -207,9 +149,9 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
       }),
 
       crewmate_get_field: tool({
-        description: \`Get a field value from the current crewmate brief. Valid fields: \${VALID_FIELDS_STR}.\`,
+        description: "Get a field value from the current crewmate brief.",
         args: {
-          field: z.enum(VALID_FIELDS),
+          field: z.string().min(1).describe("Field name"),
           id: z
             .string()
             .optional()
@@ -254,7 +196,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
       crewmate_check_status: tool({
         description:
-          "Check the completeness status of the current crewmate brief. Shows which required fields (workType, goal, scope, functionalRequirements, acceptanceCriteria) are set vs missing, and whether the brief can be completed.",
+          "Check the completeness status of the current crewmate brief. Shows which required fields are set vs missing, and whether the brief can be completed.",
         args: {
           id: z
             .string()
@@ -277,7 +219,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
       crewmate_finish_brief: tool({
         description:
-          "Mark the crewmate brief as complete. This will fail if required fields (workType, goal, scope, functionalRequirements, acceptanceCriteria) are not all set. Call crewmate_check_status first to verify readiness.",
+          "Mark the crewmate brief as complete. This will fail if required fields are not all set. Call crewmate_check_status first to verify readiness.",
         args: {
           id: z
             .string()
@@ -298,6 +240,58 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           }
           return {
             title: \`Brief \${json.id} completed\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_reopen_brief: tool({
+        description: "Reopen a completed brief back to draft status so fields can be modified.",
+        args: {
+          id: z.string().optional().describe("Brief ID (defaults to latest)"),
+        },
+        async execute(args, context) {
+          const idArgs = args.id ? ["--id", args.id] : []
+          const json = await runCrewmate(context.directory, ["brief", "reopen", ...idArgs])
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Brief \${json.id} reopened to draft\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_delete_brief: tool({
+        description: "Delete a brief and cascade-delete all associated tasks, locks, artifacts, events, and workflow runs.",
+        args: {
+          id: z.string().optional().describe("Brief ID (defaults to latest)"),
+          force: z.boolean().optional().describe("Force deletion even if workflow runs or locks are active"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["brief", "delete"]
+          if (args.id) cmdParts.push(args.id)
+          if (args.force) cmdParts.push("--force")
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Brief \${json.deletedId} deleted\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_unset_field: tool({
+        description: "Remove a field from the current brief.",
+        args: {
+          field: z.string().describe("Field name to remove"),
+          id: z.string().optional().describe("Brief ID (defaults to latest)"),
+        },
+        async execute(args, context) {
+          const idArgs = args.id ? ["--id", args.id] : []
+          const json = await runCrewmate(context.directory, ["brief", "unset", args.field, ...idArgs])
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Removed field: \${args.field}\`,
             output: JSON.stringify(json),
           }
         },
@@ -362,24 +356,56 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
       crewmate_update_task: tool({
         description: [
-          "Update a task's status.",
-          "REQUIRED: taskId, status (pending | in_progress | completed).",
+          "Update a task's status or details.",
+          "REQUIRED: taskId.",
+          "Optional: status (pending | in_progress | completed), title, description, field, dependencies (array of task IDs), artifactRequirements.",
         ].join(" "),
         args: {
           taskId: z.string().min(1).describe("REQUIRED: The task ID to update"),
-          status: z.enum(["pending", "in_progress", "completed"]).describe("REQUIRED: New status"),
+          status: z.enum(["pending", "in_progress", "completed"]).optional().describe("Optional: New status"),
+          title: z.string().optional().describe("Optional: New task title"),
+          description: z.string().optional().describe("Optional: New task description"),
+          field: z.string().optional().describe("Optional: Brief field this task addresses"),
+          dependencies: z.array(z.string()).optional().describe("Optional: Updated dependency task IDs"),
+          artifactRequirements: z
+            .array(z.enum(["fact", "decision", "api_contract", "constraint", "note", "log"]))
+            .optional()
+            .describe("Optional: Required artifact types before completion"),
         },
         async execute(args, context) {
-          const json = await runCrewmate(context.directory, [
-            "task",
-            "update",
-            args.taskId,
-            "--status",
-            args.status,
-          ])
+          const cmdParts = ["task", "update", args.taskId]
+          if (args.status) cmdParts.push("--status", args.status)
+          if (args.title) cmdParts.push("--title", args.title)
+          if (args.description) cmdParts.push("--description", args.description)
+          if (args.field) cmdParts.push("--field", args.field)
+          if (args.dependencies && args.dependencies.length > 0) {
+            cmdParts.push("--dependencies", ...args.dependencies)
+          }
+          if (args.artifactRequirements && args.artifactRequirements.length > 0) {
+            cmdParts.push("--artifact-requirements", ...args.artifactRequirements)
+          }
+
+          const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
-            title: \`Updated task \${args.taskId} to \${args.status}\`,
+            title: \`Updated task \${args.taskId}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_clear_tasks: tool({
+        description: "Clear all tasks associated with a brief.",
+        args: {
+          briefId: z.string().optional().describe("Optional: Brief ID (defaults to latest)"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["task", "clear"]
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Cleared tasks for brief \${json.briefId}\`,
             output: JSON.stringify(json),
           }
         },
@@ -463,6 +489,23 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
         },
       }),
 
+      crewmate_clear_locks: tool({
+        description: "Force release all file locks, or all locks held by a specific task (for crash recovery or deadlocks).",
+        args: {
+          taskId: z.string().optional().describe("Optional: Release only locks held by this task ID"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["lock", "clear"]
+          if (args.taskId) cmdParts.push("--task", args.taskId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Cleared \${json.released} lock(s)\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
       crewmate_add_artifact: tool({
         description: [
           "Add an execution artifact / incremental knowledge fact for a task or brief.",
@@ -487,11 +530,13 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           if (args.taskId) {
             cmdParts.push(args.taskId)
           }
+          const b64Content = Buffer.from(args.content, "utf-8").toString("base64")
           cmdParts.push(
             "--type",
             args.type,
             "--content",
-            args.content,
+            b64Content,
+            "--base64",
           )
           if (args.briefId) {
             cmdParts.push("--brief", args.briefId)
@@ -537,6 +582,37 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           return {
             title: "Execution artifacts",
             output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_supersede_artifact: tool({
+        description: "Mark an older artifact as superseded by a newer one.",
+        args: {
+          oldId: z.string().describe("The ID of the obsolete artifact being replaced"),
+          newId: z.string().describe("The ID of the new artifact replacing it"),
+        },
+        async execute(args, context) {
+          const json = await runCrewmate(context.directory, ["artifact", "supersede", args.oldId, args.newId])
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Artifact \${args.oldId} superseded by \${args.newId}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_invalidate_artifact: tool({
+        description: "Mark an artifact as invalidated / obsolete.",
+        args: {
+          id: z.string().describe("The artifact ID to invalidate"),
+        },
+        async execute(args, context) {
+          const json = await runCrewmate(context.directory, ["artifact", "invalidate", args.id])
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Artifact \${args.id} invalidated\`,
+            output: JSON.stringify(json),
           }
         },
       }),
@@ -673,9 +749,191 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           }
         },
       }),
+
+      crewmate_workflow_start: tool({
+        description:
+          "Start a graph-based workflow run. Binds to a brief and loads the default or custom workflow.",
+        args: {
+          briefId: z.string().optional().describe("Optional: Brief ID (defaults to active)"),
+          file: z.string().optional().describe("Optional: Path to custom workflow JSON file"),
+          context: z.string().optional().describe("Optional: Initial context JSON string"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["workflow", "start", "--agent-summary"]
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          if (args.file) cmdParts.push("--file", args.file)
+          if (args.context) cmdParts.push("--context", args.context)
+
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Workflow run started: \${json.data?.id || "ok"}\`,
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_workflow_status: tool({
+        description:
+          "Get the active workflow run status, current stage, stages list, and context.",
+        args: {
+          runId: z.string().optional().describe("Optional: Workflow run ID (defaults to active)"),
+          briefId: z.string().optional().describe("Optional: Brief ID filter"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["workflow", "status", "--agent-summary"]
+          if (args.runId) cmdParts.push("--run", args.runId)
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: "Workflow run status",
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_workflow_advance: tool({
+        description:
+          "Advance the workflow run to the next stage after completing the current stage's work.",
+        args: {
+          runId: z.string().optional().describe("Optional: Workflow run ID (defaults to active)"),
+          outputs: z.string().optional().describe("Optional: JSON string of outputs/context to pass downstream"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["workflow", "advance", "--agent-summary"]
+          if (args.runId) cmdParts.push("--run", args.runId)
+          if (args.outputs) cmdParts.push("--outputs", args.outputs)
+
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Advanced workflow stage\`,
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_workflow_skip: tool({
+        description:
+          "Skip a stage in the active workflow run and proceed to the next.",
+        args: {
+          stageId: z.string().min(1).describe("REQUIRED: Stage ID to skip"),
+          runId: z.string().optional().describe("Optional: Workflow run ID (defaults to active)"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["workflow", "skip", args.stageId, "--agent-summary"]
+          if (args.runId) cmdParts.push("--run", args.runId)
+
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Skipped stage \${args.stageId}\`,
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_workflow_cancel: tool({
+        description: "Cancel an active or paused workflow run.",
+        args: {
+          runId: z.string().optional().describe("Optional: Workflow run ID (defaults to active)"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["workflow", "cancel"]
+          if (args.runId) cmdParts.push("--run", args.runId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Workflow run cancelled: \${json.data?.id || args.runId}\`,
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
     },
 
     "tool.execute.before": async (input: any, output: any) => {
+      const toolName = input?.tool
+      const callID = input?.callID
+      const args = output?.args || input?.args || {}
+
+      // Enforce active workflow node gates (tool permissions)
+      // Orchestration tools (subagent dispatching, user questions, workflow lifecycle) bypass node-level gates
+      const ORCHESTRATION_BYPASS = ["task", "question"]
+      if (
+        toolName &&
+        !toolName.startsWith("crewmate_workflow_") &&
+        !ORCHESTRATION_BYPASS.includes(toolName)
+      ) {
+        try {
+          const wfStatus = await runCrewmate(targetDir, ["workflow", "status", "--agent-summary"]).catch(() => null)
+          if (wfStatus?.ok && wfStatus.data?.status === "running") {
+            const activeNodes = wfStatus.data.activeNodes || []
+            for (const node of activeNodes) {
+              if (Array.isArray(node.deniedTools) && node.deniedTools.includes(toolName)) {
+                throw new Error(\`Gate restriction: tool '\${toolName}' is forbidden during the '\${node.name || node.id}' step.\`)
+              }
+              if (Array.isArray(node.allowedTools) && !node.allowedTools.includes(toolName)) {
+                throw new Error(\`Gate restriction: tool '\${toolName}' is not permitted during the '\${node.name || node.id}' step. Allowed tools: \${node.allowedTools.join(", ")}\`)
+              }
+            }
+          }
+        } catch (gateErr: any) {
+          if (gateErr?.message && gateErr.message.startsWith("Gate restriction:")) {
+            throw gateErr
+          }
+        }
+      }
+
+      // Enforce lock ownership before file-modifying tools - throws on conflict to block execution
+      if ((toolName === "edit" || toolName === "write") && args) {
+        const filePath = args.filePath || args.file_path || args.path || ""
+        if (typeof filePath === "string" && filePath.trim()) {
+          let locksResult: any = null
+          try {
+            locksResult = await runCrewmate(targetDir, ["lock", "list"])
+          } catch (err) {
+            console.error("[crewmate] lock check error:", err)
+          }
+
+          if (locksResult?.ok && Array.isArray(locksResult.locks)) {
+            const resolved = pathResolve(filePath.trim())
+            const root = targetDir
+            let rel = pathRelative(root, resolved).replace(/\\\\/g, "/")
+            if (process.platform === "win32" || process.platform === "darwin") {
+              rel = rel.toLowerCase()
+            }
+            const lockForFile = locksResult.locks.find((l: any) => {
+              const lp = (process.platform === "win32" || process.platform === "darwin")
+                ? l.filePath.toLowerCase()
+                : l.filePath
+              return lp === rel
+            })
+            if (lockForFile) {
+              const currentSessionId = input?.sessionID || input?.sessionId
+              const trackedForSession = currentSessionId ? sessionAgentMap.get(currentSessionId) : null
+              const isOwner = trackedForSession?.taskId
+                ? trackedForSession.taskId === lockForFile.taskId
+                : false
+
+              // If the current session is not the owner of this lock (or session is unknown/untracked but locked)
+              if (!isOwner) {
+                await runCrewmate(targetDir, [
+                  "event", "add",
+                  "--actor", "executor",
+                  "--type", "error",
+                  "--task", lockForFile.taskId,
+                  "--message", \`Lock violation: \${toolName} on \${rel} locked by task \${lockForFile.taskId}\`,
+                ]).catch(() => {})
+                throw new Error(\`File is locked by task \${lockForFile.taskId}: \${rel}. Acquire the lock first or wait for the task to complete.\`)
+              }
+            }
+          }
+        }
+      }
+
+      // Non-blocking hooks: heartbeat, prompt injection, and dispatch event tracking
       try {
         if (sessionIdle) {
           sessionIdle = false
@@ -688,57 +946,13 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             "active",
           ]).catch(() => {})
         }
-        const toolName = input?.tool
-        const callID = input?.callID
-        const args = output?.args || input?.args || {}
-
-        // Enforce lock ownership before file-modifying tools
-        if ((toolName === "edit" || toolName === "write") && args) {
-          const filePath = args.filePath || args.file_path || args.path || ""
-          if (typeof filePath === "string" && filePath.trim()) {
-            try {
-              const locksResult = await runCrewmate(targetDir, ["lock", "list"])
-              if (locksResult?.ok && Array.isArray(locksResult.locks)) {
-                const resolved = pathResolve(filePath.trim())
-                const root = targetDir
-                let rel = pathRelative(root, resolved).replace(/\\\\/g, "/")
-                if (process.platform === "win32" || process.platform === "darwin") {
-                  rel = rel.toLowerCase()
-                }
-                const lockForFile = locksResult.locks.find((l: any) => {
-                  const lp = (process.platform === "win32" || process.platform === "darwin")
-                    ? l.filePath.toLowerCase()
-                    : l.filePath
-                  return lp === rel
-                })
-                if (lockForFile) {
-                  const sessionTaskIds = new Set<string>()
-                  for (const tracked of sessionAgentMap.values()) {
-                    if (tracked.taskId) sessionTaskIds.add(tracked.taskId)
-                  }
-                  if (!sessionTaskIds.has(lockForFile.taskId) && activeLockedTasks.size > 0 && !activeLockedTasks.has(lockForFile.taskId)) {
-                    await runCrewmate(targetDir, [
-                      "event", "add",
-                      "--actor", "executor",
-                      "--type", "error",
-                      "--task", lockForFile.taskId,
-                      "--message", \`Lock violation: \${toolName} on \${rel} locked by task \${lockForFile.taskId}\`,
-                    ]).catch(() => {})
-                  }
-                }
-              }
-            } catch {
-              // Lock check should not block execution
-            }
-          }
-        }
 
         if (toolName === "task" && args) {
           const subagent = String(args.subagent_type || args.agent || "").toLowerCase()
           if (["scout", "planner", "executor"].includes(subagent)) {
             let taskId = args.task_id || args.taskId
             if (!taskId && subagent === "executor" && typeof args.prompt === "string") {
-              const match = args.prompt.match(/(?:taskId|task_id|task\\s+id|task)\\s*[:=]?\\s*([0-9a-f]{8})\\b/i) || args.prompt.match(/\\b([0-9a-f]{8})\\b/i)
+              const match = args.prompt.match(/(?:taskId|task_id|task\s*id|task\s*[:=#])\s*([0-9a-f]{8})\b/i)
               if (match) taskId = match[1]
             }
             let msg = \`Dispatched \${subagent}\`
@@ -837,8 +1051,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             }
           }
         }
-      } catch {
-        // Guardrail should not break tool execution
+      } catch (err) {
+        console.error("[crewmate] dispatch tracking error:", err)
       }
     },
 
@@ -895,20 +1109,23 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
         if (toolName === "crewmate_acquire_lock" && args?.taskId && Array.isArray(args?.files)) {
           const taskId = args.taskId
           const count = args.files.length
-          const taskTitle = parsedOutput?.taskTitle || taskId
-          activeLockedTasks.add(taskId)
-          await runCrewmate(targetDir, [
-            "event",
-            "add",
-            "--actor",
-            "executor",
-            "--type",
-            "locked",
-            "--task",
-            taskId,
-            "--message",
-            \`Locked \${count} file(s) for task \${taskTitle}\`,
-          ]).catch(() => {})
+          // Only track locks if acquisition actually succeeded
+          if (parsedOutput && parsedOutput.ok !== false) {
+            const taskTitle = parsedOutput?.taskTitle || taskId
+            activeLockedTasks.add(taskId)
+            await runCrewmate(targetDir, [
+              "event",
+              "add",
+              "--actor",
+              "executor",
+              "--type",
+              "locked",
+              "--task",
+              taskId,
+              "--message",
+              \`Locked \${count} file(s) for task \${taskTitle}\`,
+            ]).catch(() => {})
+          }
         }
 
         if (toolName === "crewmate_release_lock" && args?.taskId) {
@@ -916,8 +1133,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             activeLockedTasks.delete(args.taskId)
           }
         }
-      } catch {
-        // Guardrail should not break tool execution
+      } catch (err) {
+        console.error("[crewmate] post-tool event error:", err)
       }
     },
 
@@ -944,23 +1161,21 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             parentSessionId = sessionInfo.id
           }
           if (sessionInfo?.parentID && sessionInfo?.id && !sessionAgentMap.has(sessionInfo.id)) {
-            // Find most recently dispatched pending task as fallback correlation
-            let bestCallId: string | null = null
-            let latestTime = 0
+            // Find pending dispatches within timeout window - only correlate if unambiguous
+            const recentMatches: Array<{ callId: string; pending: any }> = []
             for (const [callId, pending] of pendingDispatches.entries()) {
-              if (pending.dispatchedAt > latestTime && Date.now() - pending.dispatchedAt < 10000) {
-                latestTime = pending.dispatchedAt
-                bestCallId = callId
+              if (Date.now() - pending.dispatchedAt < 10000) {
+                recentMatches.push({ callId, pending })
               }
             }
-            if (bestCallId) {
-              const pending = pendingDispatches.get(bestCallId)!
+            if (recentMatches.length === 1) {
+              const { callId, pending } = recentMatches[0]
               sessionAgentMap.set(sessionInfo.id, {
                 agent: pending.agent,
                 taskId: pending.taskId,
                 dispatchedAt: pending.dispatchedAt,
               })
-              pendingDispatches.delete(bestCallId)
+              pendingDispatches.delete(callId)
             }
           }
         }
@@ -1097,8 +1312,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             }
           }
         }
-      } catch {
-        // Guardrail should not break event processing
+      } catch (err) {
+        console.error("[crewmate] event handler error:", err)
       }
     },
   }

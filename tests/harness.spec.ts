@@ -60,13 +60,10 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('crewmate_list_artifacts');
   });
 
-  it('should include canonical FIELD_SCHEMAS definitions', () => {
-    expect(CREWMATE_PLUGIN).toContain('const FIELD_SCHEMAS =');
-    expect(CREWMATE_PLUGIN).toContain('workType: z.enum');
-    expect(CREWMATE_PLUGIN).toContain('technicalStack: z.object');
-    expect(CREWMATE_PLUGIN).toContain('constraints: z.object');
-    expect(CREWMATE_PLUGIN).toContain('qualityStandards: z.object');
-    expect(CREWMATE_PLUGIN).toContain('deliverables: z.array');
+  it('should define generic field update and get tools', () => {
+    expect(CREWMATE_PLUGIN).toContain('crewmate_update_field');
+    expect(CREWMATE_PLUGIN).toContain('crewmate_get_field');
+    expect(CREWMATE_PLUGIN).toContain('field: z.string().min(1).describe("Field name")');
   });
 
   it('should spawn crewmate safely with argument array without raw string join', () => {

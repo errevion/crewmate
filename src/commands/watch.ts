@@ -5,15 +5,16 @@ import { renderGraph } from '../utils/graph.js';
 import { SPINNERS } from '../utils/ascii.js';
 import type { ExecutionEvent } from '../models/event.js';
 import { listBriefs, resolveBrief } from '../db/brief-repo.js';
-import type { Brief, Deliverable } from '../models/brief.js';
+import type { Brief } from '../models/brief.js';
 import { getDb } from '../db/connection.js';
 import { getTaskById, listTasksByBrief } from '../db/task-repo.js';
 import type { Task } from '../models/task.js';
-import { listLocks } from '../db/lock-repo.js';
 import { listEvents } from '../db/event-repo.js';
 import { listArtifacts, getArtifactById } from '../db/artifact-repo.js';
+import { getActiveWorkflowRunByBrief } from '../db/workflow-repo.js';
+import { renderWorkflowSection, renderWorkflowDetails } from '../utils/workflow-render.js';
 import type { FileLock } from '../models/lock.js';
-import type { ExecutionArtifact, ArtifactType } from '../models/artifact.js';
+import type { ExecutionArtifact } from '../models/artifact.js';
 import { formatArtifactBody, summarizeArtifactContent } from '../utils/artifact-validation.js';
 
 // Resolve blessed default export for CJS/ESM interop
@@ -56,22 +57,6 @@ export function formatTime(createdAt: string): string {
 }
 
 /**
- * Helper to safely extract an array of strings from a field value (string or array)
- *
- * @param val The value to convert to a string array
- * @returns Array of non-empty strings
- */
-function toStringArray(val: unknown): string[] {
-  if (Array.isArray(val)) {
-    return val.map(String).filter((s) => s.trim().length > 0);
-  }
-  if (typeof val === 'string' && val.trim().length > 0) {
-    return [val.trim()];
-  }
-  return [];
-}
-
-/**
  * Formats a brief for the brief selector list item
  *
  * @param brief The brief to format
@@ -83,7 +68,9 @@ export function formatBriefListItem(brief: Brief): string {
       ? '{green-fg}[complete]{/green-fg}'
       : '{yellow-fg}[draft]{/yellow-fg}';
 
-  const goalText = brief.goal ? truncate(brief.goal.replace(/\s+/g, ' ').trim(), 40) : '(no goal)';
+  const goalText = brief.fields.goal
+    ? truncate(String(brief.fields.goal).replace(/\s+/g, ' ').trim(), 40)
+    : '(no goal)';
   const time = formatTime(brief.updatedAt || brief.createdAt);
 
   return `${statusBadge} {bold}${brief.id}{/bold} ${goalText} {gray-fg}[${time}]{/gray-fg}`;
@@ -97,7 +84,7 @@ export function formatBriefListItem(brief: Brief): string {
  */
 export function formatBriefDetails(brief: Brief | null): string {
   if (!brief) {
-    return '{yellow-fg}No brief found.{/yellow-fg}\n\nRun /brief or `crewmate brief init` to create one.';
+    return '{yellow-fg}No brief found.{/yellow-fg}\n\nRun /workflow, prompt Frontman, or run `crewmate workflow start` to create one.';
   }
 
   const lines: string[] = [];
@@ -108,235 +95,38 @@ export function formatBriefDetails(brief: Brief | null): string {
     }`
   );
   lines.push(
-    `{bold}{cyan-fg}Work Type:{/cyan-fg}{/bold} ${brief.workType ?? '{gray-fg}(not set){/gray-fg}'}`
-  );
-  lines.push(
-    `{bold}{cyan-fg}Goal:{/cyan-fg}{/bold} ${brief.goal ?? '{gray-fg}(not set){/gray-fg}'}`
-  );
-  lines.push(
     `{bold}{cyan-fg}Created:{/cyan-fg}{/bold} ${brief.createdAt} · {bold}{cyan-fg}Updated:{/cyan-fg}{/bold} ${brief.updatedAt}`
   );
   lines.push('');
 
-  // Scope
-  lines.push(
-    '{bold}{yellow-fg}── Scope ──────────────────────────────────────────{/yellow-fg}{/bold}'
-  );
-  if (brief.scope) {
-    const included = toStringArray(brief.scope.included);
-    const excluded = toStringArray(brief.scope.excluded);
-    if (included.length) {
-      lines.push('  {bold}Included:{/bold}');
-      for (const inc of included) {
-        lines.push(`    • ${inc}`);
-      }
-    }
-    if (excluded.length) {
-      lines.push('  {bold}Excluded:{/bold}');
-      for (const exc of excluded) {
-        lines.push(`    • ${exc}`);
-      }
-    }
-    if (!included.length && !excluded.length) {
-      lines.push('  {gray-fg}(empty scope){/gray-fg}');
-    }
+  const fieldKeys = Object.keys(brief.fields);
+  if (fieldKeys.length === 0) {
+    lines.push('{gray-fg}(no fields set){/gray-fg}');
   } else {
-    lines.push('  {gray-fg}(not set){/gray-fg}');
-  }
-  lines.push('');
-
-  // Functional Requirements
-  lines.push(
-    '{bold}{yellow-fg}── Functional Requirements ───────────────────────{/yellow-fg}{/bold}'
-  );
-  if (brief.functionalRequirements) {
-    const reqs = toStringArray(brief.functionalRequirements);
-    if (reqs.length) {
-      reqs.forEach((req, i) => lines.push(`  ${i + 1}. ${req}`));
-    } else {
-      lines.push('  {gray-fg}(not set){/gray-fg}');
-    }
-  } else {
-    lines.push('  {gray-fg}(not set){/gray-fg}');
-  }
-  lines.push('');
-
-  // Acceptance Criteria
-  lines.push(
-    '{bold}{yellow-fg}── Acceptance Criteria ───────────────────────────{/yellow-fg}{/bold}'
-  );
-  if (brief.acceptanceCriteria) {
-    const crits = toStringArray(brief.acceptanceCriteria);
-    if (crits.length) {
-      crits.forEach((crit, i) => lines.push(`  ${i + 1}. ${crit}`));
-    } else {
-      lines.push('  {gray-fg}(not set){/gray-fg}');
-    }
-  } else {
-    lines.push('  {gray-fg}(not set){/gray-fg}');
-  }
-  lines.push('');
-
-  // Technical Stack
-  lines.push(
-    '{bold}{yellow-fg}── Technical Stack ───────────────────────────────{/yellow-fg}{/bold}'
-  );
-  if (brief.technicalStack) {
-    const ts = brief.technicalStack;
-    const fe = toStringArray(ts.frontend);
-    const be = toStringArray(ts.backend);
-    const db = toStringArray(ts.database);
-    const tl = toStringArray(ts.tools);
-
-    if (fe.length) {
-      lines.push(`  {bold}Frontend:{/bold} ${fe.join(', ')}`);
-    }
-    if (be.length) {
-      lines.push(`  {bold}Backend:{/bold} ${be.join(', ')}`);
-    }
-    if (db.length) {
-      lines.push(`  {bold}Database:{/bold} ${db.join(', ')}`);
-    }
-    if (tl.length) {
-      lines.push(`  {bold}Tools:{/bold} ${tl.join(', ')}`);
-    }
-    if (!fe.length && !be.length && !db.length && !tl.length) {
-      lines.push('  {gray-fg}(empty stack){/gray-fg}');
-    }
-  } else {
-    lines.push('  {gray-fg}(not set){/gray-fg}');
-  }
-  lines.push('');
-
-  // Constraints
-  lines.push(
-    '{bold}{yellow-fg}── Constraints ───────────────────────────────────{/yellow-fg}{/bold}'
-  );
-  if (brief.constraints) {
-    const reqs = toStringArray(brief.constraints.requirements);
-    const excs = toStringArray(brief.constraints.exclusions);
-    if (reqs.length) {
-      lines.push('  {bold}Requirements:{/bold}');
-      for (const r of reqs) {
-        lines.push(`    • ${r}`);
-      }
-    }
-    if (excs.length) {
-      lines.push('  {bold}Exclusions:{/bold}');
-      for (const e of excs) {
-        lines.push(`    • ${e}`);
-      }
-    }
-    if (!reqs.length && !excs.length) {
-      lines.push('  {gray-fg}(empty constraints){/gray-fg}');
-    }
-  } else {
-    lines.push('  {gray-fg}(not set){/gray-fg}');
-  }
-  lines.push('');
-
-  // Deliverables
-  lines.push(
-    '{bold}{yellow-fg}── Deliverables ──────────────────────────────────{/yellow-fg}{/bold}'
-  );
-  if (brief.deliverables) {
-    const dels = Array.isArray(brief.deliverables) ? brief.deliverables : [brief.deliverables];
-    if (dels.length) {
-      for (const d of dels) {
-        if (typeof d === 'object' && d !== null) {
-          const item = d as Partial<Deliverable>;
-          lines.push(`  • [${item.type ?? 'item'}] (${item.format ?? 'format'})`);
-        } else {
-          lines.push(`  • ${String(d)}`);
+    for (const key of fieldKeys) {
+      lines.push(
+        `{bold}{yellow-fg}── ${key} ──────────────────────────────────────────{/yellow-fg}{/bold}`
+      );
+      const val = brief.fields[key];
+      if (val === null || val === undefined) {
+        lines.push('  {gray-fg}(not set){/gray-fg}');
+      } else if (typeof val === 'object') {
+        const jsonStr = JSON.stringify(val, null, 2);
+        for (const line of jsonStr.split('\n')) {
+          lines.push(`  ${line}`);
         }
-      }
-    } else {
-      lines.push('  {gray-fg}(not set){/gray-fg}');
-    }
-  } else {
-    lines.push('  {gray-fg}(not set){/gray-fg}');
-  }
-  lines.push('');
-
-  // Dependencies & Risks
-  lines.push(
-    '{bold}{yellow-fg}── Dependencies & Risks ──────────────────────────{/yellow-fg}{/bold}'
-  );
-  const deps = toStringArray(brief.dependencies);
-  const risks = toStringArray(brief.risks);
-  if (deps.length) {
-    lines.push('  {bold}Dependencies:{/bold}');
-    for (const d of deps) {
-      lines.push(`    • ${d}`);
-    }
-  }
-  if (risks.length) {
-    lines.push('  {bold}Risks:{/bold}');
-    for (const r of risks) {
-      lines.push(`    • ${r}`);
-    }
-  }
-  if (!deps.length && !risks.length) {
-    lines.push('  {gray-fg}(none){/gray-fg}');
-  }
-  lines.push('');
-
-  // References & Existing Codebase
-  lines.push(
-    '{bold}{yellow-fg}── References & Codebase ─────────────────────────{/yellow-fg}{/bold}'
-  );
-  const codebase = toStringArray(brief.existingCodebase);
-  const refs = toStringArray(brief.referenceMaterials);
-  if (codebase.length) {
-    lines.push('  {bold}Existing Codebase:{/bold}');
-    for (const c of codebase) {
-      lines.push(`    • ${c}`);
-    }
-  }
-  if (refs.length) {
-    lines.push('  {bold}Reference Materials:{/bold}');
-    for (const r of refs) {
-      lines.push(`    • ${r}`);
-    }
-  }
-  if (!codebase.length && !refs.length) {
-    lines.push('  {gray-fg}(none){/gray-fg}');
-  }
-  lines.push('');
-
-  // Quality Standards
-  lines.push(
-    '{bold}{yellow-fg}── Quality Standards ─────────────────────────────{/yellow-fg}{/bold}'
-  );
-  if (brief.qualityStandards && typeof brief.qualityStandards === 'object') {
-    const qs = brief.qualityStandards as unknown as Record<string, unknown>;
-    const categories: Array<{ label: string; key: string }> = [
-      { label: 'Performance', key: 'performance' },
-      { label: 'Security', key: 'security' },
-      { label: 'Accessibility', key: 'accessibility' },
-    ];
-    let hasEntries = false;
-    for (const cat of categories) {
-      const data = qs[cat.key];
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const entries = Object.entries(data as Record<string, unknown>);
-        if (entries.length > 0) {
-          hasEntries = true;
-          lines.push(`  {bold}${cat.label}:{/bold}`);
-          for (const [k, v] of entries) {
-            lines.push(`    • ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`);
+      } else {
+        const strVal = String(val);
+        if (strVal.includes('\n')) {
+          for (const line of strVal.split('\n')) {
+            lines.push(`  ${line}`);
           }
+        } else {
+          lines.push(`  ${strVal}`);
         }
-      } else if (data && typeof data === 'string' && data.trim().length > 0) {
-        hasEntries = true;
-        lines.push(`  {bold}${cat.label}:{/bold} ${data}`);
       }
+      lines.push('');
     }
-    if (!hasEntries) {
-      lines.push('  {gray-fg}(empty quality standards){/gray-fg}');
-    }
-  } else {
-    lines.push('  {gray-fg}(not set){/gray-fg}');
   }
 
   return lines.join('\n');
@@ -435,6 +225,10 @@ export function formatTaskDetails(
  * @param locks Array of file locks
  * @param allTasks Optional list or map of all tasks for resolving task titles
  * @returns Tagged string representation of the file locks
+ */
+export { renderWorkflowSection, renderWorkflowDetails } from '../utils/workflow-render.js';
+/**
+ *
  */
 export function formatLockDetails(
   locks: FileLock[],
@@ -755,90 +549,6 @@ export function formatArtifactDetail(
 }
 
 /**
- * Formats a list of execution artifacts into a tagged string for display in the fullscreen overlay modal
- */
-export function formatArtifactDetails(
-  artifacts: ExecutionArtifact[],
-  allTasks?: Task[] | Map<string, { title: string }>
-): string {
-  if (!artifacts || artifacts.length === 0) {
-    return '{yellow-fg}No execution artifacts recorded yet.{/yellow-fg}';
-  }
-
-  const tasksMap =
-    allTasks instanceof Map
-      ? allTasks
-      : Array.isArray(allTasks)
-        ? new Map(allTasks.map((t) => [t.id, t]))
-        : new Map<string, { title: string }>();
-
-  const lines: string[] = [];
-  lines.push(
-    `{bold}{cyan-fg}Knowledge Base:{/cyan-fg}{/bold} ${artifacts.length} recorded artifact(s)`
-  );
-  lines.push('');
-
-  const CATEGORIES: Array<{
-    type: ArtifactType[];
-    title: string;
-    color: string;
-  }> = [
-    { type: ['constraint'], title: 'Constraints & Boundaries', color: 'red' },
-    { type: ['api_contract'], title: 'API & Interface Contracts', color: 'yellow' },
-    { type: ['decision'], title: 'Architectural Decisions', color: 'cyan' },
-    { type: ['fact'], title: 'System Facts', color: 'green' },
-    { type: ['note', 'log'], title: 'Notes & Logs', color: 'white' },
-  ];
-
-  for (const cat of CATEGORIES) {
-    const catArtifacts = artifacts.filter((a) => cat.type.includes(a.type));
-    if (catArtifacts.length === 0) {
-      continue;
-    }
-
-    lines.push(
-      `{bold}{${cat.color}-fg}── ${cat.title} (${catArtifacts.length}) ──────────────────────────────────{/${cat.color}-fg}{/bold}`
-    );
-
-    for (let i = 0; i < catArtifacts.length; i++) {
-      const a = catArtifacts[i];
-      const time = formatTime(a.createdAt);
-
-      const statusBadge =
-        a.status === 'active'
-          ? '{green-fg}[active]{/green-fg}'
-          : a.status === 'superseded'
-            ? '{gray-fg}[superseded]{/gray-fg}'
-            : '{red-fg}[invalidated]{/red-fg}';
-
-      let taskSuffix = ' · {gray-fg}scope:{/gray-fg} {bold}brief{/bold}';
-      if (a.taskId) {
-        const task = tasksMap.get(a.taskId);
-        const title = task ? task.title : a.taskId;
-        taskSuffix = ` · {gray-fg}task:{/gray-fg} {bold}${truncate(title, 36)}{/bold}`;
-      }
-
-      lines.push(
-        ` {gray-fg}[${time}]{/gray-fg} {bold}${a.type.toUpperCase()}{/bold} ${statusBadge}${taskSuffix}`
-      );
-
-      const bodyLines = formatArtifactBody(a.type, a.content);
-      for (const bLine of bodyLines) {
-        lines.push(`  ${bLine}`);
-      }
-
-      if (i < catArtifacts.length - 1) {
-        lines.push('');
-      }
-    }
-
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
-
-/**
  * Registers the watch command on commander program
  */
 export function registerWatchCommand(program: Command): void {
@@ -953,28 +663,28 @@ function runDashboard(opts: WatchOptions): void {
     wrap: false,
   });
 
-  const activityGraph = blessed.box({
+  const workflowBoard = blessed.box({
     parent: screen,
     top: '50%',
     left: 0,
     width: '60%',
     bottom: 2,
-    label: ' Activity ',
+    label: ' Workflow ',
     border: { type: 'line' },
-    style: { fg: 'white', border: { fg: 'yellow' } },
+    style: { fg: 'white', border: { fg: 'magenta' } },
     tags: true,
     wrap: false,
   });
 
-  const locksBoard = blessed.box({
+  const activityGraph = blessed.box({
     parent: screen,
     top: '50%',
     left: '60%',
     right: 0,
     bottom: 2,
-    label: ' Active File Locks ',
+    label: ' Activity ',
     border: { type: 'line' },
-    style: { fg: 'white', border: { fg: 'magenta' } },
+    style: { fg: 'white', border: { fg: 'yellow' } },
     tags: true,
     wrap: false,
   });
@@ -985,7 +695,7 @@ function runDashboard(opts: WatchOptions): void {
     left: 0,
     width: '100%',
     height: 2,
-    content: ' q / Ctrl-C: quit · b: briefs · t: tasks · a: artifacts · e: events · l: file locks ',
+    content: ' q / Ctrl-C: quit · b: briefs · t: tasks · a: artifacts · e: events · w: workflow ',
     style: { fg: 'gray' },
     tags: true,
   });
@@ -1100,13 +810,13 @@ function runDashboard(opts: WatchOptions): void {
     hidden: true,
   });
 
-  const lockModal = blessed.box({
+  const workflowModal = blessed.box({
     parent: screen,
     top: 0,
     left: 0,
     width: '100%',
     bottom: 2,
-    label: ' Active File Locks ',
+    label: ' Workflow ',
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: 'magenta' }, bg: 'black' },
     tags: true,
@@ -1262,7 +972,7 @@ function runDashboard(opts: WatchOptions): void {
       header.setContent(
         [
           `Brief {bold}{red-fg}(none){/red-fg}{/bold} · status: {gray-fg}none{/gray-fg} · events: {cyan-fg}0{/cyan-fg}`,
-          `Goal: {gray-fg}(no brief created yet — run /brief or \`crewmate brief init\` to begin){/gray-fg}`,
+          `Goal: {gray-fg}(no brief created yet — run /workflow, prompt Frontman, or run \`crewmate workflow start\` to begin){/gray-fg}`,
           `[{yellow-fg}░░░░░░░░░░{/yellow-fg}] {bold}0/0{/bold} tasks done · 0 running`,
         ].join('\n')
       );
@@ -1339,10 +1049,12 @@ function runDashboard(opts: WatchOptions): void {
     if (lines.length === 0) {
       if (s.briefId === '(none)') {
         lines.push(
-          '{gray-fg}No brief available. Run /brief or `crewmate brief init` to get started.{/gray-fg}'
+          '{gray-fg}No brief available. Run /workflow, prompt Frontman, or run `crewmate workflow start` to get started.{/gray-fg}'
         );
       } else {
-        lines.push('{gray-fg}No tasks yet. Run /brief and /execute to get started.{/gray-fg}');
+        lines.push(
+          '{gray-fg}No tasks yet. Run /workflow, prompt Frontman, or run `crewmate workflow start` to get started.{/gray-fg}'
+        );
       }
     }
     taskBoard.setContent(lines.join('\n'));
@@ -1363,18 +1075,9 @@ function runDashboard(opts: WatchOptions): void {
     eventFeed.setContent(lines.join('\n'));
   }
 
-  function renderLocks(s: WorkflowSnapshot): void {
-    const tasksById = new Map(s.tasks.map((t) => [t.id, t]));
-    const lines: string[] = [];
-    for (const lock of s.locks.slice(0, 10)) {
-      const task = tasksById.get(lock.taskId);
-      const title = task ? truncate(task.title, 20) : lock.taskId;
-      lines.push(`• {bold}${truncate(lock.filePath, 26)}{/bold} {gray-fg}(${title}){/gray-fg}`);
-    }
-    if (lines.length === 0) {
-      lines.push('{gray-fg}No active file locks.{/gray-fg}');
-    }
-    locksBoard.setContent(lines.join('\n'));
+  function renderWorkflow(s: WorkflowSnapshot): void {
+    const content = renderWorkflowSection(s.workflowRun, spinnerFrame);
+    workflowBoard.setContent(content);
   }
 
   function renderActivity(s: WorkflowSnapshot): void {
@@ -1400,7 +1103,7 @@ function runDashboard(opts: WatchOptions): void {
     renderTaskBoard(snapshot);
     renderEventFeed(snapshot);
     renderActivity(snapshot);
-    renderLocks(snapshot);
+    renderWorkflow(snapshot);
 
     if (!briefListModal.hidden) {
       currentBriefs = listBriefs(getDb());
@@ -1433,11 +1136,10 @@ function runDashboard(opts: WatchOptions): void {
       }
     }
 
-    if (!lockModal.hidden) {
-      const locks = listLocks(getDb());
+    if (!workflowModal.hidden) {
       const brief = resolveBrief(currentBriefId);
-      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
-      lockModal.setContent(formatLockDetails(locks, allTasks));
+      const workflowRun = getActiveWorkflowRunByBrief(getDb(), brief?.id);
+      workflowModal.setContent(renderWorkflowDetails(workflowRun, spinnerFrame));
     }
 
     if (!taskDetailModal.hidden && selectedTaskId) {
@@ -1485,6 +1187,10 @@ function runDashboard(opts: WatchOptions): void {
     if (currentSnapshot) {
       renderTaskBoard(currentSnapshot);
       renderActivity(currentSnapshot);
+      renderWorkflow(currentSnapshot);
+      if (!workflowModal.hidden) {
+        workflowModal.setContent(renderWorkflowDetails(currentSnapshot.workflowRun, spinnerFrame));
+      }
       screen.render();
     }
   }
@@ -1498,7 +1204,7 @@ function runDashboard(opts: WatchOptions): void {
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
   const MAIN_FOOTER =
-    ' q / Ctrl-C: quit · b: briefs · t: tasks · a: artifacts · e: events · l: file locks ';
+    ' q / Ctrl-C: quit · b: briefs · t: tasks · a: artifacts · e: events · w: workflow ';
   const BRIEF_LIST_FOOTER =
     ' q / Ctrl-C: quit · Enter: select · v: view details · b / Esc: close · ↑/↓/k/j: navigate ';
   const BRIEF_DETAIL_FOOTER =
@@ -1511,7 +1217,8 @@ function runDashboard(opts: WatchOptions): void {
     ' q / Ctrl-C: quit · Enter: view event · e / Esc: close events · ↑/↓/k/j: navigate ';
   const EVENT_DETAIL_FOOTER =
     ' q / Ctrl-C: quit · Esc: back to event list · e: close events · ↑/↓/k/j/PgUp/PgDn: scroll ';
-  const LOCK_FOOTER = ' q / Ctrl-C: quit · l / Esc: close file locks · ↑/↓/k/j/PgUp/PgDn: scroll ';
+  const WORKFLOW_FOOTER =
+    ' q / Ctrl-C: quit · w / Esc: close workflow · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const TASK_LIST_FOOTER =
     ' q / Ctrl-C: quit · Enter: view task · t / Esc: close tasks · ↑/↓/k/j: navigate ';
   const TASK_DETAIL_FOOTER =
@@ -1534,8 +1241,8 @@ function runDashboard(opts: WatchOptions): void {
       footer.setContent(BRIEF_DETAIL_FOOTER);
     } else if (!briefListModal.hidden) {
       footer.setContent(BRIEF_LIST_FOOTER);
-    } else if (!lockModal.hidden) {
-      footer.setContent(LOCK_FOOTER);
+    } else if (!workflowModal.hidden) {
+      footer.setContent(WORKFLOW_FOOTER);
     } else {
       footer.setContent(MAIN_FOOTER);
     }
@@ -1563,12 +1270,14 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     currentBriefs = listBriefs(getDb());
     if (currentBriefs.length === 0) {
-      briefListModal.setItems(['{yellow-fg}(no briefs created yet — run /brief init){/yellow-fg}']);
+      briefListModal.setItems([
+        '{yellow-fg}(no briefs created yet — run /workflow or `crewmate workflow start`){/yellow-fg}',
+      ]);
     } else {
       briefListModal.setItems(currentBriefs.map(formatBriefListItem));
       const activeIdx = currentBriefs.findIndex(
@@ -1637,17 +1346,21 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     const brief = resolveBrief(currentBriefId);
     if (!brief) {
-      taskListModal.setItems(['{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}']);
+      taskListModal.setItems([
+        '{yellow-fg}(no brief created yet — run /workflow or `crewmate workflow start`){/yellow-fg}',
+      ]);
       currentTasks = [];
     } else {
       currentTasks = listTasksByBrief(getDb(), brief.id);
       if (currentTasks.length === 0) {
-        taskListModal.setItems(['{yellow-fg}(no tasks yet — run /brief and /execute){/yellow-fg}']);
+        taskListModal.setItems([
+          '{yellow-fg}(no tasks yet — run /workflow, prompt Frontman, or run `crewmate workflow start`){/yellow-fg}',
+        ]);
       } else {
         taskListModal.setItems(currentTasks.map(formatTaskListItem));
         taskListModal.select(0);
@@ -1702,13 +1415,13 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     const brief = resolveBrief(currentBriefId);
     if (!brief) {
       artifactListModal.setItems([
-        '{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}',
+        '{yellow-fg}(no brief created yet — run /workflow or `crewmate workflow start`){/yellow-fg}',
       ]);
       currentArtifacts = [];
     } else {
@@ -1716,7 +1429,7 @@ function runDashboard(opts: WatchOptions): void {
       const allTasks = listTasksByBrief(getDb(), brief.id);
       if (currentArtifacts.length === 0) {
         artifactListModal.setItems([
-          '{yellow-fg}(no artifacts recorded yet — run /execute){/yellow-fg}',
+          '{yellow-fg}(no artifacts recorded yet — run /workflow, prompt Frontman, or run `crewmate workflow start`){/yellow-fg}',
         ]);
       } else {
         artifactListModal.setItems(
@@ -1774,12 +1487,14 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     const brief = resolveBrief(currentBriefId);
     if (!brief) {
-      eventListModal.setItems(['{yellow-fg}(no brief created yet — run /brief init){/yellow-fg}']);
+      eventListModal.setItems([
+        '{yellow-fg}(no brief created yet — run /workflow or `crewmate workflow start`){/yellow-fg}',
+      ]);
       currentEvents = [];
     } else {
       currentEvents = listEvents(getDb(), { briefId: brief.id, limit: 100 });
@@ -1849,8 +1564,8 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     openTaskListModal();
   }
@@ -1885,8 +1600,8 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     openBriefListModal();
   }
@@ -1921,8 +1636,8 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     openArtifactListModal();
   }
@@ -1957,13 +1672,13 @@ function runDashboard(opts: WatchOptions): void {
     if (!artifactDetailModal.hidden) {
       artifactDetailModal.hide();
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
     }
     openEventListModal();
   }
 
-  function toggleLockModal(): void {
+  function toggleWorkflowModal(): void {
     if (!taskListModal.hidden) {
       taskListModal.hide();
     }
@@ -1988,18 +1703,17 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (lockModal.hidden) {
-      const locks = listLocks(getDb());
+    if (workflowModal.hidden) {
       const brief = resolveBrief(currentBriefId);
-      const allTasks = brief ? listTasksByBrief(getDb(), brief.id) : [];
-      lockModal.setContent(formatLockDetails(locks, allTasks));
-      lockModal.scrollTo(0);
-      lockModal.show();
-      lockModal.focus();
+      const workflowRun = getActiveWorkflowRunByBrief(getDb(), brief?.id);
+      workflowModal.setContent(renderWorkflowDetails(workflowRun, spinnerFrame));
+      workflowModal.scrollTo(0);
+      workflowModal.show();
+      workflowModal.focus();
       updateFooter();
       screen.render();
     } else {
-      lockModal.hide();
+      workflowModal.hide();
       updateFooter();
       screen.render();
     }
@@ -2021,8 +1735,8 @@ function runDashboard(opts: WatchOptions): void {
     toggleEventModal();
   });
 
-  screen.key(['l', 'L'], () => {
-    toggleLockModal();
+  screen.key(['w', 'W'], () => {
+    toggleWorkflowModal();
   });
 
   screen.key(['escape'], () => {
@@ -2070,8 +1784,8 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
       return;
     }
-    if (!lockModal.hidden) {
-      lockModal.hide();
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
       updateFooter();
       screen.render();
       return;
@@ -2104,8 +1818,8 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!briefDetailModal.hidden) {
       briefDetailModal.scroll(-1);
       screen.render();
-    } else if (!lockModal.hidden) {
-      lockModal.scroll(-1);
+    } else if (!workflowModal.hidden) {
+      workflowModal.scroll(-1);
       screen.render();
     }
   });
@@ -2123,8 +1837,8 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!briefDetailModal.hidden) {
       briefDetailModal.scroll(1);
       screen.render();
-    } else if (!lockModal.hidden) {
-      lockModal.scroll(1);
+    } else if (!workflowModal.hidden) {
+      workflowModal.scroll(1);
       screen.render();
     }
   });
@@ -2142,8 +1856,8 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!briefDetailModal.hidden) {
       briefDetailModal.scroll(-5);
       screen.render();
-    } else if (!lockModal.hidden) {
-      lockModal.scroll(-5);
+    } else if (!workflowModal.hidden) {
+      workflowModal.scroll(-5);
       screen.render();
     }
   });
@@ -2161,8 +1875,8 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!briefDetailModal.hidden) {
       briefDetailModal.scroll(5);
       screen.render();
-    } else if (!lockModal.hidden) {
-      lockModal.scroll(5);
+    } else if (!workflowModal.hidden) {
+      workflowModal.scroll(5);
       screen.render();
     }
   });

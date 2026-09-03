@@ -16,8 +16,8 @@ import {
   writeManifest,
 } from '../../manifest.js';
 import { CREWMATE_PLUGIN } from './templates/crewmate-plugin.js';
-import BRIEF_MD from './templates/brief.md';
-import EXECUTE_MD from './templates/execute.md';
+import { getModularWorkflowFiles } from '../../../graph/modular-templates.js';
+import WORKFLOW_MD from './templates/workflow.md';
 import FRONTMAN_MD from './templates/agents/frontman.md';
 import SCOUT_MD from './templates/agents/scout.md';
 import PLANNER_MD from './templates/agents/planner.md';
@@ -50,12 +50,12 @@ export class OpenCodeAdapter implements HarnessAdapter {
   private getTemplateFiles(): Record<string, string> {
     return {
       '.opencode/plugins/crewmate.ts': CREWMATE_PLUGIN,
-      '.opencode/commands/brief.md': BRIEF_MD,
-      '.opencode/commands/execute.md': EXECUTE_MD,
+      '.opencode/commands/workflow.md': WORKFLOW_MD,
       '.opencode/agents/frontman.md': FRONTMAN_MD,
       '.opencode/agents/scout.md': SCOUT_MD,
       '.opencode/agents/planner.md': PLANNER_MD,
       '.opencode/agents/executor.md': EXECUTOR_MD,
+      ...getModularWorkflowFiles(),
     };
   }
 

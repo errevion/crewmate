@@ -13,8 +13,7 @@ harness/
       adapter.ts                  OpenCode adapter implementation
       templates/
         crewmate-plugin.ts        Plugin source template (TypeScript)
-        brief.md                  Markdown template for the /brief command
-        execute.md                Markdown template for the /execute command
+        workflow.md               Markdown template for the /workflow command
         agents/
           Frontman.md             Primary orchestrator agent prompt
           Scout.md                Read-only codebase explorer subagent prompt
@@ -61,7 +60,7 @@ An adapter's job is purely scaffolding. It writes files into the target project 
 For OpenCode this means:
 
 1. A **plugin** (`crewmate-plugin.ts`) that wraps every `crewmate` CLI command as an OpenCode tool, so agents can call them without knowing the CLI exists.
-2. **Slash commands** (`brief.md`, `execute.md`) that give users `/brief` and `/execute` entry points.
+2. **Slash command** (`workflow.md`) that gives users the `/workflow` entry point.
 3. **Agent prompts** (`Frontman.md`, `Scout.md`, `Planner.md`, `Executor.md`) that tell each agent its role, constraints, and available tools.
 
 The plugin calls `crewmate <subcommand>` under the hood, parses JSON output, and returns structured results to the agent. Agents never shell out to `crewmate` directly.
@@ -89,7 +88,7 @@ At minimum, an adapter should scaffold:
 | Concern | What to provide | OpenCode example |
 | --- | --- | --- |
 | Tool bridge | A plugin or extension that wraps `crewmate` CLI calls | `crewmate-plugin.ts` |
-| User entry points | Slash commands or UI hooks for `/brief` and `/execute` | `brief.md`, `execute.md` |
+| User entry points | Slash commands or UI hooks for workflow execution | `workflow.md` |
 | Agent prompts | Role-specific instructions for Frontman, Scout, Planner, Executor | `agents/*.md` |
 | Dependencies | Any packages the plugin needs | `package.json` with `@opencode-ai/plugin` |
 
@@ -100,9 +99,8 @@ Templates live directly alongside each adapter implementation. The adapter's `in
 For example, the OpenCode adapter writes into `.opencode/`:
 
 - `.opencode/plugins/crewmate.ts` — hooks Crewmate's tools into OpenCode
-- `.opencode/commands/brief.md` — the `/brief` command that starts the planning conversation
-- `.opencode/commands/execute.md` — the `/execute` command that runs the implementation plan
-- `.opencode/agents/frontman.md` — supervisor agent that orchestrates brief creation and task dispatch
+- `.opencode/commands/workflow.md` — the `/workflow` command that starts and runs graph-based workflows
+- `.opencode/agents/frontman.md` — supervisor agent that orchestrates workflow stages and subagent dispatch
 - `.opencode/agents/scout.md` — read-only codebase explorer subagent
 - `.opencode/agents/planner.md` — task decomposition subagent
 - `.opencode/agents/executor.md` — parallel implementation subagent

@@ -165,3 +165,34 @@ export function listLocks(db: Database.Database, taskId?: string): FileLock[] {
   const rows = stmt.all() as Record<string, unknown>[];
   return rows.map(rowToLock);
 }
+
+/**
+ * Releases a lock on a specific file path regardless of which task holds it
+ */
+export function releaseLockByPath(db: Database.Database, filePath: string): boolean {
+  const normalized = normalizeFilePath(filePath);
+  const info = db.prepare('DELETE FROM file_locks WHERE file_path = ?').run(normalized);
+  return info.changes > 0;
+}
+
+/**
+ * Clears all locks in the system, or all locks held by a specific task
+ */
+export function clearAllLocks(db: Database.Database, taskId?: string): number {
+  if (taskId) {
+    const info = db.prepare('DELETE FROM file_locks WHERE task_id = ?').run(taskId);
+    return info.changes;
+  }
+  const info = db.prepare('DELETE FROM file_locks').run();
+  return info.changes;
+}
+
+/**
+ * Cleans up stale / expired locks immediately
+ */
+export function cleanStaleLocks(db: Database.Database): number {
+  const info = db
+    .prepare("DELETE FROM file_locks WHERE expires_at IS NOT NULL AND expires_at < datetime('now')")
+    .run();
+  return info.changes;
+}

@@ -2,133 +2,40 @@ import { describe, it, expect } from 'vitest';
 import {
   isValidField,
   parseFieldValue,
+  getRequiredFieldStatuses,
   getMissingRequiredFields,
   isBriefComplete,
-  FIELD_FORMAT_HINTS,
 } from '../src/utils/validation.js';
-import { BRIEF_FIELDS, type Brief } from '../src/models/brief.js';
+import type { Brief } from '../src/models/brief.js';
 
 describe('validation', () => {
-  describe('FIELD_FORMAT_HINTS', () => {
-    it('should provide format hints for all valid brief fields', () => {
-      for (const field of BRIEF_FIELDS) {
-        expect(FIELD_FORMAT_HINTS[field]).toBeDefined();
-        expect(typeof FIELD_FORMAT_HINTS[field]).toBe('string');
-        expect(FIELD_FORMAT_HINTS[field].length).toBeGreaterThan(0);
-      }
-    });
-  });
   describe('isValidField', () => {
-    const validFields = [
-      'workType',
-      'goal',
-      'scope',
-      'functionalRequirements',
-      'technicalStack',
-      'constraints',
-      'existingCodebase',
-      'referenceMaterials',
-      'acceptanceCriteria',
-      'qualityStandards',
-      'dependencies',
-      'risks',
-      'deliverables',
-    ];
-
-    for (const field of validFields) {
-      it(`should recognize "${field}" as valid`, () => {
-        expect(isValidField(field)).toBe(true);
-      });
-    }
-
-    it('should reject unknown fields', () => {
-      expect(isValidField('invalidField')).toBe(false);
-      expect(isValidField('work')).toBe(false);
-      expect(isValidField('')).toBe(false);
+    it('should accept any non-empty field name in the generic KV model', () => {
+      expect(isValidField('workType')).toBe(true);
+      expect(isValidField('goal')).toBe(true);
+      expect(isValidField('customField')).toBe(true);
+      expect(isValidField('any_field_123')).toBe(true);
     });
   });
 
   describe('parseFieldValue', () => {
-    it('should validate workType enum values', () => {
-      expect(parseFieldValue('workType', 'software')).toBe('software');
-      expect(parseFieldValue('workType', 'infrastructure')).toBe('infrastructure');
-      expect(parseFieldValue('workType', 'data')).toBe('data');
-      expect(parseFieldValue('workType', 'documentation')).toBe('documentation');
-      expect(parseFieldValue('workType', 'audit')).toBe('audit');
-    });
-
-    it('should throw on invalid workType value', () => {
-      expect(() => parseFieldValue('workType', 'invalid')).toThrow(/Invalid workType/);
-    });
-
-    it('should pass through string values for goal', () => {
+    it('should pass through string values', () => {
       expect(parseFieldValue('goal', 'Build a chat app')).toBe('Build a chat app');
+      expect(parseFieldValue('customField', 'some text')).toBe('some text');
     });
 
-    it('should parse JSON arrays for functionalRequirements', () => {
+    it('should parse JSON arrays', () => {
       const result = parseFieldValue('functionalRequirements', '["feat1", "feat2"]');
       expect(result).toEqual(['feat1', 'feat2']);
     });
 
-    it('should parse JSON objects for scope', () => {
+    it('should parse JSON objects', () => {
       const result = parseFieldValue('scope', '{"included": ["a"], "excluded": ["b"]}');
       expect(result).toEqual({ included: ['a'], excluded: ['b'] });
     });
 
-    it('should throw on invalid JSON with format hint', () => {
-      expect(() => parseFieldValue('scope', '{invalid')).toThrow(
-        /Expected format: \{"included": string\[\], "excluded": string\[\]\}/
-      );
-    });
-
-    it('should throw on invalid structure for scope', () => {
-      expect(() => parseFieldValue('scope', '{"invalid": true}')).toThrow(
-        /Invalid structure for field "scope"/
-      );
-      expect(() => parseFieldValue('scope', '["item"]')).toThrow(
-        /Invalid structure for field "scope"/
-      );
-    });
-
-    it('should throw on invalid structure for array fields', () => {
-      expect(() => parseFieldValue('functionalRequirements', '{"not": "an array"}')).toThrow(
-        /Invalid structure for field "functionalRequirements"/
-      );
-      expect(() => parseFieldValue('acceptanceCriteria', '"plain string"')).toThrow(
-        /Invalid structure for field "acceptanceCriteria"/
-      );
-    });
-
-    it('should throw on invalid structure for technicalStack and constraints', () => {
-      expect(() => parseFieldValue('technicalStack', '["not", "object"]')).toThrow(
-        /Invalid structure for field "technicalStack"/
-      );
-      expect(() => parseFieldValue('technicalStack', '{"frontend": 123}')).toThrow(
-        /Invalid structure for field "technicalStack"/
-      );
-      expect(() => parseFieldValue('constraints', '"not an object"')).toThrow(
-        /Invalid structure for field "constraints"/
-      );
-      expect(() => parseFieldValue('constraints', '{"requirements": 123}')).toThrow(
-        /Invalid structure for field "constraints"/
-      );
-    });
-
-    it('should normalize string values in technicalStack and constraints to arrays', () => {
-      const ts = parseFieldValue('technicalStack', '{"frontend": "React", "backend": ["Node"]}');
-      expect(ts).toEqual({ frontend: ['React'], backend: ['Node'] });
-
-      const constraints = parseFieldValue(
-        'constraints',
-        '{"requirements": "Node 20+", "exclusions": ["Cloud"]}'
-      );
-      expect(constraints).toEqual({ requirements: ['Node 20+'], exclusions: ['Cloud'] });
-    });
-
-    it('should throw on invalid structure for deliverables', () => {
-      expect(() => parseFieldValue('deliverables', '{"type": "code"}')).toThrow(
-        /Invalid structure for field "deliverables"/
-      );
+    it('should pass through raw string if JSON parsing fails', () => {
+      expect(parseFieldValue('anyField', '{not valid json')).toBe('{not valid json');
     });
 
     it('should parse complex nested JSON', () => {
@@ -141,39 +48,50 @@ describe('validation', () => {
     });
   });
 
-  describe('getMissingRequiredFields', () => {
-    const createMockBrief = (overrides: Partial<Brief>): Brief => ({
+  describe('getRequiredFieldStatuses', () => {
+    const brief: Brief = {
       id: 'test-id',
-      workType: null,
-      goal: null,
-      scope: null,
-      functionalRequirements: null,
-      technicalStack: null,
-      constraints: null,
-      existingCodebase: null,
-      referenceMaterials: null,
-      acceptanceCriteria: null,
-      qualityStandards: null,
-      dependencies: null,
-      risks: null,
-      deliverables: null,
       status: 'draft',
+      fields: {
+        fieldA: 'valueA',
+        fieldB: '',
+        fieldC: null,
+      },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      ...overrides,
+    };
+
+    it('should report set and missing statuses based on required fields list', () => {
+      const statuses = getRequiredFieldStatuses(brief, ['fieldA', 'fieldB', 'fieldC', 'fieldD']);
+      expect(statuses).toEqual({
+        fieldA: 'set',
+        fieldB: 'missing',
+        fieldC: 'missing',
+        fieldD: 'missing',
+      });
+    });
+
+    it('should return empty object when no required fields are specified', () => {
+      const statuses = getRequiredFieldStatuses(brief, []);
+      expect(statuses).toEqual({});
+    });
+  });
+
+  describe('getMissingRequiredFields', () => {
+    const createMockBrief = (fields: Record<string, unknown>): Brief => ({
+      id: 'test-id',
+      status: 'draft',
+      fields,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
 
     it('should return all required fields when none are set', () => {
       const brief = createMockBrief({});
-      const missing = getMissingRequiredFields(brief);
+      const required = ['workType', 'goal', 'scope'];
+      const missing = getMissingRequiredFields(brief, required);
 
-      expect(missing).toEqual([
-        'workType',
-        'goal',
-        'scope',
-        'functionalRequirements',
-        'acceptanceCriteria',
-      ]);
+      expect(missing).toEqual(['workType', 'goal', 'scope']);
     });
 
     it('should not include set fields', () => {
@@ -181,7 +99,8 @@ describe('validation', () => {
         workType: 'software',
         goal: 'Test',
       });
-      const missing = getMissingRequiredFields(brief);
+      const required = ['workType', 'goal', 'scope'];
+      const missing = getMissingRequiredFields(brief, required);
 
       expect(missing).not.toContain('workType');
       expect(missing).not.toContain('goal');
@@ -192,60 +111,54 @@ describe('validation', () => {
       const brief = createMockBrief({
         workType: 'software',
         goal: 'Test',
-        scope: { included: ['feature A'], excluded: ['feature B'] },
-        functionalRequirements: ['req 1'],
-        acceptanceCriteria: ['criteria 1'],
+        scope: { included: ['feature A'] },
       });
-      const missing = getMissingRequiredFields(brief);
+      const required = ['workType', 'goal', 'scope'];
+      const missing = getMissingRequiredFields(brief, required);
 
       expect(missing).toEqual([]);
+    });
+
+    it('should return empty array when no required fields are configured', () => {
+      const brief = createMockBrief({});
+      expect(getMissingRequiredFields(brief, [])).toEqual([]);
+      expect(getMissingRequiredFields(brief)).toEqual([]);
     });
   });
 
   describe('isBriefComplete', () => {
-    const createMockBrief = (overrides: Partial<Brief>): Brief => ({
+    const createMockBrief = (fields: Record<string, unknown>): Brief => ({
       id: 'test-id',
-      workType: null,
-      goal: null,
-      scope: null,
-      functionalRequirements: null,
-      technicalStack: null,
-      constraints: null,
-      existingCodebase: null,
-      referenceMaterials: null,
-      acceptanceCriteria: null,
-      qualityStandards: null,
-      dependencies: null,
-      risks: null,
-      deliverables: null,
       status: 'draft',
+      fields,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      ...overrides,
     });
 
-    it('should be false when no required fields are set', () => {
+    it('should be true when no required fields are specified (default)', () => {
       const brief = createMockBrief({});
-      expect(isBriefComplete(brief)).toBe(false);
+      expect(isBriefComplete(brief)).toBe(true);
+      expect(isBriefComplete(brief, [])).toBe(true);
     });
 
-    it('should be true when all required fields are set', () => {
+    it('should be false when required fields are missing', () => {
+      const brief = createMockBrief({});
+      expect(isBriefComplete(brief, ['goal', 'scope'])).toBe(false);
+    });
+
+    it('should be true when all specified required fields are set', () => {
       const brief = createMockBrief({
-        workType: 'software',
-        goal: 'Test',
-        scope: { included: ['feature A'], excluded: ['feature B'] },
-        functionalRequirements: ['req 1'],
-        acceptanceCriteria: ['criteria 1'],
+        goal: 'Test goal',
+        scope: ['a', 'b'],
       });
-      expect(isBriefComplete(brief)).toBe(true);
+      expect(isBriefComplete(brief, ['goal', 'scope'])).toBe(true);
     });
 
     it('should be false when only some required fields are set', () => {
       const brief = createMockBrief({
-        workType: 'software',
         goal: 'Test',
       });
-      expect(isBriefComplete(brief)).toBe(false);
+      expect(isBriefComplete(brief, ['goal', 'scope'])).toBe(false);
     });
   });
 });

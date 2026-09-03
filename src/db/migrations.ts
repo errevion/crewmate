@@ -7,22 +7,18 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS briefs (
       id TEXT PRIMARY KEY,
-      work_type TEXT CHECK(work_type IS NULL OR work_type IN ('software', 'infrastructure', 'data', 'documentation', 'audit')),
-      goal TEXT,
-      scope TEXT,
-      functional_requirements TEXT,
-      technical_stack TEXT,
-      constraints TEXT,
-      existing_codebase TEXT,
-      reference_materials TEXT,
-      acceptance_criteria TEXT,
-      quality_standards TEXT,
-      dependencies TEXT,
-      risks TEXT,
-      deliverables TEXT,
       status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'complete')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS brief_fields (
+      brief_id TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      field_name TEXT NOT NULL,
+      field_value TEXT,
+      PRIMARY KEY (brief_id, field_name)
     );
   `);
 
@@ -118,6 +114,39 @@ export function runMigrations(db: Database.Database): void {
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_session_liveness_last_heartbeat ON session_liveness (last_heartbeat_at)`
   );
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS workflow_runs (
+      id            TEXT PRIMARY KEY,
+      brief_id      TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      workflow_def  TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'paused', 'cancelled')),
+      current_stage TEXT,
+      context       TEXT NOT NULL DEFAULT '{}',
+      started_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at  TEXT
+    );
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_workflow_runs_brief_id ON workflow_runs (brief_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs (status)`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stage_runs (
+      id              TEXT PRIMARY KEY,
+      workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+      stage_id        TEXT NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'skipped', 'paused')),
+      context         TEXT NOT NULL DEFAULT '{}',
+      started_at      TEXT,
+      completed_at    TEXT
+    );
+  `);
+
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_stage_runs_workflow_run_id ON stage_runs (workflow_run_id)`
+  );
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_stage_runs_stage_id ON stage_runs (stage_id)`);
 
   try {
     db.exec(`ALTER TABLE file_locks ADD COLUMN expires_at TEXT`);

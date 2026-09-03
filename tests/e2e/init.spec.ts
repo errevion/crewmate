@@ -42,20 +42,12 @@ describe('crewmate init', () => {
       expect(result.stdout).toContain('"ok":true');
     });
 
-    it('should create .opencode/commands/brief.md', async () => {
+    it('should create .opencode/commands/workflow.md', async () => {
       const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
       await expectSuccess(result);
 
       const output = parseJsonOutput(result.stdout);
-      expect(output.filesWritten).toContain('.opencode/commands/brief.md');
-    });
-
-    it('should create .opencode/commands/execute.md', async () => {
-      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
-      await expectSuccess(result);
-
-      const output = parseJsonOutput(result.stdout);
-      expect(output.filesWritten).toContain('.opencode/commands/execute.md');
+      expect(output.filesWritten).toContain('.opencode/commands/workflow.md');
     });
 
     it('should create/update .opencode/package.json', async () => {
@@ -188,27 +180,48 @@ describe('crewmate init', () => {
       expect(executorContent).toContain('crewmate_add_artifact: allow');
     });
 
-    it('should route brief.md to the frontman agent', async () => {
+    it('should create workflow.md command', async () => {
       const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
       await expectSuccess(result);
 
       const { readFileSync } = await import('node:fs');
-      const briefContent = readFileSync(join(tmpDir, '.opencode', 'commands', 'brief.md'), 'utf-8');
-      expect(briefContent).toContain('agent: frontman');
-    });
-
-    it('should route execute.md to the frontman agent and include execution instructions', async () => {
-      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
-      await expectSuccess(result);
-
-      const { readFileSync } = await import('node:fs');
-      const executeContent = readFileSync(
-        join(tmpDir, '.opencode', 'commands', 'execute.md'),
+      const workflowContent = readFileSync(
+        join(tmpDir, '.opencode', 'commands', 'workflow.md'),
         'utf-8'
       );
-      expect(executeContent).toContain('agent: frontman');
-      expect(executeContent).toContain('crewmate_list_tasks');
-      expect(executeContent).toContain('Executor');
+      expect(workflowContent).toContain('crewmate_workflow_status');
+      expect(workflowContent).toContain('crewmate_workflow_advance');
+    });
+
+    it('should create .crewmate/workflows/default.json and modular stages and nodes', async () => {
+      const result = await runCli(['init', '--harness', 'opencode'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout);
+      expect(output.filesWritten).toContain('.crewmate/workflows/default.json');
+      expect(output.filesWritten).toContain('.crewmate/workflows/stages/discussion.json');
+      expect(output.filesWritten).toContain('.crewmate/workflows/nodes/frontman-interview.json');
+
+      const { readFileSync, existsSync } = await import('node:fs');
+      const defaultWorkflowPath = join(tmpDir, '.crewmate', 'workflows', 'default.json');
+      const stagePath = join(tmpDir, '.crewmate', 'workflows', 'stages', 'discussion.json');
+      const nodePath = join(tmpDir, '.crewmate', 'workflows', 'nodes', 'frontman-interview.json');
+
+      expect(existsSync(defaultWorkflowPath)).toBe(true);
+      expect(existsSync(stagePath)).toBe(true);
+      expect(existsSync(nodePath)).toBe(true);
+
+      const parsedNode = JSON.parse(readFileSync(nodePath, 'utf-8'));
+      expect(parsedNode.id).toBe('frontman-interview');
+      expect(parsedNode.config.allowedTools).toBeDefined();
+
+      const parsedStage = JSON.parse(readFileSync(stagePath, 'utf-8'));
+      expect(parsedStage.id).toBe('discussion');
+      expect(parsedStage.graph.nodes).toContain('../nodes/frontman-interview.json');
+
+      const parsedWf = JSON.parse(readFileSync(defaultWorkflowPath, 'utf-8'));
+      expect(parsedWf.id).toBe('software-development');
+      expect(parsedWf.stages).toContain('./stages/discussion.json');
     });
   });
 
