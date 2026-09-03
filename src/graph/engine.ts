@@ -427,8 +427,12 @@ export class GraphEngine {
             // Explicit AND-join: all predecessors must be completed
             isPrerequisiteMet = incomingEdges.every((inEdge) => {
               const srcState = nodeStates[inEdge.from];
-              if (!srcState) return false;
-              if (inEdge.from === res.nodeId) return true;
+              if (!srcState) {
+                return false;
+              }
+              if (inEdge.from === res.nodeId) {
+                return true;
+              }
               return srcState.status === 'completed';
             });
           } else if (joinPolicy === 'any') {
@@ -449,8 +453,12 @@ export class GraphEngine {
             if (allPredecessorsStarted) {
               isPrerequisiteMet = incomingEdges.every((inEdge) => {
                 const srcState = nodeStates[inEdge.from];
-                if (!srcState) return false;
-                if (inEdge.from === res.nodeId) return true;
+                if (!srcState) {
+                  return false;
+                }
+                if (inEdge.from === res.nodeId) {
+                  return true;
+                }
                 return srcState.status === 'completed';
               });
             } else {
