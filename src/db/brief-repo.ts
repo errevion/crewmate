@@ -1,43 +1,38 @@
 import { randomBytes } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { getDb } from './connection.js';
-import {
-  type Brief,
-  type BriefField,
-  COLUMN_TO_FIELD,
-  FIELD_TO_COLUMN,
-  JSON_FIELDS,
-} from '../models/brief.js';
+import type { Brief, BriefField } from '../models/brief.js';
 
 function generateId(): string {
   return randomBytes(4).toString('hex');
 }
 
-function rowToBrief(row: Record<string, unknown>): Brief {
-  const brief: Record<string, unknown> = {};
+function rowToBrief(row: Record<string, unknown>, fieldRows: Record<string, unknown>[]): Brief {
+  const brief: Brief = {
+    id: row.id as string,
+    status: row.status as 'draft' | 'complete',
+    fields: {},
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
 
-  for (const [col, val] of Object.entries(row)) {
-    const mapped = COLUMN_TO_FIELD[col];
-    const camelField = mapped
-      ? mapped
-      : col === 'created_at'
-        ? 'createdAt'
-        : col === 'updated_at'
-          ? 'updatedAt'
-          : col;
+  for (const fRow of fieldRows) {
+    const fieldName = fRow.field_name as string;
+    const fieldValue = fRow.field_value as string;
 
-    if (JSON_FIELDS.includes(camelField as BriefField) && typeof val === 'string') {
-      try {
-        brief[camelField] = JSON.parse(val);
-      } catch {
-        brief[camelField] = val;
-      }
-    } else {
-      brief[camelField] = val ?? null;
+    if (fieldValue === null) {
+      brief.fields[fieldName] = null;
+      continue;
+    }
+
+    try {
+      brief.fields[fieldName] = JSON.parse(fieldValue);
+    } catch {
+      brief.fields[fieldName] = fieldValue;
     }
   }
 
-  return brief as unknown as Brief;
+  return brief;
 }
 
 /**
@@ -52,7 +47,7 @@ export function createBrief(db: Database.Database = getDb()): Brief {
   db.prepare('INSERT INTO briefs (id) VALUES (?)').run(id);
 
   const row = db.prepare('SELECT * FROM briefs WHERE id = ?').get(id) as Record<string, unknown>;
-  return rowToBrief(row);
+  return rowToBrief(row, []);
 }
 
 /**
@@ -65,7 +60,30 @@ export function listBriefs(db: Database.Database = getDb()): Brief[] {
   const rows = db
     .prepare('SELECT * FROM briefs ORDER BY COALESCE(updated_at, created_at) DESC, rowid DESC')
     .all() as Record<string, unknown>[];
-  return rows.map(rowToBrief);
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const briefIds = rows.map((r) => r.id);
+  const placeholders = briefIds.map(() => '?').join(',');
+  const fieldRows = db
+    .prepare(`SELECT * FROM brief_fields WHERE brief_id IN (${placeholders})`)
+    .all(...briefIds) as Record<string, unknown>[];
+
+  const fieldsByBriefId = fieldRows.reduce<Record<string, Record<string, unknown>[]>>(
+    (acc, row) => {
+      const briefId = row.brief_id as string;
+      if (!acc[briefId]) {
+        acc[briefId] = [];
+      }
+      acc[briefId].push(row);
+      return acc;
+    },
+    {}
+  );
+
+  return rows.map((row) => rowToBrief(row, fieldsByBriefId[row.id as string] || []));
 }
 
 /**
@@ -80,7 +98,16 @@ export function getLatestBrief(db: Database.Database = getDb()): Brief | null {
       'SELECT * FROM briefs ORDER BY COALESCE(updated_at, created_at) DESC, rowid DESC LIMIT 1'
     )
     .get() as Record<string, unknown> | undefined;
-  return row ? rowToBrief(row) : null;
+
+  if (!row) {
+    return null;
+  }
+
+  const fieldRows = db
+    .prepare('SELECT * FROM brief_fields WHERE brief_id = ?')
+    .all(row.id) as Record<string, unknown>[];
+
+  return rowToBrief(row, fieldRows);
 }
 
 /**
@@ -93,7 +120,17 @@ export function getLatestBrief(db: Database.Database = getDb()): Brief | null {
 export function getBriefById(id: string, db: Database.Database = getDb()): Brief | null {
   const row = db.prepare('SELECT * FROM briefs WHERE id = ?').get(id) as
     Record<string, unknown> | undefined;
-  return row ? rowToBrief(row) : null;
+
+  if (!row) {
+    return null;
+  }
+
+  const fieldRows = db.prepare('SELECT * FROM brief_fields WHERE brief_id = ?').all(id) as Record<
+    string,
+    unknown
+  >[];
+
+  return rowToBrief(row, fieldRows);
 }
 
 /**
@@ -121,13 +158,17 @@ export function setField(
   value: unknown,
   db: Database.Database = getDb()
 ): void {
-  const column = FIELD_TO_COLUMN[field];
-  const storeValue = JSON_FIELDS.includes(field) ? JSON.stringify(value) : (value as string);
+  const storeValue = typeof value === 'string' ? value : JSON.stringify(value);
 
-  db.prepare(`UPDATE briefs SET ${column} = ?, updated_at = datetime('now') WHERE id = ?`).run(
-    storeValue,
-    briefId
-  );
+  db.prepare(
+    `
+    INSERT INTO brief_fields (brief_id, field_name, field_value)
+    VALUES (?, ?, ?)
+    ON CONFLICT(brief_id, field_name) DO UPDATE SET field_value = excluded.field_value
+  `
+  ).run(briefId, field, storeValue);
+
+  db.prepare(`UPDATE briefs SET updated_at = datetime('now') WHERE id = ?`).run(briefId);
 }
 
 /**
@@ -143,23 +184,26 @@ export function getField(
   field: BriefField,
   db: Database.Database = getDb()
 ): unknown {
-  const column = FIELD_TO_COLUMN[field];
-  const row = db.prepare(`SELECT ${column} FROM briefs WHERE id = ?`).get(briefId) as
-    Record<string, unknown> | undefined;
+  const row = db
+    .prepare(`SELECT field_value FROM brief_fields WHERE brief_id = ? AND field_name = ?`)
+    .get(briefId, field) as Record<string, unknown> | undefined;
 
   if (!row) {
     return undefined;
   }
 
-  const raw = row[column];
-  if (JSON_FIELDS.includes(field) && typeof raw === 'string') {
+  const raw = row.field_value;
+  if (raw === null) {
+    return null;
+  }
+  if (typeof raw === 'string') {
     try {
       return JSON.parse(raw);
     } catch {
       return raw;
     }
   }
-  return raw ?? null;
+  return raw;
 }
 
 /**
@@ -172,4 +216,52 @@ export function markComplete(briefId: string, db: Database.Database = getDb()): 
   db.prepare(
     "UPDATE briefs SET status = 'complete', updated_at = datetime('now') WHERE id = ?"
   ).run(briefId);
+}
+
+/**
+ * Reopens a completed brief back to draft status
+ *
+ * @param briefId - The unique identifier of the brief to reopen
+ * @param db Database connection (defaults to the shared connection)
+ */
+export function reopenBrief(briefId: string, db: Database.Database = getDb()): void {
+  db.prepare("UPDATE briefs SET status = 'draft', updated_at = datetime('now') WHERE id = ?").run(
+    briefId
+  );
+}
+
+/**
+ * Deletes a brief and cascades all child entities via SQLite foreign key rules
+ *
+ * @param briefId - The unique identifier of the brief to delete
+ * @param db Database connection (defaults to the shared connection)
+ * @returns true if a row was deleted, false otherwise
+ */
+export function deleteBrief(briefId: string, db: Database.Database = getDb()): boolean {
+  const info = db.prepare('DELETE FROM briefs WHERE id = ?').run(briefId);
+  return info.changes > 0;
+}
+
+/**
+ * Deletes a specific field from a brief
+ *
+ * @param briefId - The unique identifier of the brief
+ * @param fieldName - The name of the field to remove
+ * @param db Database connection (defaults to the shared connection)
+ * @returns true if a field was deleted, false otherwise
+ */
+export function deleteField(
+  briefId: string,
+  fieldName: string,
+  db: Database.Database = getDb()
+): boolean {
+  const info = db
+    .prepare('DELETE FROM brief_fields WHERE brief_id = ? AND field_name = ?')
+    .run(briefId, fieldName);
+
+  if (info.changes > 0) {
+    db.prepare("UPDATE briefs SET updated_at = datetime('now') WHERE id = ?").run(briefId);
+    return true;
+  }
+  return false;
 }

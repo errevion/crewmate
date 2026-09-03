@@ -13,6 +13,7 @@ import {
   listArtifacts,
   getArtifactById,
   invalidateArtifact,
+  supersedeArtifact,
 } from '../db/artifact-repo.js';
 
 interface AddArtifactResult {
@@ -63,6 +64,12 @@ interface InvalidateArtifactResult {
   status: 'invalidated';
 }
 
+interface SupersedeArtifactResult {
+  ok: true;
+  supersededId: string;
+  byId: string;
+}
+
 interface ErrorOutput {
   ok: false;
   error: string;
@@ -74,6 +81,7 @@ function out(
     | GetArtifactResult
     | ListArtifactsResult
     | InvalidateArtifactResult
+    | SupersedeArtifactResult
     | ErrorOutput
 ): void {
   process.stdout.write(JSON.stringify(result) + '\n');
@@ -99,6 +107,7 @@ export function registerArtifactCommand(program: Command): void {
     .argument('[task-id]', 'The task ID creating the artifact (optional for brief-level facts)')
     .option('--type <type>', `Artifact type (${ARTIFACT_TYPES.join(' | ')})`, '')
     .option('--content <content>', 'Artifact content / note / contract description', '')
+    .option('--base64', 'Interpret content as base64-encoded string')
     .option('--brief <briefId>', 'Optional brief ID (defaults to task brief or latest)')
     .option('--tags <tags...>', 'Optional tags for categorization', [])
     .action((taskId, opts) => {
@@ -110,7 +119,16 @@ export function registerArtifactCommand(program: Command): void {
         fail(`Invalid artifact type: ${opts.type}. Must be one of: ${ARTIFACT_TYPES.join(', ')}`);
       }
 
-      if (!opts.content || !opts.content.trim()) {
+      let content = opts.content || '';
+      if (opts.base64 && content) {
+        try {
+          content = Buffer.from(content, 'base64').toString('utf-8');
+        } catch {
+          fail('Failed to decode base64 content');
+        }
+      }
+
+      if (!content || !content.trim()) {
         fail('--content is required');
       }
 
@@ -274,6 +292,31 @@ export function registerArtifactCommand(program: Command): void {
         ok: true,
         id: artifactId,
         status: 'invalidated',
+      });
+    });
+
+  // artifact supersede <old-id> <new-id>
+  artifactGroup
+    .command('supersede')
+    .description('Mark an old artifact as superseded by a newer one')
+    .argument('<old-id>', 'The old artifact ID')
+    .argument('<new-id>', 'The new artifact ID replacing it')
+    .action((oldId, newId) => {
+      const db = getDb();
+      const oldArt = getArtifactById(db, oldId);
+      if (!oldArt) {
+        fail(`Old artifact not found: ${oldId}`);
+      }
+      const newArt = getArtifactById(db, newId);
+      if (!newArt) {
+        fail(`New artifact not found: ${newId}`);
+      }
+
+      supersedeArtifact(db, oldId, newId);
+      out({
+        ok: true,
+        supersededId: oldId,
+        byId: newId,
       });
     });
 }

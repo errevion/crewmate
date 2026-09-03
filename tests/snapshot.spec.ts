@@ -49,6 +49,11 @@ describe('Workflow Snapshot Frontman State Derivation', () => {
     expect(snapshot?.frontmanState).toBe('asking');
   });
 
+  it('includes active workflow run in snapshot when present', () => {
+    let snapshot = buildSnapshot({ briefId }, db);
+    expect(snapshot?.workflowRun).toBeNull();
+  });
+
   it('derives thinking state when activityType is analyzing, planning, orchestrating, or reviewing', () => {
     setActivity(db, briefId, 'analyzing');
     let snapshot = buildSnapshot({ briefId }, db);
@@ -276,19 +281,10 @@ describe('formatBriefListItem', () => {
     const brief: Brief = {
       id: 'brief123',
       status: 'complete',
-      workType: 'software',
-      goal: 'Build an ultra comprehensive real-time dashboard for AI agent execution workflows with interactive modals',
-      scope: null,
-      functionalRequirements: null,
-      acceptanceCriteria: null,
-      technicalStack: null,
-      constraints: null,
-      deliverables: null,
-      dependencies: null,
-      risks: null,
-      existingCodebase: null,
-      referenceMaterials: null,
-      qualityStandards: null,
+      fields: {
+        workType: 'software',
+        goal: 'Build an ultra comprehensive real-time dashboard for AI agent execution workflows with interactive modals',
+      },
       createdAt: '2026-08-30T10:00:00Z',
       updatedAt: '2026-08-30T15:30:45Z',
     };
@@ -305,19 +301,7 @@ describe('formatBriefListItem', () => {
     const brief: Brief = {
       id: 'draft456',
       status: 'draft',
-      workType: null,
-      goal: null,
-      scope: null,
-      functionalRequirements: null,
-      acceptanceCriteria: null,
-      technicalStack: null,
-      constraints: null,
-      deliverables: null,
-      dependencies: null,
-      risks: null,
-      existingCodebase: null,
-      referenceMaterials: null,
-      qualityStandards: null,
+      fields: {},
       createdAt: '2026-08-30T09:15:00Z',
       updatedAt: '2026-08-30T09:15:00Z',
     };
@@ -333,19 +317,9 @@ describe('formatBriefListItem', () => {
     const brief: Brief = {
       id: 'ws789',
       status: 'draft',
-      workType: null,
-      goal: '   multi \n\n line   and \t spaced   goal   ',
-      scope: null,
-      functionalRequirements: null,
-      acceptanceCriteria: null,
-      technicalStack: null,
-      constraints: null,
-      deliverables: null,
-      dependencies: null,
-      risks: null,
-      existingCodebase: null,
-      referenceMaterials: null,
-      qualityStandards: null,
+      fields: {
+        goal: '   multi \n\n line   and \t spaced   goal   ',
+      },
       createdAt: '2026-08-30T08:00:00Z',
       updatedAt: '',
     };
@@ -366,30 +340,32 @@ describe('formatBriefDetails', () => {
     const brief: Brief = {
       id: 'abc12345',
       status: 'complete',
-      workType: 'software',
-      goal: 'Build authentication system',
-      scope: { included: ['OAuth2', 'JWT'], excluded: ['SAML'] },
-      functionalRequirements: ['Login with Google', 'Refresh token rotation'],
-      acceptanceCriteria: ['Passes unit tests', 'Latency < 200ms'],
-      technicalStack: {
-        frontend: ['React'],
-        backend: ['Node.js', 'Express'],
-        database: ['SQLite'],
-        tools: ['Vitest'],
-      },
-      constraints: {
-        requirements: ['Node 20+'],
-        exclusions: ['No external cloud services'],
-      },
-      deliverables: [{ type: 'code', format: 'repo' }],
-      dependencies: ['node-fetch'],
-      risks: ['Token expiration edge cases'],
-      existingCodebase: ['src/index.ts'],
-      referenceMaterials: ['RFC 6749'],
-      qualityStandards: {
-        performance: { maxResponseTimeMs: 200 },
-        security: { rateLimit: true },
-        accessibility: {},
+      fields: {
+        workType: 'software',
+        goal: 'Build authentication system',
+        scope: { included: ['OAuth2', 'JWT'], excluded: ['SAML'] },
+        functionalRequirements: ['Login with Google', 'Refresh token rotation'],
+        acceptanceCriteria: ['Passes unit tests', 'Latency < 200ms'],
+        technicalStack: {
+          frontend: ['React'],
+          backend: ['Node.js', 'Express'],
+          database: ['SQLite'],
+          tools: ['Vitest'],
+        },
+        constraints: {
+          requirements: ['Node 20+'],
+          exclusions: ['No external cloud services'],
+        },
+        deliverables: [{ type: 'code', format: 'repo' }],
+        dependencies: ['node-fetch'],
+        risks: ['Token expiration edge cases'],
+        existingCodebase: ['src/index.ts'],
+        referenceMaterials: ['RFC 6749'],
+        qualityStandards: {
+          performance: { maxResponseTimeMs: 200 },
+          security: { rateLimit: true },
+          accessibility: {},
+        },
       },
       createdAt: '2026-08-21T00:00:00Z',
       updatedAt: '2026-08-21T01:00:00Z',
@@ -398,8 +374,11 @@ describe('formatBriefDetails', () => {
     const formatted = formatBriefDetails(brief);
     expect(formatted).toContain('abc12345');
     expect(formatted).toContain('complete');
+    expect(formatted).toContain('workType');
     expect(formatted).toContain('software');
+    expect(formatted).toContain('goal');
     expect(formatted).toContain('Build authentication system');
+    expect(formatted).toContain('scope');
     expect(formatted).toContain('OAuth2');
     expect(formatted).toContain('SAML');
     expect(formatted).toContain('Login with Google');
@@ -407,7 +386,8 @@ describe('formatBriefDetails', () => {
     expect(formatted).toContain('React');
     expect(formatted).toContain('Node 20+');
     expect(formatted).toContain('No external cloud services');
-    expect(formatted).toContain('[code] (repo)');
+    expect(formatted).toContain('code');
+    expect(formatted).toContain('repo');
     expect(formatted).toContain('node-fetch');
     expect(formatted).toContain('Token expiration edge cases');
     expect(formatted).toContain('src/index.ts');
@@ -419,19 +399,7 @@ describe('formatBriefDetails', () => {
     const brief: Brief = {
       id: 'draft123',
       status: 'draft',
-      workType: null,
-      goal: null,
-      scope: null,
-      functionalRequirements: null,
-      acceptanceCriteria: null,
-      technicalStack: null,
-      constraints: null,
-      deliverables: null,
-      dependencies: null,
-      risks: null,
-      existingCodebase: null,
-      referenceMaterials: null,
-      qualityStandards: null,
+      fields: {},
       createdAt: '2026-08-21T00:00:00Z',
       updatedAt: '2026-08-21T00:00:00Z',
     };
@@ -439,35 +407,35 @@ describe('formatBriefDetails', () => {
     const formatted = formatBriefDetails(brief);
     expect(formatted).toContain('draft123');
     expect(formatted).toContain('draft');
-    expect(formatted).toContain('(not set)');
-    expect(formatted).toContain('(none)');
+    expect(formatted).toContain('(no fields set)');
   });
 
   it('handles non-array / string fields in technicalStack, scope, and constraints without throwing', () => {
-    const brief: any = {
+    const brief: Brief = {
       id: 'loose123',
       status: 'draft',
-      workType: 'software',
-      goal: 'Test resilient formatting',
-      scope: { included: 'Single scope item', excluded: 'Single exclusion' },
-      functionalRequirements: 'Single requirement',
-      acceptanceCriteria: 'Single criterion',
-      technicalStack: {
-        frontend: 'React with Tailwind',
-        backend: 'Express.js',
-        database: 'SQLite',
-        tools: 'Vitest',
+      fields: {
+        workType: 'software',
+        goal: 'Test resilient formatting',
+        scope: { included: 'Single scope item', excluded: 'Single exclusion' },
+        functionalRequirements: 'Single requirement',
+        acceptanceCriteria: 'Single criterion',
+        technicalStack: {
+          frontend: 'React with Tailwind',
+          backend: 'Express.js',
+          database: 'SQLite',
+          tools: 'Vitest',
+        },
+        constraints: {
+          requirements: 'Node 20+',
+          exclusions: 'No external APIs',
+        },
+        deliverables: { type: 'code', format: 'file' },
+        dependencies: 'single-dep',
+        risks: 'single-risk',
+        existingCodebase: 'src/main.ts',
+        referenceMaterials: 'README.md',
       },
-      constraints: {
-        requirements: 'Node 20+',
-        exclusions: 'No external APIs',
-      },
-      deliverables: { type: 'code', format: 'file' },
-      dependencies: 'single-dep',
-      risks: 'single-risk',
-      existingCodebase: 'src/main.ts',
-      referenceMaterials: 'README.md',
-      qualityStandards: null,
       createdAt: '2026-08-21T00:00:00Z',
       updatedAt: '2026-08-21T00:00:00Z',
     };

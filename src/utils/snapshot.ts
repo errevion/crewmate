@@ -11,6 +11,8 @@ import { listArtifacts } from '../db/artifact-repo.js';
 import { listEvents, countEvents } from '../db/event-repo.js';
 import { getCurrentActivity } from '../db/activity-repo.js';
 import { getLatestSession, isProcessAlive } from '../db/session-repo.js';
+import { getActiveWorkflowRunByBrief } from '../db/workflow-repo.js';
+import type { WorkflowRunView } from '../models/workflow-run.js';
 import { EVENT_ACTORS, type EventActor } from '../models/event.js';
 import type { ExecutionEvent } from '../models/event.js';
 import type { FrontmanActivity } from '../models/activity.js';
@@ -82,6 +84,7 @@ export interface WorkflowSnapshot {
   isSessionActive?: boolean;
   sessionStatus?: 'active' | 'idle' | 'stopped' | 'offline';
   harness?: string;
+  workflowRun?: WorkflowRunView | null;
 }
 
 /**
@@ -131,6 +134,7 @@ export function buildEmptySnapshot(): WorkflowSnapshot {
     dispatchEdges: [],
     frontmanState: 'idle',
     currentActivity: null,
+    workflowRun: null,
   };
 }
 
@@ -155,6 +159,7 @@ export function buildSnapshot(
   const artifacts = listArtifacts(db, { briefId: brief.id });
   const events = listEvents(db, { briefId: brief.id, limit: options.eventLimit ?? 200 });
   const eventCount = countEvents(db, brief.id);
+  const workflowRun = getActiveWorkflowRunByBrief(db, brief.id);
 
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   const completedIds = new Set(tasks.filter((t) => t.status === 'completed').map((t) => t.id));
@@ -336,7 +341,7 @@ export function buildSnapshot(
   return {
     briefId: brief.id,
     briefStatus: brief.status,
-    goal: brief.goal,
+    goal: brief.fields.goal ? String(brief.fields.goal) : null,
     tasks: taskViews,
     locks,
     artifacts: recentArtifacts,
@@ -353,6 +358,7 @@ export function buildSnapshot(
     isSessionActive,
     sessionStatus,
     harness: session?.harness,
+    workflowRun,
   };
 }
 

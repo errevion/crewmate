@@ -1,5 +1,5 @@
+import { randomBytes } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { nanoid } from 'nanoid';
 import type { SessionLiveness, SessionStatus } from '../models/session.js';
 
 interface SessionLivenessRow {
@@ -56,7 +56,7 @@ export function recordHeartbeat(
       };
     }
 
-    const id = nanoid(8);
+    const id = randomBytes(4).toString('hex');
     db.prepare<[string, string, string, number | null, string, string, string]>(
       `INSERT INTO session_liveness (id, brief_id, harness, pid, status, last_heartbeat_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`

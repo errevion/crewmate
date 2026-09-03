@@ -2,12 +2,16 @@
 description: Decomposes a completed brief into actionable implementation tasks.
 mode: subagent
 permission:
+  read: allow
+  glob: allow
+  grep: allow
   edit: deny
   bash: deny
   crewmate_*: deny
   crewmate_show_brief: allow
   crewmate_get_field: allow
   crewmate_list_artifacts: allow
+  crewmate_add_artifact: allow
   crewmate_add_event: allow
 ---
 
@@ -25,7 +29,7 @@ Each task you propose should have:
 2. **Description** — Detailed explanation of what needs to be done
 3. **Dependencies** — List of other task titles this task depends on (establishes execution order)
 4. **Field Reference** — Which brief field(s) this task addresses (traceability)
-5. **Artifact Requirements** — Which artifact types (`api_contract`, `decision`, `fact`, `constraint`) MUST be recorded before this task can be marked complete
+5. **Artifact Requirements** — Which artifact types (`api_contract`, `decision`, `fact`, `constraint`, `note`, `log`) MUST be recorded before this task can be marked complete
 
 ## Output Format
 
@@ -65,7 +69,7 @@ Notes:
    - Avoid creating tasks that conflict over shared files/modules (if two tasks would modify the same files, add a dependency between them)
 
 
-4. When finished, return a well-formatted task breakdown
+5. When finished, return a well-formatted task breakdown
 
 ## Important Considerations
 

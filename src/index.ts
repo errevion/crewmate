@@ -9,6 +9,7 @@ import { registerEventCommand } from './commands/event.js';
 import { registerActivityCommand } from './commands/activity.js';
 import { registerWatchCommand } from './commands/watch.js';
 import { registerSessionCommand } from './commands/session.js';
+import { registerWorkflowCommands } from './commands/workflow.js';
 
 const program = new Command();
 
@@ -24,5 +25,6 @@ registerEventCommand(program);
 registerActivityCommand(program);
 registerWatchCommand(program);
 registerSessionCommand(program);
+registerWorkflowCommands(program);
 
 program.parse();

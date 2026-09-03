@@ -74,22 +74,14 @@ describe('crewmate brief', () => {
       expect(output.field).toBe('workType');
     });
 
-    it('should validate workType enum values', async () => {
-      const validTypes = ['software', 'infrastructure', 'data', 'documentation', 'audit'];
+    it('should allow setting arbitrary field names in generic KV model', async () => {
+      const result = await runCli(['brief', 'set', 'customKey', 'customValue'], { cwd: tmpDir });
+      await expectSuccess(result);
 
-      for (const type of validTypes) {
-        const result = await runCli(['brief', 'set', 'workType', type], { cwd: tmpDir });
-        await expectSuccess(result, `Setting workType to ${type}`);
-      }
-    });
-
-    it('should reject invalid workType value', async () => {
-      const result = await runCli(['brief', 'set', 'workType', 'invalid-type'], { cwd: tmpDir });
-      await expectFailure(
-        result,
-        /Invalid workType|must be one of/i,
-        'Invalid workType should fail'
-      );
+      const output = parseJsonOutput(result.stdout);
+      expect(output.ok).toBe(true);
+      expect(output.field).toBe('customKey');
+      expect(output.value).toBe('customValue');
     });
 
     it('should set goal field', async () => {
@@ -215,10 +207,13 @@ describe('crewmate brief', () => {
       expect(output.value).toEqual(failureReportScope);
     });
 
-    it('should reject invalid JSON content inside base64 string', async () => {
-      const b64 = Buffer.from('{not valid json}').toString('base64');
-      const result = await runCli(['brief', 'set', 'scope', b64, '--base64'], { cwd: tmpDir });
-      await expectFailure(result, /Invalid JSON/i);
+    it('should pass through plain string in base64 payload when not valid JSON', async () => {
+      const b64 = Buffer.from('plain string content').toString('base64');
+      const result = await runCli(['brief', 'set', 'notes', b64, '--base64'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const output = parseJsonOutput(result.stdout);
+      expect(output.value).toBe('plain string content');
     });
   });
 
@@ -290,8 +285,8 @@ describe('crewmate brief', () => {
       const output = parseJsonOutput(result.stdout);
       expect(output.ok).toBe(true);
       expect(output.brief).toBeDefined();
-      expect(output.brief.workType).toBe('software');
-      expect(output.brief.goal).toBe('Test goal');
+      expect(output.brief.fields.workType).toBe('software');
+      expect(output.brief.fields.goal).toBe('Test goal');
     });
 
     it('should work with --id flag', async () => {
@@ -301,7 +296,7 @@ describe('crewmate brief', () => {
       await expectSuccess(result);
 
       const output = parseJsonOutput(result.stdout);
-      expect(output.brief.workType).toBe('audit');
+      expect(output.brief.fields.workType).toBe('audit');
     });
   });
 
@@ -315,22 +310,17 @@ describe('crewmate brief', () => {
       briefId = output.id;
     });
 
-    it('should show all required fields as missing initially', async () => {
-      const result = await runCli(['brief', 'status'], { cwd: tmpDir });
+    it('should show configured required fields as missing initially', async () => {
+      const result = await runCli(['brief', 'status', '--required-fields', 'workType,goal,scope'], {
+        cwd: tmpDir,
+      });
       await expectSuccess(result);
 
       const output = parseJsonOutput(result.stdout);
       expect(output.complete).toBe(false);
       expect(output.status).toBe('draft');
 
-      const expectedMissing = [
-        'workType',
-        'goal',
-        'scope',
-        'functionalRequirements',
-        'acceptanceCriteria',
-      ];
-
+      const expectedMissing = ['workType', 'goal', 'scope'];
       for (const field of expectedMissing) {
         expect(output.required[field]).toBe('missing');
       }
@@ -340,12 +330,15 @@ describe('crewmate brief', () => {
       await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'goal', 'Test goal'], { cwd: tmpDir });
 
-      const result = await runCli(['brief', 'status'], { cwd: tmpDir });
+      const result = await runCli(['brief', 'status', '--required-fields', 'workType,goal,scope'], {
+        cwd: tmpDir,
+      });
       await expectSuccess(result);
 
       const output = parseJsonOutput(result.stdout);
       expect(output.required.workType).toBe('set');
       expect(output.required.goal).toBe('set');
+      expect(output.required.scope).toBe('missing');
       expect(output.complete).toBe(false);
     });
   });
@@ -355,17 +348,13 @@ describe('crewmate brief', () => {
       const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
       await expectSuccess(initResult);
 
-      // Set all required fields
+      // Set required fields
       await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'goal', 'Build something'], { cwd: tmpDir });
-      await runCli(
-        ['brief', 'set', 'scope', '{"included":["feature A"],"excluded":["feature B"]}'],
-        { cwd: tmpDir }
-      );
-      await runCli(['brief', 'set', 'functionalRequirements', '["feat1"]'], { cwd: tmpDir });
-      await runCli(['brief', 'set', 'acceptanceCriteria', '["criterion1"]'], { cwd: tmpDir });
 
-      const result = await runCli(['brief', 'complete'], { cwd: tmpDir });
+      const result = await runCli(['brief', 'complete', '--required-fields', 'workType,goal'], {
+        cwd: tmpDir,
+      });
       await expectSuccess(result);
 
       const output = parseJsonOutput(result.stdout);
@@ -377,7 +366,9 @@ describe('crewmate brief', () => {
       await runCli(['brief', 'init'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
 
-      const result = await runCli(['brief', 'complete'], { cwd: tmpDir });
+      const result = await runCli(['brief', 'complete', '--required-fields', 'workType,goal'], {
+        cwd: tmpDir,
+      });
       await expectFailure(
         result,
         /Missing required fields/i,
@@ -387,22 +378,14 @@ describe('crewmate brief', () => {
       const output = parseJsonOutput(result.stderr + result.stdout);
       expect(output.missing).toBeDefined();
       expect(Array.isArray(output.missing)).toBe(true);
+      expect(output.missing).toContain('goal');
     });
 
     it('should mark brief as complete', async () => {
-      // Set all required fields first
       const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
       await expectSuccess(initResult);
 
-      await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'goal', 'Test'], { cwd: tmpDir });
-      await runCli(
-        ['brief', 'set', 'scope', '{"included":["feature A"],"excluded":["feature B"]}'],
-        { cwd: tmpDir }
-      );
-      await runCli(['brief', 'set', 'functionalRequirements', '["req1"]'], { cwd: tmpDir });
-      await runCli(['brief', 'set', 'acceptanceCriteria', '["crit1"]'], { cwd: tmpDir });
-
       await runCli(['brief', 'complete'], { cwd: tmpDir });
 
       // Verify status shows complete
@@ -412,30 +395,6 @@ describe('crewmate brief', () => {
       const output = parseJsonOutput(statusResult.stdout);
       expect(output.complete).toBe(true);
       expect(output.status).toBe('complete');
-    });
-  });
-
-  describe('field name validation', () => {
-    it('should reject unknown field names', async () => {
-      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
-      await expectSuccess(initResult);
-
-      const result = await runCli(['brief', 'set', 'unknownField', 'value'], { cwd: tmpDir });
-      await expectFailure(result, /Unknown field|validFields/i, 'Unknown field should fail');
-    });
-
-    it('should list valid fields in error message', async () => {
-      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
-      await expectSuccess(initResult);
-
-      const result = await runCli(['brief', 'set', 'invalid', 'value'], { cwd: tmpDir });
-      await expectFailure(result, /validFields/i);
-
-      // Error messages are in stdout as JSON
-      const output = result.stdout + result.stderr;
-      expect(output).toContain('workType');
-      expect(output).toContain('goal');
-      expect(output).toContain('scope');
     });
   });
 
@@ -454,6 +413,13 @@ describe('crewmate brief', () => {
         { cwd: tmpDir }
       );
       await expectSuccess(result);
+
+      const getResult = await runCli(['brief', 'get', 'qualityStandards'], { cwd: tmpDir });
+      const getOutput = parseJsonOutput(getResult.stdout);
+      expect(getOutput.value).toEqual({
+        performance: { latency: '<100ms' },
+        security: { tls: 'required' },
+      });
     });
 
     it('should handle nested JSON structures', async () => {
@@ -472,12 +438,16 @@ describe('crewmate brief', () => {
       await expectSuccess(result);
     });
 
-    it('should reject invalid JSON', async () => {
+    it('should treat unparsable JSON as plain string', async () => {
       const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
       await expectSuccess(initResult);
 
-      const result = await runCli(['brief', 'set', 'scope', '{invalid json}'], { cwd: tmpDir });
-      await expectFailure(result, /Invalid JSON/i, 'Invalid JSON should fail');
+      const result = await runCli(['brief', 'set', 'notes', '{plain text note}'], { cwd: tmpDir });
+      await expectSuccess(result);
+
+      const getResult = await runCli(['brief', 'get', 'notes'], { cwd: tmpDir });
+      const getOutput = parseJsonOutput(getResult.stdout);
+      expect(getOutput.value).toBe('{plain text note}');
     });
   });
 
@@ -495,6 +465,94 @@ describe('crewmate brief', () => {
 
       await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
       await runCli(['brief', 'set', 'workType', 'data', '--id', id2.id], { cwd: tmpDir });
+    });
+  });
+
+  describe('reopen and unset', () => {
+    it('should allow unsetting a field on a draft brief', async () => {
+      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(initResult);
+
+      await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
+      const getRes1 = await runCli(['brief', 'get', 'workType'], { cwd: tmpDir });
+      expect(parseJsonOutput(getRes1.stdout).value).toBe('software');
+
+      const unsetRes = await runCli(['brief', 'unset', 'workType'], { cwd: tmpDir });
+      await expectSuccess(unsetRes);
+
+      const getRes2 = await runCli(['brief', 'get', 'workType'], { cwd: tmpDir });
+      expect(parseJsonOutput(getRes2.stdout).value).toBeNull();
+    });
+
+    it('should reject unsetting fields on a completed brief', async () => {
+      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(initResult);
+
+      await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
+      await runCli(['brief', 'complete'], { cwd: tmpDir });
+
+      const unsetRes = await runCli(['brief', 'unset', 'workType'], { cwd: tmpDir });
+      await expectFailure(unsetRes, /cannot modify a completed brief/i);
+    });
+
+    it('should reopen completed brief back to draft status', async () => {
+      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(initResult);
+
+      await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
+      await runCli(['brief', 'complete'], { cwd: tmpDir });
+
+      const reopenRes = await runCli(['brief', 'reopen'], { cwd: tmpDir });
+      await expectSuccess(reopenRes);
+      expect(parseJsonOutput(reopenRes.stdout).status).toBe('draft');
+
+      // Modifying after reopening should succeed
+      const setRes = await runCli(['brief', 'set', 'workType', 'hardware'], { cwd: tmpDir });
+      await expectSuccess(setRes);
+      const getRes = await runCli(['brief', 'get', 'workType'], { cwd: tmpDir });
+      expect(parseJsonOutput(getRes.stdout).value).toBe('hardware');
+    });
+  });
+
+  describe('delete', () => {
+    it('should delete a brief and cascade all associated data', async () => {
+      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(initResult);
+      const briefId = (parseJsonOutput(initResult.stdout) as { id: string }).id;
+
+      await runCli(['brief', 'set', 'workType', 'software'], { cwd: tmpDir });
+      await runCli(['task', 'add', briefId, '--title', 'Task 1', '--description', 'Test'], {
+        cwd: tmpDir,
+      });
+
+      const deleteRes = await runCli(['brief', 'delete', briefId], { cwd: tmpDir });
+      await expectSuccess(deleteRes);
+      expect(parseJsonOutput(deleteRes.stdout).deletedId).toBe(briefId);
+
+      // Brief should no longer exist
+      const showRes = await runCli(['brief', 'show', '--id', briefId], { cwd: tmpDir });
+      await expectFailure(showRes, /no brief found/i);
+
+      // Tasks should be cascade deleted
+      const tasksRes = await runCli(['task', 'list', '--brief', briefId], { cwd: tmpDir });
+      await expectFailure(tasksRes, /(no brief found|brief not found)/i);
+    });
+
+    it('should prevent deleting brief with active workflow run without --force', async () => {
+      const initResult = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(initResult);
+      const briefId = (parseJsonOutput(initResult.stdout) as { id: string }).id;
+
+      await runCli(['workflow', 'start', '--brief', briefId], { cwd: tmpDir });
+
+      const deleteRes = await runCli(['brief', 'delete', briefId], { cwd: tmpDir });
+      await expectFailure(deleteRes, /active workflow run/i);
+
+      // Should succeed with --force
+      const forceDeleteRes = await runCli(['brief', 'delete', briefId, '--force'], {
+        cwd: tmpDir,
+      });
+      await expectSuccess(forceDeleteRes);
     });
   });
 });

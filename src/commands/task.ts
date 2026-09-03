@@ -1,17 +1,17 @@
 import type { Command } from 'commander';
 import { getDb } from '../db/connection.js';
-import { TASK_STATUSES } from '../models/task.js';
-import { BRIEF_FIELDS } from '../models/brief.js';
+import { TASK_STATUSES, type Task } from '../models/task.js';
 import { ARTIFACT_TYPES, type ArtifactType } from '../models/artifact.js';
 import {
   createTask,
   getTaskById,
   listTasksByBrief,
-  updateTaskStatus,
+  updateTask,
   removeTask,
+  deleteTasksByBrief,
   validateDependencies,
 } from '../db/task-repo.js';
-import { getBriefById as getBrief } from '../db/brief-repo.js';
+import { getBriefById as getBrief, resolveBrief } from '../db/brief-repo.js';
 import { checkTaskArtifactCompliance } from '../db/artifact-repo.js';
 
 interface AddTaskResult {
@@ -54,6 +54,14 @@ interface UpdateTaskResult {
   ok: true;
   id: string;
   status: string;
+  title?: string;
+  task?: Task;
+}
+
+interface ClearTasksResult {
+  ok: true;
+  briefId: string;
+  message: string;
 }
 
 interface RemoveTaskResult {
@@ -72,6 +80,7 @@ function out(
     | ListTasksResult
     | GetTaskResult
     | UpdateTaskResult
+    | ClearTasksResult
     | RemoveTaskResult
     | ErrorOutput
 ): void {
@@ -125,17 +134,7 @@ export function registerTaskCommand(program: Command): void {
         fail(`Invalid dependencies JSON: ${e}`);
       }
 
-      if (dependencies.length > 0) {
-        const depCheck = validateDependencies(getDb(), briefId, dependencies);
-        if (!depCheck.valid) {
-          fail(depCheck.error || 'Invalid dependencies');
-        }
-      }
-
       const field = opts.field ? opts.field : null;
-      if (field && !(BRIEF_FIELDS as readonly string[]).includes(field)) {
-        fail(`Invalid field "${field}". Must be one of: ${BRIEF_FIELDS.join(', ')}`);
-      }
 
       const artifactRequirements: ArtifactType[] = [];
       if (opts.artifactRequirements && Array.isArray(opts.artifactRequirements)) {
@@ -149,11 +148,21 @@ export function registerTaskCommand(program: Command): void {
         }
       }
 
-      const task = createTask(getDb(), briefId, opts.title, opts.description, {
-        dependencies,
-        field,
-        artifactRequirements,
-      });
+      const db = getDb();
+      const task = db.transaction(() => {
+        if (dependencies.length > 0) {
+          const depCheck = validateDependencies(db, briefId, dependencies);
+          if (!depCheck.valid) {
+            fail(depCheck.error || 'Invalid dependencies');
+          }
+        }
+
+        return createTask(db, briefId, opts.title, opts.description, {
+          dependencies,
+          field,
+          artifactRequirements,
+        });
+      })();
 
       out({
         ok: true,
@@ -222,55 +231,132 @@ export function registerTaskCommand(program: Command): void {
       });
     });
 
-  // task update <taskId> --status <s> [--skip-artifact-check]
+  // task update <taskId> [--status <s>] [--title <t>] [--description <d>] [--field <f>] [--dependencies <deps...>] [--artifact-requirements <reqs...>] [--skip-artifact-check]
   taskGroup
     .command('update')
-    .description('Update a task status')
+    .description('Update a task status or details')
     .argument('<task-id>', 'The task ID to update')
-    .option('--status <status>', 'New status (pending | in_progress | completed)', '')
+    .option('--status <status>', 'New status (pending | in_progress | completed)')
+    .option('--title <title>', 'New task title')
+    .option('--description <description>', 'New task description')
+    .option('--field <field>', 'Brief field this task addresses')
+    .option('--dependencies <dependencies...>', 'Array of task IDs this task depends on')
+    .option(
+      '--artifact-requirements <requirements...>',
+      'Required artifact types before completion'
+    )
     .option('--skip-artifact-check', 'Skip artifact verification on completion', false)
-    .action((taskId, opts) => {
-      if (!opts.status) {
-        fail('--status is required');
-      }
+    .action(
+      (
+        taskId,
+        opts: {
+          status?: string;
+          title?: string;
+          description?: string;
+          field?: string;
+          dependencies?: string[];
+          artifactRequirements?: string[];
+          skipArtifactCheck?: boolean;
+        }
+      ) => {
+        const hasAnyUpdate =
+          opts.status !== undefined ||
+          opts.title !== undefined ||
+          opts.description !== undefined ||
+          opts.field !== undefined ||
+          opts.dependencies !== undefined ||
+          opts.artifactRequirements !== undefined;
 
-      if (!TASK_STATUSES.includes(opts.status as (typeof TASK_STATUSES)[number])) {
-        fail(`Invalid status: ${opts.status}. Must be one of: ${TASK_STATUSES.join(', ')}`);
-      }
+        if (!hasAnyUpdate) {
+          fail(
+            'At least one update option must be provided (--status, --title, --description, --field, --dependencies, --artifact-requirements)'
+          );
+        }
 
-      const task = getTaskById(getDb(), taskId);
-      if (!task) {
-        fail(`Task not found: ${taskId}`);
-      }
+        const task = getTaskById(getDb(), taskId);
+        if (!task) {
+          fail(`Task not found: ${taskId}`);
+        }
 
-      const newStatus = opts.status as (typeof TASK_STATUSES)[number];
-      const VALID_TRANSITIONS: Record<string, string[]> = {
-        pending: ['in_progress'],
-        in_progress: ['completed', 'pending'],
-        completed: [],
-      };
+        let newStatus: (typeof TASK_STATUSES)[number] | undefined;
+        if (opts.status) {
+          if (!TASK_STATUSES.includes(opts.status as (typeof TASK_STATUSES)[number])) {
+            fail(`Invalid status: ${opts.status}. Must be one of: ${TASK_STATUSES.join(', ')}`);
+          }
 
-      const allowed = VALID_TRANSITIONS[task.status] ?? [];
-      if (newStatus !== task.status && !allowed.includes(newStatus)) {
-        fail(
-          `Invalid status transition: ${task.status} -> ${newStatus}. Allowed: ${allowed.join(', ') || 'none'}`
-        );
-      }
+          newStatus = opts.status as (typeof TASK_STATUSES)[number];
+          // Allow reopening completed tasks
+          const VALID_TRANSITIONS: Record<string, string[]> = {
+            pending: ['in_progress'],
+            in_progress: ['completed', 'pending'],
+            completed: ['in_progress', 'pending'],
+          };
 
-      // Hard Completion Gate: Check artifact compliance before marking as completed
-      if (newStatus === 'completed' && !opts.skipArtifactCheck) {
-        const compliance = checkTaskArtifactCompliance(getDb(), taskId);
-        if (!compliance.compliant) {
-          fail(compliance.error || 'Cannot complete task: artifact requirements not satisfied');
+          const allowed = VALID_TRANSITIONS[task.status] ?? [];
+          if (newStatus !== task.status && !allowed.includes(newStatus)) {
+            fail(
+              `Invalid status transition: ${task.status} -> ${newStatus}. Allowed: ${allowed.join(', ') || 'none'}`
+            );
+          }
+
+          // Hard Completion Gate: Check artifact compliance before marking as completed
+          if (newStatus === 'completed' && !opts.skipArtifactCheck) {
+            const compliance = checkTaskArtifactCompliance(getDb(), taskId);
+            if (!compliance.compliant) {
+              fail(compliance.error || 'Cannot complete task: artifact requirements not satisfied');
+            }
+          }
+        }
+
+        if (opts.artifactRequirements) {
+          for (const req of opts.artifactRequirements) {
+            if (!ARTIFACT_TYPES.includes(req as ArtifactType)) {
+              fail(
+                `Invalid artifact requirement: "${req}". Must be one of: ${ARTIFACT_TYPES.join(', ')}`
+              );
+            }
+          }
+        }
+
+        try {
+          const updated = updateTask(getDb(), taskId, {
+            title: opts.title,
+            description: opts.description,
+            field: opts.field,
+            dependencies: opts.dependencies,
+            artifactRequirements: opts.artifactRequirements,
+            status: newStatus,
+          });
+
+          out({
+            ok: true,
+            id: task.id,
+            status: updated?.status ?? task.status,
+            title: updated?.title ?? task.title,
+            ...(updated ? { task: updated } : {}),
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          fail(msg);
         }
       }
+    );
 
-      updateTaskStatus(getDb(), taskId, newStatus);
+  // task clear [--brief <briefId>]
+  taskGroup
+    .command('clear')
+    .description('Clear all tasks for a brief')
+    .option('--brief <brief-id>', 'Brief ID (defaults to latest brief)')
+    .action((opts: { brief?: string }) => {
+      const brief = resolveBrief(opts.brief);
+      if (!brief) {
+        fail('No brief found');
+      }
+      deleteTasksByBrief(getDb(), brief.id);
       out({
         ok: true,
-        id: task.id,
-        status: opts.status,
-        title: task.title,
+        briefId: brief.id,
+        message: `Cleared all tasks for brief ${brief.id}`,
       });
     });
 

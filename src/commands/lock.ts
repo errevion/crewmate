@@ -1,7 +1,15 @@
 import type { Command } from 'commander';
 import { getDb } from '../db/connection.js';
 import { getTaskById } from '../db/task-repo.js';
-import { acquireLocks, releaseLocks, listLocks, normalizeFilePath } from '../db/lock-repo.js';
+import {
+  acquireLocks,
+  releaseLocks,
+  listLocks,
+  releaseLockByPath,
+  clearAllLocks,
+  cleanStaleLocks,
+  normalizeFilePath,
+} from '../db/lock-repo.js';
 
 interface AcquireLockResult {
   ok: true;
@@ -11,8 +19,19 @@ interface AcquireLockResult {
 
 interface ReleaseLockResult {
   ok: true;
-  taskId: string;
+  taskId?: string;
   released: number;
+}
+
+interface UnlockFileResult {
+  ok: true;
+  filePath: string;
+  released: boolean;
+}
+
+interface CleanStaleLocksResult {
+  ok: true;
+  purged: number;
 }
 
 interface ListLocksResult {
@@ -33,7 +52,15 @@ interface ErrorOutput {
   lockedBy?: string;
 }
 
-function out(result: AcquireLockResult | ReleaseLockResult | ListLocksResult | ErrorOutput): void {
+function out(
+  result:
+    | AcquireLockResult
+    | ReleaseLockResult
+    | UnlockFileResult
+    | CleanStaleLocksResult
+    | ListLocksResult
+    | ErrorOutput
+): void {
   process.stdout.write(JSON.stringify(result) + '\n');
 }
 
@@ -120,6 +147,46 @@ export function registerLockCommand(program: Command): void {
           createdAt: l.createdAt,
           expiresAt: l.expiresAt,
         })),
+      });
+    });
+
+  // lock clear [--task <task-id>]
+  lockGroup
+    .command('clear')
+    .description('Force release all locks, or all locks held by a task')
+    .option('--task <task-id>', 'Release only locks held by this task')
+    .action((opts: { task?: string }) => {
+      const count = clearAllLocks(getDb(), opts.task);
+      out({
+        ok: true,
+        released: count,
+        taskId: opts.task,
+      });
+    });
+
+  // lock unlock <file-path>
+  lockGroup
+    .command('unlock')
+    .description('Unlock a specific file path regardless of owning task')
+    .argument('<file-path>', 'File path to unlock')
+    .action((filePath: string) => {
+      const released = releaseLockByPath(getDb(), filePath);
+      out({
+        ok: true,
+        filePath: normalizeFilePath(filePath),
+        released,
+      });
+    });
+
+  // lock clean-stale
+  lockGroup
+    .command('clean-stale')
+    .description('Immediately purge all expired file locks')
+    .action(() => {
+      const count = cleanStaleLocks(getDb());
+      out({
+        ok: true,
+        purged: count,
       });
     });
 }

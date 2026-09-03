@@ -3,6 +3,7 @@ description: Executes an assigned task, manages workspace file locks, runs verif
 mode: subagent
 permission:
   edit: allow
+  write: allow
   bash: allow
   read: allow
   glob: allow
@@ -56,6 +57,8 @@ Follow these steps strictly:
     Payload: `{ "rule": "...", "severity": "must"|"should" }` or rule string.
   - `fact`: Concrete facts discovered about the system state.
     Payload: `{ "statement": "...", "evidence": "..." }` or fact string.
+  - `note`: Contextual notes, findings, or explanations for team reference.
+  - `log`: Execution and diagnostic logs.
 
 ### 6. Completion & Cleanup
 - When implementation and tests pass and all required artifacts are recorded, mark your task status as `completed` using `crewmate_update_task`. (Note: Do NOT call `crewmate_add_event` for task completion; `crewmate_update_task` automatically logs lifecycle events). If completion is rejected due to missing artifacts, record the missing artifacts first and retry.
