@@ -17,6 +17,9 @@
     "test": "vitest run",
     "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "test:coverage": "vitest run --coverage",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "prepare": "husky"
   },
   "engines": {
@@ -45,6 +48,7 @@
     "tsup": "^8.5.1",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.67.0",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.10"
   },
   "allowScripts": {

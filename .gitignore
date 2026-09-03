@@ -3,3 +3,5 @@ dist/
 coverage/
 .crewmate/
 .opencode/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
