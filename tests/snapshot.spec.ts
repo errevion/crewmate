@@ -127,10 +127,13 @@ describe('Workflow Snapshot Frontman State Derivation', () => {
 });
 
 describe('Frontman agent prompt rule adherence', () => {
-  it('verifies that .opencode/agents/frontman.md contains immediate state transition rules', async () => {
+  it('verifies that frontman template contains immediate state transition rules', async () => {
     const { readFile } = await import('node:fs/promises');
     const { resolve } = await import('node:path');
-    const frontmanPath = resolve(process.cwd(), '../.opencode/agents/frontman.md');
+    const frontmanPath = resolve(
+      process.cwd(),
+      'src/harness/adapters/opencode/templates/agents/frontman.md'
+    );
     const content = await readFile(frontmanPath, 'utf-8');
 
     // Rule: Transition away from questioning / awaiting_response immediately on receiving input
@@ -142,13 +145,18 @@ describe('Frontman agent prompt rule adherence', () => {
     expect(content).toContain('orchestrating');
     expect(content).toContain('reviewing');
     expect(content).toContain('idle');
-    expect(content).toMatch(/Do not linger in `questioning` \/ `awaiting_response`/);
+    expect(content).toMatch(
+      /transition active state away from `questioning` \/ `awaiting_response`/i
+    );
   });
 
-  it('verifies that .opencode/agents/frontman.md enforces streaming markdown tables before concise question prompts', async () => {
+  it('verifies that frontman template enforces streaming markdown tables before concise question prompts', async () => {
     const { readFile } = await import('node:fs/promises');
     const { resolve } = await import('node:path');
-    const frontmanPath = resolve(process.cwd(), '../.opencode/agents/frontman.md');
+    const frontmanPath = resolve(
+      process.cwd(),
+      'src/harness/adapters/opencode/templates/agents/frontman.md'
+    );
     const content = await readFile(frontmanPath, 'utf-8');
 
     // Rule: Question UX Formatting & chat stream
@@ -158,8 +166,8 @@ describe('Frontman agent prompt rule adherence', () => {
     expect(content).toMatch(
       /concise questions and selectable options inside the `question` tool prompt/
     );
-    expect(content).toMatch(
-      /Never dump large markdown tables or lengthy content directly into the `question` tool prompt/
+    expect(content).toContain(
+      'Never dump large markdown tables directly into the `question` tool prompt'
     );
   });
 });

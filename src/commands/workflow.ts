@@ -112,7 +112,7 @@ function loadCustomWorkflowOrDefault(customPath?: string): WorkflowDefinition {
     }
   }
 
-  // Regenerate modular workflow if no workflow files detected in workflows/
+  // Regenerate modular workflow if no workflow files detected in .crewmate/workflows/
   regenerateModularWorkflow(process.cwd());
   return DEFAULT_WORKFLOW;
 }
