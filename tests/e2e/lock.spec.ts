@@ -149,5 +149,60 @@ describe('crewmate lock & artifact CLI', () => {
       );
       await expectFailure(invalidResult, /Invalid artifact type/i);
     });
+
+    it('should support artifact supersession', async () => {
+      const art1Res = await runCli(
+        ['artifact', 'add', taskId1, '--type', 'decision', '--content', 'Decision V1'],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(art1Res);
+      const id1 = parseJsonOutput(art1Res.stdout).id;
+
+      const art2Res = await runCli(
+        ['artifact', 'add', taskId1, '--type', 'decision', '--content', 'Decision V2'],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(art2Res);
+      const id2 = parseJsonOutput(art2Res.stdout).id;
+
+      const supersedeRes = await runCli(['artifact', 'supersede', id1, id2], { cwd: tmpDir });
+      await expectSuccess(supersedeRes);
+
+      const getRes = await runCli(['artifact', 'get', id1], { cwd: tmpDir });
+      const art = parseJsonOutput(getRes.stdout).artifact;
+      expect(art.status).toBe('superseded');
+      expect(art.supersededBy).toBe(id2);
+    });
+  });
+
+  describe('lock management: unlock, clear, and clean-stale', () => {
+    it('should unlock a specific file path', async () => {
+      await runCli(['lock', 'acquire', taskId1, '--files', 'src/shared.ts'], { cwd: tmpDir });
+      const unlockRes = await runCli(['lock', 'unlock', 'src/shared.ts'], { cwd: tmpDir });
+      await expectSuccess(unlockRes);
+
+      const listRes = await runCli(['lock', 'list'], { cwd: tmpDir });
+      const locks = parseJsonOutput(listRes.stdout).locks;
+      expect(locks).toHaveLength(0);
+    });
+
+    it('should clear all locks', async () => {
+      await runCli(['lock', 'acquire', taskId1, '--files', 'src/a.ts', 'src/b.ts'], {
+        cwd: tmpDir,
+      });
+      const clearRes = await runCli(['lock', 'clear'], { cwd: tmpDir });
+      await expectSuccess(clearRes);
+      expect(parseJsonOutput(clearRes.stdout).released).toBe(2);
+
+      const listRes = await runCli(['lock', 'list'], { cwd: tmpDir });
+      const locks = parseJsonOutput(listRes.stdout).locks;
+      expect(locks).toHaveLength(0);
+    });
+
+    it('should clean stale locks', async () => {
+      const cleanRes = await runCli(['lock', 'clean-stale'], { cwd: tmpDir });
+      await expectSuccess(cleanRes);
+      expect(parseJsonOutput(cleanRes.stdout).ok).toBe(true);
+    });
   });
 });

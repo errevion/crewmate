@@ -140,6 +140,68 @@ export function updateTaskStatus(db: Database.Database, id: string, status: Task
 }
 
 /**
+ * Updates mutable fields on an existing task (title, description, field, dependencies, artifactRequirements)
+ */
+export function updateTask(
+  db: Database.Database,
+  id: string,
+  updates: {
+    title?: string;
+    description?: string;
+    field?: string | null;
+    dependencies?: string[];
+    artifactRequirements?: string[];
+    status?: Task['status'];
+  }
+): Task | null {
+  const existing = getTaskById(db, id);
+  if (!existing) {
+    return null;
+  }
+
+  if (updates.dependencies !== undefined) {
+    const depCheck = validateDependencies(db, existing.briefId, updates.dependencies, id);
+    if (!depCheck.valid) {
+      throw new Error(depCheck.error || 'Invalid dependencies');
+    }
+  }
+
+  const setClauses: string[] = ["updated_at = datetime('now')"];
+  const values: unknown[] = [];
+
+  if (updates.title !== undefined) {
+    setClauses.push('title = ?');
+    values.push(updates.title);
+  }
+  if (updates.description !== undefined) {
+    setClauses.push('description = ?');
+    values.push(updates.description);
+  }
+  if (updates.field !== undefined) {
+    setClauses.push('field = ?');
+    values.push(updates.field);
+  }
+  if (updates.dependencies !== undefined) {
+    setClauses.push('dependencies = ?');
+    values.push(JSON.stringify(updates.dependencies));
+  }
+  if (updates.artifactRequirements !== undefined) {
+    setClauses.push('artifact_requirements = ?');
+    values.push(JSON.stringify(updates.artifactRequirements));
+  }
+  if (updates.status !== undefined) {
+    setClauses.push('status = ?');
+    values.push(updates.status);
+  }
+
+  values.push(id);
+  const sql = `UPDATE tasks SET ${setClauses.join(', ')} WHERE id = ?`;
+  db.prepare(sql).run(...values);
+
+  return getTaskById(db, id);
+}
+
+/**
  *
  */
 export function removeTask(db: Database.Database, id: string): void {

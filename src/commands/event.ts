@@ -117,7 +117,8 @@ export function registerEventCommand(program: Command): void {
 
         const now = Date.now();
         const duplicate = recentEvents.find((e) => {
-          const createdAtUtc = e.createdAt.endsWith('Z') ? e.createdAt : e.createdAt + 'Z';
+          const isoStr = e.createdAt.includes('T') ? e.createdAt : e.createdAt.replace(' ', 'T');
+          const createdAtUtc = isoStr.endsWith('Z') ? isoStr : isoStr + 'Z';
           const age = now - new Date(createdAtUtc).getTime();
 
           // Identical message within 10 seconds is always duplicate

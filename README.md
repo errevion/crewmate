@@ -49,8 +49,7 @@ crewmate init --harness opencode
 This adds a few files under `.opencode/`:
 
 - `plugins/crewmate.ts` — hooks Crewmate's tools into OpenCode
-- `commands/brief.md` — the `/brief` command that starts the planning conversation
-- `commands/execute.md` — the `/execute` command that runs the plan
+- `commands/workflow.md` — the `/workflow` command that executes graph workflows
 - `agents/frontman.md` — the supervisor's prompt
 - `agents/scout.md` — the read-only codebase explorer's prompt
 - `agents/planner.md` — the task-breakdown agent's prompt
@@ -74,7 +73,7 @@ crewmate update
 
 ## Running a project through it
 
-The typical workflow uses two commands inside OpenCode: `/brief` to plan and structure the work, and `/execute` to build it safely. You can also drive the CLI yourself if you prefer scripting.
+The typical workflow uses the `/workflow` command inside OpenCode (or prompting Frontman directly) to run customizable, graph-based multi-stage workflows. You can also drive the CLI directly via `crewmate workflow start`.
 
 ```mermaid
 flowchart LR
@@ -89,38 +88,30 @@ flowchart LR
     exec2 --> result2["Finished work + notes"]
 ```
 
-### Agent workflow (`/brief` and `/execute`)
+### Agent workflow (`/workflow` or direct prompt with Frontman)
 
-#### 1. Plan with `/brief`
+Run `/workflow` in OpenCode (or prompt Frontman directly with your request):
 
-Start by running `/brief` (optionally passing your initial goal, e.g. `/brief Add GitHub OAuth authentication`):
-
-1. **Requirements gathering** — Frontman creates a new brief and asks questions conversationally (one or two at a time) to fill the five required fields (`workType`, `goal`, `scope`, `functionalRequirements`, and `acceptanceCriteria`).
-2. **Codebase discovery (Scout)** — Frontman dispatches Scout to inspect your codebase, project structure, existing configs, and dependencies. Scout reports objective workspace facts, which Frontman discusses with you before filling optional brief fields (`technicalStack`, `constraints`, etc.).
-3. **Task breakdown (Planner)** — Once the brief is finalized, Frontman automatically dispatches Planner to decompose the brief into a dependency-ordered list of concrete implementation tasks.
-4. **Review & persistence** — Frontman presents the proposed task table for your review. Once approved, tasks are saved to SQLite (`crewmate_add_task`). Frontman then prompts you to run `/execute` when ready.
-
-#### 2. Build with `/execute`
-
-When you are ready to begin implementation, run `/execute`:
-
-1. **Dependency resolution** — Frontman inspects the brief's tasks and active file locks, identifying all `pending` tasks whose dependencies are already `completed`.
-2. **Parallel dispatch (Executor)** — Frontman dispatches Executor subagents in parallel for independent tasks that touch different files.
-3. **Locking & implementation** — Each Executor acquires locks on the files it needs (`crewmate_acquire_lock`), implements the changes, writes tests, logs incremental artifacts (`crewmate_add_artifact` for facts, decisions, and API contracts), updates task status to `completed`, and releases its locks.
-4. **Continuous execution** — Frontman continuously unblocks and dispatches downstream tasks across batches without prompting, pausing only if an Executor hits an error or test failure so you can decide how to proceed.
-5. **Final summary** — When all tasks finish, Frontman presents a summary of completed work, recorded architectural decisions, and verification instructions.
+1. **Workflow initialization** — Frontman checks for an active workflow run (`crewmate_workflow_status`), initializing a brief session record (`crewmate_create_brief`) and workflow run (`crewmate_workflow_start`) if none exists.
+2. **Dynamic stage execution** — Frontman dynamically inspects the active stage's definition, objectives, and graph nodes:
+   - In **Discussion / Planning** stages: Frontman gathers requirements conversationally, dispatches Scout for codebase discovery, and dispatches Planner to decompose requirements into a DAG of implementation tasks.
+   - In **Execution** stages: Frontman coordinates parallel Executor subagents across ready tasks with file locking (`crewmate_acquire_lock`) and incremental knowledge recording (`crewmate_add_artifact`).
+   - In **Custom** stages: Frontman follows the stage graph topology, evaluating conditions, transformations, or custom agent dispatches.
+3. **Stage advancement** — Frontman advances through stages via `crewmate_workflow_advance` until workflow completion.
 
 ### CLI workflow (manual)
 
 If you prefer driving the CLI directly:
 
 ```bash
+# Start a workflow run
+crewmate workflow start
+
+# Or set custom brief fields directly
 crewmate brief init
 crewmate brief set workType software
 crewmate brief set goal "Add GitHub OAuth authentication"
 crewmate brief set scope '{"included":["authentication","oauth flow"],"excluded":["admin panel"]}'
-crewmate brief set functionalRequirements '["GitHub OAuth 2.0 login","Token storage","User profile sync"]'
-crewmate brief set acceptanceCriteria '["Users can log in via GitHub","Tokens persist securely"]'
 crewmate brief complete
 ```
 

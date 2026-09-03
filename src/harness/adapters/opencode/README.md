@@ -1,6 +1,6 @@
 # OpenCode Adapter
 
-This adapter integrates Crewmate with [OpenCode](https://opencode.ai). When you run `crewmate init --harness opencode`, it scaffolds everything OpenCode needs to run the Crewmate workflow: a plugin, two slash commands, and four agent prompts.
+This adapter integrates Crewmate with [OpenCode](https://opencode.ai). When you run `crewmate init --harness opencode`, it scaffolds everything OpenCode needs to run the Crewmate workflow: a plugin, the `/workflow` slash command, and four agent prompts.
 
 For the general harness architecture and how to build new adapters, see [../../README.md](../../README.md).
 
@@ -14,8 +14,7 @@ For the general harness architecture and how to build new adapters, see [../../R
   plugins/
     crewmate.ts             Tool bridge — wraps every crewmate CLI command as an OpenCode tool
   commands/
-    brief.md                /brief slash command
-    execute.md              /execute slash command
+    workflow.md             /workflow slash command
   agents/
     frontman.md             Orchestrator (primary agent)
     scout.md                Codebase explorer (subagent)
@@ -63,28 +62,16 @@ The plugin includes a `tool.execute.before` hook that detects when Frontman disp
 
 ## Slash commands
 
-### `/brief`
+### `/workflow`
 
-Triggers Frontman to start a new briefing session. The command template instructs Frontman to:
+Triggers Frontman to execute the active graph-based workflow run. The command template instructs Frontman to:
 
-1. Create a brief with `crewmate_create_brief`
-2. Gather the five required fields conversationally (one or two at a time)
-3. Dispatch Scout for codebase discovery
-4. Discuss Scout's findings before setting optional fields
-5. Finalize the brief and dispatch Planner for task breakdown
-6. Present tasks for approval, persist them, and prompt for `/execute`
+1. Check active workflow run status with `crewmate_workflow_status` (or initialize a session with `crewmate_create_brief` and `crewmate_workflow_start`).
+2. Dynamically inspect the current stage's definition, objectives, and graph nodes.
+3. Coordinate subagents, prompt the user for approvals, or perform required operations as defined by the stage.
+4. Advance stages with `crewmate_workflow_advance` until workflow completion.
 
-Accepts optional arguments (e.g. `/brief Add GitHub OAuth`) that Frontman uses as initial context.
-
-### `/execute`
-
-Triggers Frontman to begin the execution loop:
-
-1. Retrieve tasks and check dependencies
-2. Dispatch Executors in parallel for independent ready tasks
-3. Continue automatically across batches without prompting
-4. Pause only on errors or lock conflicts for user decision
-5. Present a final summary when all tasks complete
+Accepts optional initial prompt arguments that Frontman uses as initial context.
 
 ## Agent prompts
 

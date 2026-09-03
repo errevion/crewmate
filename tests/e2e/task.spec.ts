@@ -224,7 +224,7 @@ describe('crewmate task', () => {
       const taskId = parseJsonOutput(addResult.stdout).id;
 
       const noStatusResult = await runCli(['task', 'update', taskId], { cwd: tmpDir });
-      await expectFailure(noStatusResult, /--status is required/i);
+      await expectFailure(noStatusResult, /At least one update option must be provided/i);
     });
 
     it('should fail if task does not exist', async () => {
@@ -369,6 +369,63 @@ describe('crewmate task', () => {
       await expectFailure(removeResult, /Task not found/i);
       const output = parseJsonOutput(removeResult.stdout);
       expect(output.ok).toBe(false);
+    });
+  });
+
+  describe('task update (fields & reopen) and task clear', () => {
+    let testBriefId: string;
+
+    beforeEach(async () => {
+      const bRes = await runCli(['brief', 'init'], { cwd: tmpDir });
+      await expectSuccess(bRes);
+      testBriefId = parseJsonOutput(bRes.stdout).id;
+    });
+
+    it('should update task title, description, and reopen completed task', async () => {
+      const addResult = await runCli(
+        ['task', 'add', testBriefId, '--title', 'Original', '--description', 'Original desc'],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(addResult);
+      const taskId = parseJsonOutput(addResult.stdout).id;
+
+      // Update title and description
+      const updateRes = await runCli(
+        ['task', 'update', taskId, '--title', 'Renamed', '--description', 'New desc'],
+        { cwd: tmpDir }
+      );
+      await expectSuccess(updateRes);
+      const updated = parseJsonOutput(updateRes.stdout);
+      expect(updated.title).toBe('Renamed');
+
+      // Complete the task
+      await runCli(['task', 'update', taskId, '--status', 'in_progress'], { cwd: tmpDir });
+      await runCli(['task', 'update', taskId, '--status', 'completed', '--skip-artifact-check'], {
+        cwd: tmpDir,
+      });
+
+      // Reopen the completed task back to in_progress
+      const reopenRes = await runCli(['task', 'update', taskId, '--status', 'in_progress'], {
+        cwd: tmpDir,
+      });
+      await expectSuccess(reopenRes);
+      expect(parseJsonOutput(reopenRes.stdout).status).toBe('in_progress');
+    });
+
+    it('should clear all tasks for a brief', async () => {
+      await runCli(['task', 'add', testBriefId, '--title', 'T1', '--description', 'D1'], {
+        cwd: tmpDir,
+      });
+      await runCli(['task', 'add', testBriefId, '--title', 'T2', '--description', 'D2'], {
+        cwd: tmpDir,
+      });
+
+      const clearRes = await runCli(['task', 'clear', '--brief', testBriefId], { cwd: tmpDir });
+      await expectSuccess(clearRes);
+
+      const listRes = await runCli(['task', 'list', '--brief', testBriefId], { cwd: tmpDir });
+      const tasks = parseJsonOutput(listRes.stdout).tasks;
+      expect(tasks).toHaveLength(0);
     });
   });
 });
