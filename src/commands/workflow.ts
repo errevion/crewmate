@@ -554,4 +554,22 @@ export function registerWorkflowCommands(program: Command): void {
         process.exitCode = 1;
       }
     });
+
+  // Register 'edit' as a subcommand under 'workflow'
+  workflowCmd
+    .command('edit')
+    .description('Launch the interactive terminal TUI workflow editor')
+    .option('-f, --file <path>', 'Path to custom workflow JSON file to edit')
+    .option('-n, --new', 'Create and edit a brand new empty workflow')
+    .action(async (opts: { file?: string; new?: boolean }) => {
+      const { runEditor } = await import('./workflow-edit.js');
+      if (!process.stdout.isTTY) {
+        process.stdout.write(
+          JSON.stringify({ ok: false, error: 'TUI editor requires an interactive TTY terminal' }) +
+            '\n'
+        );
+        process.exit(1);
+      }
+      runEditor(opts);
+    });
 }
