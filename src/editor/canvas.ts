@@ -263,6 +263,7 @@ export class CanvasBuffer {
         const minY = Math.min(fromY, toY);
         const maxY = Math.max(fromY, toY);
         const midY = Math.floor((fromY + toY) / 2);
+        const pushoutStagger = routeIndex * 3;
         const exitX = fromX + 2 + pushoutStagger;
         const enterX = toX - 2 - pushoutStagger;
 
@@ -288,7 +289,12 @@ export class CanvasBuffer {
 
         if (label) {
           const labelText = `(${label})`;
-          this.writeString(fromX + 3, midY, labelText, labelTag);
+          // Stagger label Y by direction and routeIndex so bidirectional vertical edges never overlap labels
+          const labelY =
+            toY > fromY
+              ? Math.max(minY + 1, midY - 1 - routeIndex * 2)
+              : Math.min(maxY - 1, midY + 1 + routeIndex * 2);
+          this.writeString(exitX + 1, labelY, labelText, labelTag);
         }
       }
     }
@@ -518,10 +524,10 @@ export function renderGraphCanvas(
       const isSelected = state.selectedEdgeIndex === eIdx;
       const isCycle = toX <= fromX;
 
-      // Group edges by direction and endpoints to calculate a distinct lane
-      const laneKey = isCycle ? `back-${edge.from}` : `${edge.from}-${edge.to}`;
-      const routeIdx = routeCounters.get(laneKey) || 0;
-      routeCounters.set(laneKey, routeIdx + 1);
+      // Group edges between the same two nodes (regardless of direction) to guarantee distinct routing lanes and non-overlapping labels
+      const pairKey = [edge.from, edge.to].sort().join('<->');
+      const routeIdx = routeCounters.get(pairKey) || 0;
+      routeCounters.set(pairKey, routeIdx + 1);
 
       // Check if an intermediate node sits between fromX and toX on this row (skip-layer edge obstacle)
       const isObstructed =

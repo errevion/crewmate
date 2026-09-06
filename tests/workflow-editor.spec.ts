@@ -334,4 +334,58 @@ describe('Workflow Editor Engine & Core Modules', () => {
     const renderedNode = renderGraphCanvas(state, 120, 25);
     expect(renderedNode.content).toContain('{bold}{green-fg}╔═');
   });
+
+  it('keeps connected components horizontally layered even when orphaned nodes exist', () => {
+    const cyclicWithOrphan: WorkflowDefinition = {
+      id: 'test-wf-orphan',
+      name: 'Test Workflow with Orphan',
+      stages: [
+        {
+          id: 'stage-1',
+          name: 'Stage 1',
+          graph: {
+            nodes: [
+              { id: 'frontman-interview', type: 'agent', config: { agent: 'frontman' } },
+              {
+                id: 'validate-brief',
+                type: 'condition',
+                config: { field: 'status', operator: 'equals', value: 'ok' },
+              },
+              { id: 'frontman-interview-2', type: 'agent', config: { agent: 'frontman' } }, // Orphaned
+            ],
+            edges: [
+              {
+                from: 'frontman-interview',
+                to: 'validate-brief',
+                condition: { type: 'on_success' },
+              },
+              { from: 'validate-brief', to: 'frontman-interview', condition: { type: 'always' } },
+            ],
+          },
+        },
+      ],
+    };
+
+    const state = new EditorState(cyclicWithOrphan);
+    state.drillIntoStage('stage-1');
+
+    const layout = computeGraphLayout(state.currentGraph);
+    const posFrontman = layout.layouts.get('frontman-interview')!;
+    const posValidate = layout.layouts.get('validate-brief')!;
+    const posOrphan = layout.layouts.get('frontman-interview-2')!;
+
+    // Connected nodes must be horizontally separated in distinct layers (frontman before validate)
+    expect(posFrontman.x).toBeLessThan(posValidate.x);
+
+    // Canvas must render cleanly without merging labels
+    const rendered = renderGraphCanvas(state, 120, 30);
+    expect(rendered.content).toContain('frontman-interview');
+    expect(rendered.content).toContain('validate-brief');
+    expect(rendered.content).toContain('frontman-interview-2');
+
+    // Edge labels must not collide into (always)ess)
+    expect(rendered.content).not.toContain('(always)ess)');
+    expect(rendered.content).toContain('(always)');
+    expect(rendered.content).toContain('(on_success)');
+  });
 });
