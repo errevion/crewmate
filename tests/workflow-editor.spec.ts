@@ -190,22 +190,42 @@ describe('Workflow Editor Engine & Core Modules', () => {
     expect(state.selectedNodeId).toBe('nodeB');
   });
 
-  it('renames stages and records history', () => {
+  it('adds stages from file definitions and records history', () => {
     const state = new EditorState(sampleWorkflow);
-    expect(state.workflow.stages[0].name).toBe('Stage One');
+    expect(state.workflow.stages.length).toBe(2);
 
-    const success = state.renameStage('stage-1', 'Requirements Discovery');
-    expect(success).toBe(true);
-    expect(state.workflow.stages[0].name).toBe('Requirements Discovery');
+    const newStageFromFile = {
+      id: 'verification',
+      name: 'Verification',
+      description: 'Run quality checks',
+      graph: {
+        nodes: [{ id: 'verify-node', type: 'tool' as const, config: { tool: 'npm test' } }],
+        edges: [],
+      },
+    };
+
+    const addedId = state.addStageFromFile(newStageFromFile);
+    expect(addedId).toBe('verification');
+    expect(state.workflow.stages.length).toBe(3);
+    expect(state.workflow.stages[2].id).toBe('verification');
     expect(state.isModified).toBe(true);
 
-    // Undo restores previous name
-    state.undo();
-    expect(state.workflow.stages[0].name).toBe('Stage One');
+    // Auto-suffixes if added again to avoid ID collisions
+    const addedId2 = state.addStageFromFile(newStageFromFile);
+    expect(addedId2).toBe('verification-2');
+    expect(state.workflow.stages.length).toBe(4);
 
-    // Redo applies renamed name
-    state.redo();
-    expect(state.workflow.stages[0].name).toBe('Requirements Discovery');
+    // Undo removes the added stage
+    state.undo();
+    expect(state.workflow.stages.length).toBe(3);
+  });
+
+  it('refreshes discovered nodes and stages from disk', () => {
+    const state = new EditorState(sampleWorkflow);
+    state.refreshDiscovered(process.cwd());
+    // Should run discovery without throwing
+    expect(Array.isArray(state.discoveredNodes)).toBe(true);
+    expect(Array.isArray(state.discoveredStages)).toBe(true);
   });
 
   it('prevents duplicate node IDs by auto-suffixing', () => {

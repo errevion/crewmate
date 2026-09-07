@@ -7,6 +7,7 @@ import type {
   NodeType,
 } from '../models/graph.js';
 import { computeGraphLayout } from './graph-layout.js';
+import { discoverNodesInDirectory, discoverStagesInDirectory } from './node-discovery.js';
 
 /**
  *
@@ -57,6 +58,15 @@ export interface DiscoveredNode {
 /**
  *
  */
+export interface DiscoveredStage {
+  filePath: string;
+  fileName: string;
+  stage: StageDefinition;
+}
+
+/**
+ *
+ */
 export interface EditorSnapshot {
   workflow: WorkflowDefinition;
   stageIndex: number;
@@ -93,8 +103,17 @@ export class EditorState {
   // Edge creation state
   public pendingEdgeSourceId: string | null = null;
 
-  // Node discovery cache
+  // Discovery caches
   public discoveredNodes: DiscoveredNode[] = [];
+  public discoveredStages: DiscoveredStage[] = [];
+
+  /**
+   * Rescans directories to refresh discovered nodes and stages from disk
+   */
+  public refreshDiscovered(baseDir: string = process.cwd()): void {
+    this.discoveredNodes = discoverNodesInDirectory(baseDir);
+    this.discoveredStages = discoverStagesInDirectory(baseDir);
+  }
 
   // Undo / Redo history
   private undoStack: string[] = [];
@@ -895,6 +914,33 @@ export class EditorState {
   }
 
   /**
+   * Adds an existing stage definition loaded from file
+   */
+  public addStageFromFile(stage: StageDefinition): string {
+    this.pushHistory();
+
+    // Ensure unique stage ID
+    let uniqueId = stage.id;
+    let suffix = 2;
+    while (this.workflow.stages.some((s) => s.id === uniqueId)) {
+      uniqueId = `${stage.id}-${suffix}`;
+      suffix++;
+    }
+
+    const newStage: StageDefinition = JSON.parse(JSON.stringify(stage));
+    newStage.id = uniqueId;
+    if (stage.id === stage.name) {
+      newStage.name = uniqueId;
+    }
+
+    this.workflow.stages.push(newStage);
+    this.currentStageIndex = this.workflow.stages.length - 1;
+    this.selectedStageId = uniqueId;
+    this.validateSelection();
+    return uniqueId;
+  }
+
+  /**
    *
    */
   public removeCurrentStage(): boolean {
@@ -910,19 +956,6 @@ export class EditorState {
       this.selectedStageId = this.workflow.stages[this.currentStageIndex].id;
     }
     this.validateSelection();
-    return true;
-  }
-
-  /**
-   *
-   */
-  public renameStage(stageId: string, newName: string): boolean {
-    const stage = this.workflow.stages.find((s) => s.id === stageId);
-    if (!stage) {
-      return false;
-    }
-    this.pushHistory();
-    stage.name = newName;
     return true;
   }
 

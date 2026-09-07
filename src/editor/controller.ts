@@ -1,4 +1,3 @@
-import type { NodeDefinition, NodeType } from '../models/graph.js';
 import type { EditorState } from './state.js';
 import type { EditorWidgets } from './ui.js';
 import { renderGraphCanvas } from './canvas.js';
@@ -221,20 +220,23 @@ export class EditorController {
       }
     }
 
-    // Node Discovery summary
+    // Discovered Library summary
     lines.push('');
     lines.push(`{bold}{cyan-fg}── Discovered Library ──{/cyan-fg}{/bold}`);
-    if (this.state.discoveredNodes.length === 0) {
-      lines.push('{gray-fg}(no custom node templates found){/gray-fg}');
-    } else {
-      lines.push(`Found {green-fg}${this.state.discoveredNodes.length}{/green-fg} local nodes.`);
-      for (const d of this.state.discoveredNodes.slice(0, 4)) {
-        lines.push(` • {bold}${d.node.id}{/bold} ({gray-fg}${d.node.type}{/gray-fg})`);
-      }
-      if (this.state.discoveredNodes.length > 4) {
-        lines.push(` {gray-fg}...and ${this.state.discoveredNodes.length - 4} more{/gray-fg}`);
-      }
+    lines.push(` • Stages: {green-fg}${this.state.discoveredStages.length}{/green-fg} files found`);
+    for (const s of this.state.discoveredStages.slice(0, 3)) {
+      lines.push(
+        `   {gray-fg}▸{/gray-fg} {bold}${s.stage.id}{/bold} ({gray-fg}${s.stage.name}{/gray-fg})`
+      );
     }
+    lines.push(` • Nodes:  {green-fg}${this.state.discoveredNodes.length}{/green-fg} files found`);
+    for (const d of this.state.discoveredNodes.slice(0, 3)) {
+      lines.push(
+        `   {gray-fg}▸{/gray-fg} {bold}${d.node.id}{/bold} ({gray-fg}${d.node.type}{/gray-fg})`
+      );
+    }
+    lines.push('');
+    lines.push('{gray-fg}Press {bold}R{/bold} to reload files from disk{/gray-fg}');
 
     this.widgets.sidebarBox.setContent(lines.join('\n'));
   }
@@ -246,7 +248,7 @@ export class EditorController {
       );
     } else if (this.state.viewLevel === 'workflow') {
       this.widgets.footerBox.setContent(
-        ' {bold}W/A/S/D{/bold}: select stage · {bold}Enter{/bold}: drill in · {bold}r{/bold}: rename · {bold}n{/bold}: add · {bold}x{/bold}: delete · {bold}h/l{/bold}: reorder · {bold}Ctrl-S{/bold}: save · {bold}?{/bold}: help '
+        ' {bold}W/A/S/D{/bold}: select stage · {bold}Enter{/bold}: drill in · {bold}n{/bold}: add stage from file · {bold}x{/bold}: delete · {bold}R{/bold}: refresh · {bold}Ctrl-S{/bold}: save · {bold}?{/bold}: help '
       );
     } else {
       const modeLabel =
@@ -254,7 +256,7 @@ export class EditorController {
           ? '{bold}{yellow-fg}[EDGE SELECTED]{/yellow-fg}{/bold}'
           : '{bold}[NODE SELECTED]{/bold}';
       this.widgets.footerBox.setContent(
-        ` ${modeLabel} {bold}Tab{/bold}: cycle · {bold}W/A/S/D{/bold}: nav · {bold}n{/bold}: add node · {bold}e{/bold}: edge · {bold}i{/bold}: start node · {bold}x{/bold}: del · {bold}Ctrl-S{/bold}: save · {bold}Backspace{/bold}: out `
+        ` ${modeLabel} {bold}Tab{/bold}: toggle mode · {bold}W/A/S/D{/bold}: nav · {bold}n{/bold}: add node from file · {bold}e{/bold}: edge · {bold}i{/bold}: start node · {bold}x{/bold}: del · {bold}R{/bold}: refresh · {bold}Ctrl-S{/bold}: save · {bold}Backspace{/bold}: out `
       );
     }
   }
@@ -355,12 +357,12 @@ export class EditorController {
       }
     });
 
-    // Rename Stage (Hotkeys: 'r', 'R', 'f2')
-    screen.key(['r', 'R', 'f2'], () => {
+    // Refresh discovered files from disk (Hotkey: 'r', 'R')
+    screen.key(['r', 'R'], () => {
       if (this.isModalOpen()) {
         return;
       }
-      this.promptRenameStage();
+      this.handleRefreshFiles();
     });
 
     // Move / reorder operations (Vim keys h/j/k/l)
@@ -424,13 +426,13 @@ export class EditorController {
       this.refreshUI();
     });
 
-    // Add operation (Stage in workflow view, Node in stage view)
+    // Add operation (Stage from file in workflow view, Node from file in stage view)
     screen.key(['n', 'N'], () => {
       if (this.isModalOpen()) {
         return;
       }
       if (this.state.viewLevel === 'workflow') {
-        this.promptNewStage();
+        this.openStagePaletteModal();
       } else {
         this.openPaletteModal();
       }
@@ -536,26 +538,33 @@ export class EditorController {
     });
   }
 
+  private handleRefreshFiles(): void {
+    this.state.refreshDiscovered();
+    this.showNotice(
+      'Files Refreshed',
+      `Reloaded from disk:\n • Stages: ${this.state.discoveredStages.length} found\n • Nodes:  ${this.state.discoveredNodes.length} found`
+    );
+    this.refreshUI();
+  }
+
   private openPaletteModal(): void {
-    const items: string[] = [];
+    // Automatically re-scan to ensure newly created or edited files on disk are captured
+    this.state.refreshDiscovered();
 
-    // Built-in types
-    items.push('{bold}{yellow-fg}── Built-in Node Types ──{/yellow-fg}{/bold}');
-    items.push('agent: AI agent prompt task');
-    items.push('task: SQLite task with file locking & compliance');
-    items.push('condition: Conditional if/else router node');
-    items.push('tool: CLI or shell command runner');
-    items.push('transform: JSON data transformer');
-    items.push('passthrough: No-op passthrough node');
-
-    // Discovered nodes
-    if (this.state.discoveredNodes.length > 0) {
-      items.push('{bold}{yellow-fg}── Discovered Local Nodes ──{/yellow-fg}{/bold}');
-      for (const d of this.state.discoveredNodes) {
-        items.push(`[Library] ${d.node.id} (${d.node.type})`);
-      }
+    if (this.state.discoveredNodes.length === 0) {
+      this.showNotice(
+        'No Node Files Found',
+        'No .json node files found in .crewmate/workflows/nodes/ or workflows/nodes/.\nAdd node JSON definitions to that folder and press R to reload.'
+      );
+      return;
     }
 
+    const items: string[] = [];
+    for (const d of this.state.discoveredNodes) {
+      items.push(`[Node] ${d.node.id} (${d.node.type}) - ${d.fileName}`);
+    }
+
+    this.widgets.paletteModal.setLabel(' Select Node From File to Add (Enter to Add) ');
     this.widgets.paletteModal.setItems(items);
     this.widgets.paletteModal.show();
     this.widgets.paletteModal.focus();
@@ -565,148 +574,48 @@ export class EditorController {
       this.widgets.paletteModal.hide();
       this.widgets.screen.render();
 
-      const selectedStr = items[index];
-      if (selectedStr.startsWith('agent:')) {
-        this.promptNewNode('agent');
-      } else if (selectedStr.startsWith('task:')) {
-        this.promptNewNode('task');
-      } else if (selectedStr.startsWith('condition:')) {
-        this.promptNewNode('condition');
-      } else if (selectedStr.startsWith('tool:')) {
-        this.promptNewNode('tool');
-      } else if (selectedStr.startsWith('transform:')) {
-        this.promptNewNode('transform');
-      } else if (selectedStr.startsWith('passthrough:')) {
-        this.promptNewNode('passthrough');
-      } else if (selectedStr.startsWith('[Library]')) {
-        const match = selectedStr.match(/\[Library\]\s+([^\s]+)/);
-        if (match) {
-          const nodeId = match[1];
-          const found = this.state.discoveredNodes.find((d) => d.node.id === nodeId);
-          if (found) {
-            this.state.addNode(JSON.parse(JSON.stringify(found.node)));
-            this.refreshUI();
-          }
-        }
+      const selectedNode = this.state.discoveredNodes[index];
+      if (selectedNode) {
+        this.state.addNode(JSON.parse(JSON.stringify(selectedNode.node)));
+        this.refreshUI();
       }
     });
   }
 
-  private promptNewStage(): void {
-    this.widgets.inputPrompt.setLabel(' Enter New Stage Name ');
-    this.widgets.inputText.setValue(`Stage ${this.state.workflow.stages.length + 1}`);
-    this.widgets.inputPrompt.show();
-    this.widgets.inputText.focus();
-    this.widgets.screen.render();
+  private openStagePaletteModal(): void {
+    // Automatically re-scan to ensure newly created or edited files on disk are captured
+    this.state.refreshDiscovered();
 
-    const onSubmit = (val: string) => {
-      this.widgets.inputText.removeListener('cancel', onCancel);
-      this.widgets.inputPrompt.hide();
-      const stageName = val.trim();
-      if (!stageName) {
-        this.refreshUI();
-        return;
-      }
-      const stageId = stageName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      this.state.addStage(stageName, stageId);
-      this.refreshUI();
-    };
-
-    const onCancel = () => {
-      this.widgets.inputText.removeListener('submit', onSubmit);
-      this.widgets.inputPrompt.hide();
-      this.refreshUI();
-    };
-
-    this.widgets.inputText.once('submit', onSubmit);
-    this.widgets.inputText.once('cancel', onCancel);
-  }
-
-  private promptRenameStage(): void {
-    const stageToRename =
-      this.state.viewLevel === 'workflow'
-        ? this.state.workflow.stages.find((s) => s.id === this.state.selectedStageId) ||
-          this.state.currentStage
-        : this.state.currentStage;
-
-    this.widgets.inputPrompt.setLabel(` Rename Stage (${stageToRename.id}) `);
-    this.widgets.inputText.setValue(stageToRename.name);
-    this.widgets.inputPrompt.show();
-    this.widgets.inputText.focus();
-    this.widgets.screen.render();
-
-    const onSubmit = (val: string) => {
-      this.widgets.inputText.removeListener('cancel', onCancel);
-      this.widgets.inputPrompt.hide();
-      const newName = val.trim();
-      if (newName && newName !== stageToRename.name) {
-        this.state.renameStage(stageToRename.id, newName);
-      }
-      this.refreshUI();
-    };
-
-    const onCancel = () => {
-      this.widgets.inputText.removeListener('submit', onSubmit);
-      this.widgets.inputPrompt.hide();
-      this.refreshUI();
-    };
-
-    this.widgets.inputText.once('submit', onSubmit);
-    this.widgets.inputText.once('cancel', onCancel);
-  }
-
-  private promptNewNode(type: NodeType): void {
-    this.widgets.inputPrompt.setLabel(` Enter New Node ID (${type}) `);
-    this.widgets.inputText.setValue(`${type}-${Date.now().toString().slice(-4)}`);
-    this.widgets.inputPrompt.show();
-    this.widgets.inputText.focus();
-    this.widgets.screen.render();
-
-    const onSubmit = (val: string) => {
-      this.widgets.inputText.removeListener('cancel', onCancel);
-      this.widgets.inputPrompt.hide();
-      const nodeId = val.trim();
-      if (!nodeId) {
-        this.refreshUI();
-        return;
-      }
-
-      const newNode: NodeDefinition = {
-        id: nodeId,
-        name: nodeId,
-        type,
-        config: this.getDefaultConfigForType(type, nodeId),
-      };
-
-      this.state.addNode(newNode);
-      this.refreshUI();
-    };
-
-    const onCancel = () => {
-      this.widgets.inputText.removeListener('submit', onSubmit);
-      this.widgets.inputPrompt.hide();
-      this.refreshUI();
-    };
-
-    this.widgets.inputText.once('submit', onSubmit);
-    this.widgets.inputText.once('cancel', onCancel);
-  }
-
-  private getDefaultConfigForType(type: NodeType, id: string): Record<string, unknown> {
-    switch (type) {
-      case 'agent':
-        return { agent: 'executor', prompt: 'Implement changes' };
-      case 'task':
-        return { title: id, description: 'Task execution details' };
-      case 'condition':
-        return { field: 'status', operator: 'equals', value: 'success' };
-      case 'tool':
-        return { tool: 'bash', command: 'echo "Running tool"' };
-      case 'transform':
-        return { transformType: 'custom' };
-      default:
-        return {};
+    if (this.state.discoveredStages.length === 0) {
+      this.showNotice(
+        'No Stage Files Found',
+        'No .json stage files found in .crewmate/workflows/stages/ or workflows/stages/.\nAdd stage JSON definitions to that folder and press R to reload.'
+      );
+      return;
     }
+
+    const items: string[] = [];
+    for (const s of this.state.discoveredStages) {
+      const nodeCount = s.stage.graph?.nodes?.length ?? 0;
+      items.push(`[Stage] ${s.stage.name} (${s.stage.id}) - ${nodeCount} nodes - ${s.fileName}`);
+    }
+
+    this.widgets.paletteModal.setLabel(' Select Stage From File to Add (Enter to Add) ');
+    this.widgets.paletteModal.setItems(items);
+    this.widgets.paletteModal.show();
+    this.widgets.paletteModal.focus();
+    this.widgets.screen.render();
+
+    this.widgets.paletteModal.once('select', (_item, index) => {
+      this.widgets.paletteModal.hide();
+      this.widgets.screen.render();
+
+      const selectedStage = this.state.discoveredStages[index];
+      if (selectedStage) {
+        this.state.addStageFromFile(selectedStage.stage);
+        this.refreshUI();
+      }
+    });
   }
 
   private handleConnectEdge(): void {
@@ -887,18 +796,18 @@ export class EditorController {
       '  h / j / k / l       Move/shift selected node or stage in 2D space',
       '',
       '{bold}Workflow View Operations:{/bold}',
-      '  n                   Add a new stage',
-      '  r / F2              Rename selected stage',
+      '  n                   Add a stage from discovered stage file',
       '  x / Delete          Delete selected stage',
       '  h / l               Reorder stages left or right',
+      '  R                   Reload discovered files from disk',
       '',
       '{bold}Stage View Operations:{/bold}',
-      '  n                   Open node palette (add built-in or discovered node)',
+      '  n                   Add a node from discovered node file',
       '  i                   Toggle Start Node role (sets entryNodeIds)',
-      '  r / F2              Rename current stage',
       '  e                   Connect edge between nodes',
       '  Tab                 Toggle Node Mode vs Edge Mode',
       '  x / Delete          Delete selected node or edge',
+      '  R                   Reload discovered files from disk',
       '  u / Ctrl-R          Undo / Redo',
       '  Ctrl-S              Save modular workflow JSON files',
       '  q / Ctrl-C          Quit editor',

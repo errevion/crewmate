@@ -6,7 +6,6 @@ import { loadAndResolveWorkflow } from '../graph/resolver.js';
 import { EditorState } from '../editor/state.js';
 import { createEditorUI } from '../editor/ui.js';
 import { EditorController } from '../editor/controller.js';
-import { discoverNodesInDirectory } from '../editor/node-discovery.js';
 
 interface EditOptions {
   file?: string;
@@ -52,8 +51,8 @@ export function runEditor(options: EditOptions = {}): void {
   }
 
   const state = new EditorState(initialWorkflow);
-  // Auto-discover existing local nodes from folder
-  state.discoveredNodes = discoverNodesInDirectory(process.cwd());
+  // Auto-discover existing local nodes and stages from folder
+  state.refreshDiscovered(process.cwd());
 
   const widgets = createEditorUI();
 
