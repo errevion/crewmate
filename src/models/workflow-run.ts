@@ -36,6 +36,8 @@ export interface StageRun {
   workflowRunId: string;
   stageId: string;
   status: StageRunStatus;
+  currentNode: string | null;
+  completedNodes: string[];
   context: Record<string, unknown>;
   startedAt: string | null;
   completedAt: string | null;
@@ -74,7 +76,7 @@ export interface WorkflowSummary {
   stageDescription?: string;
   startedAt: string;
   completedAt: string | null;
-  activeNodes?: {
+  currentNode?: {
     id: string;
     name?: string;
     type: string;
@@ -82,7 +84,8 @@ export interface WorkflowSummary {
     allowedTools?: string[];
     deniedTools?: string[];
     config?: Record<string, unknown>;
-  }[];
+  };
+  completedNodes?: string[];
   edges?: {
     from: string;
     to: string;

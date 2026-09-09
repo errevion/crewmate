@@ -180,6 +180,18 @@ export function runMigrations(db: Database.Database): void {
     // column already exists
   }
 
+  try {
+    db.exec(`ALTER TABLE stage_runs ADD COLUMN current_node TEXT`);
+  } catch {
+    // column already exists
+  }
+
+  try {
+    db.exec(`ALTER TABLE stage_runs ADD COLUMN completed_nodes TEXT NOT NULL DEFAULT '[]'`);
+  } catch {
+    // column already exists
+  }
+
   db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_brief_id ON tasks (brief_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_file_locks_task_id ON file_locks (task_id)`);
   db.exec(

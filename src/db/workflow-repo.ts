@@ -7,7 +7,9 @@ import type {
   WorkflowRunStatus,
   StageRunStatus,
 } from '../models/workflow-run.js';
-import type { WorkflowDefinition } from '../models/graph.js';
+import type { WorkflowDefinition, NodeDefinition } from '../models/graph.js';
+import { evaluateCondition } from '../graph/router.js';
+import type { EvaluationContext } from '../graph/router.js';
 
 /**
  * Generates an 8-character hex ID
@@ -26,11 +28,22 @@ function rowToStageRun(row: Record<string, unknown>): StageRun {
     context = {};
   }
 
+  let completedNodes: string[] = [];
+  try {
+    if (row.completed_nodes) {
+      completedNodes = JSON.parse(row.completed_nodes as string);
+    }
+  } catch {
+    completedNodes = [];
+  }
+
   return {
     id: row.id as string,
     workflowRunId: row.workflow_run_id as string,
     stageId: row.stage_id as string,
     status: row.status as StageRunStatus,
+    currentNode: (row.current_node as string) || null,
+    completedNodes,
     context,
     startedAt: (row.started_at as string) || null,
     completedAt: (row.completed_at as string) || null,
@@ -66,6 +79,32 @@ function rowToWorkflowRun(row: Record<string, unknown>): WorkflowRun {
   };
 }
 
+function resolveEntryNodeId(
+  stageDef:
+    | {
+        graph?: {
+          entryNodeIds?: string[];
+          nodes?: NodeDefinition[];
+          edges?: { from: string; to: string }[];
+        };
+      }
+    | undefined
+): string | null {
+  if (!stageDef?.graph) {
+    return null;
+  }
+  const graph = stageDef.graph;
+  if (graph.entryNodeIds && graph.entryNodeIds.length > 0) {
+    return graph.entryNodeIds[0];
+  }
+  if (graph.nodes && graph.nodes.length > 0) {
+    const targetIds = new Set((graph.edges || []).map((e) => e.to));
+    const roots = graph.nodes.filter((n) => !targetIds.has(n.id));
+    return roots.length > 0 ? roots[0].id : graph.nodes[0].id;
+  }
+  return null;
+}
+
 /**
  * Creates and initializes a new workflow run with pending stage runs
  */
@@ -77,6 +116,8 @@ export function createWorkflowRun(
 ): WorkflowRunView {
   const runId = generateId();
   const firstStage = workflowDef.stages.length > 0 ? workflowDef.stages[0].id : null;
+  const firstStageDef = workflowDef.stages.length > 0 ? workflowDef.stages[0] : undefined;
+  const firstNode = resolveEntryNodeId(firstStageDef);
 
   const tx = db.transaction(() => {
     db.prepare(
@@ -88,10 +129,11 @@ export function createWorkflowRun(
       const stage = workflowDef.stages[i];
       const stageRunId = generateId();
       const isFirst = i === 0;
+      const entryNode = isFirst ? firstNode : null;
       db.prepare(
-        `INSERT INTO stage_runs (id, workflow_run_id, stage_id, status, context, started_at)
-         VALUES (?, ?, ?, ?, '{}', ${isFirst ? "datetime('now')" : 'NULL'})`
-      ).run(stageRunId, runId, stage.id, isFirst ? 'running' : 'pending');
+        `INSERT INTO stage_runs (id, workflow_run_id, stage_id, status, current_node, completed_nodes, context, started_at)
+         VALUES (?, ?, ?, ?, ?, '[]', '{}', ${isFirst ? "datetime('now')" : 'NULL'})`
+      ).run(stageRunId, runId, stage.id, isFirst ? 'running' : 'pending', entryNode);
     }
   });
 
@@ -180,7 +222,7 @@ export function advanceWorkflowRun(
     if (currentStageId) {
       db.prepare(
         `UPDATE stage_runs 
-         SET status = 'completed', context = ?, completed_at = datetime('now')
+         SET status = 'completed', current_node = NULL, context = ?, completed_at = datetime('now')
          WHERE workflow_run_id = ? AND stage_id = ?`
       ).run(JSON.stringify(stageOutputs), runId, currentStageId);
     }
@@ -195,6 +237,7 @@ export function advanceWorkflowRun(
     if (nextIndex < stages.length) {
       // Advance to next stage
       const nextStage = stages[nextIndex];
+      const nextEntryNode = resolveEntryNodeId(nextStage);
       db.prepare(
         `UPDATE workflow_runs 
          SET current_stage = ?, context = ?
@@ -203,9 +246,9 @@ export function advanceWorkflowRun(
 
       db.prepare(
         `UPDATE stage_runs 
-         SET status = 'running', started_at = datetime('now')
+         SET status = 'running', current_node = ?, started_at = datetime('now')
          WHERE workflow_run_id = ? AND stage_id = ?`
-      ).run(runId, nextStage.id);
+      ).run(nextEntryNode, runId, nextStage.id);
     } else {
       // Completed all stages
       db.prepare(
@@ -253,13 +296,14 @@ export function skipStageInWorkflowRun(
 
       if (nextIndex < stages.length) {
         const nextStage = stages[nextIndex];
+        const nextEntryNode = resolveEntryNodeId(nextStage);
         db.prepare(`UPDATE workflow_runs SET current_stage = ? WHERE id = ?`).run(
           nextStage.id,
           runId
         );
         db.prepare(
-          `UPDATE stage_runs SET status = 'running', started_at = datetime('now') WHERE workflow_run_id = ? AND stage_id = ?`
-        ).run(runId, nextStage.id);
+          `UPDATE stage_runs SET status = 'running', current_node = ?, started_at = datetime('now') WHERE workflow_run_id = ? AND stage_id = ?`
+        ).run(nextEntryNode, runId, nextStage.id);
       } else {
         db.prepare(
           `UPDATE workflow_runs SET current_stage = NULL, status = 'completed', completed_at = datetime('now') WHERE id = ?`
@@ -295,6 +339,9 @@ export function setStageInWorkflowRun(
     throw new Error(`Stage "${stageId}" does not exist in workflow definition`);
   }
 
+  const targetStageDef = run.workflowDef.stages.find((s) => s.id === stageId);
+  const targetEntryNode = resolveEntryNodeId(targetStageDef);
+
   const tx = db.transaction(() => {
     if (run.currentStage && run.currentStage !== stageId) {
       db.prepare(
@@ -308,8 +355,8 @@ export function setStageInWorkflowRun(
     );
 
     db.prepare(
-      `UPDATE stage_runs SET status = 'running', started_at = COALESCE(started_at, datetime('now')) WHERE workflow_run_id = ? AND stage_id = ?`
-    ).run(runId, stageId);
+      `UPDATE stage_runs SET status = 'running', current_node = COALESCE(current_node, ?), started_at = COALESCE(started_at, datetime('now')) WHERE workflow_run_id = ? AND stage_id = ?`
+    ).run(targetEntryNode, runId, stageId);
   });
 
   tx();
@@ -317,6 +364,99 @@ export function setStageInWorkflowRun(
   const updatedRun = getWorkflowRunById(db, runId);
   if (!updatedRun) {
     throw new Error(`Failed to retrieve workflow run ${runId} after set-stage`);
+  }
+  return updatedRun;
+}
+
+/**
+ * Advances the current node within the active stage's graph.
+ * Evaluates outgoing edges to determine the next node.
+ * If the current node is an exit node (no outgoing edges match), auto-advances the stage.
+ */
+export function advanceNodeInWorkflowRun(
+  db: Database.Database,
+  runId: string,
+  nodeOutputs: Record<string, unknown> = {}
+): WorkflowRunView {
+  const run = getWorkflowRunById(db, runId);
+  if (!run) {
+    throw new Error(`Workflow run ${runId} not found`);
+  }
+
+  const currentStageId = run.currentStage;
+  if (!currentStageId) {
+    throw new Error('No active stage to advance node in');
+  }
+
+  const stageDef = run.workflowDef.stages.find((s) => s.id === currentStageId);
+  if (!stageDef?.graph) {
+    throw new Error(`Stage "${currentStageId}" has no graph definition`);
+  }
+
+  const stageRun = run.stageRuns.find((sr) => sr.stageId === currentStageId);
+  if (!stageRun) {
+    throw new Error(`No stage run found for stage "${currentStageId}"`);
+  }
+
+  const currentNodeId = stageRun.currentNode;
+  if (!currentNodeId) {
+    throw new Error('No current node to advance from');
+  }
+
+  const graph = stageDef.graph;
+  const completedNodes = [...stageRun.completedNodes, currentNodeId];
+  const exitNodeIds = graph.exitNodeIds || [];
+
+  const evalContext: EvaluationContext = {
+    globalContext: run.context || {},
+    stageContext: stageRun.context || {},
+    graphContext: {},
+    nodeOutputs: { [currentNodeId]: nodeOutputs },
+    nodeStates: {
+      [currentNodeId]: {
+        nodeId: currentNodeId,
+        status: 'completed',
+        iteration: 0,
+        inputs: {},
+        outputs: nodeOutputs,
+        retries: 0,
+      },
+    },
+    currentNodeId,
+  };
+
+  const outgoingEdges = graph.edges.filter((e) => e.from === currentNodeId);
+  let nextNodeId: string | null = null;
+
+  for (const edge of outgoingEdges) {
+    const sourceState = evalContext.nodeStates[currentNodeId];
+    if (evaluateCondition(edge.condition, sourceState, evalContext)) {
+      nextNodeId = edge.to;
+      break;
+    }
+  }
+
+  const isExitNode =
+    nextNodeId === null ||
+    (exitNodeIds.length > 0 && exitNodeIds.includes(currentNodeId) && nextNodeId === null);
+
+  if (isExitNode) {
+    return advanceWorkflowRun(db, runId, nodeOutputs);
+  }
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `UPDATE stage_runs
+       SET current_node = ?, completed_nodes = ?
+       WHERE workflow_run_id = ? AND stage_id = ?`
+    ).run(nextNodeId, JSON.stringify(completedNodes), runId, currentStageId);
+  });
+
+  tx();
+
+  const updatedRun = getWorkflowRunById(db, runId);
+  if (!updatedRun) {
+    throw new Error(`Failed to retrieve workflow run ${runId} after node advance`);
   }
   return updatedRun;
 }

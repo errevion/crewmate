@@ -815,6 +815,27 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
         },
       }),
 
+      crewmate_workflow_advance_node: tool({
+        description:
+          "Advance to the next node within the current stage. Evaluates outgoing edges to determine the next node. If the current node is an exit node (no matching outgoing edges), automatically advances to the next stage.",
+        args: {
+          runId: z.string().optional().describe("Optional: Workflow run ID (defaults to active)"),
+          outputs: z.string().optional().describe("Optional: JSON string of outputs/context to pass downstream"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["workflow", "advance-node", "--agent-summary"]
+          if (args.runId) cmdParts.push("--run", args.runId)
+          if (args.outputs) cmdParts.push("--outputs", args.outputs)
+
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Advanced workflow node\`,
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
       crewmate_workflow_skip: tool({
         description:
           "Skip a stage in the active workflow run and proceed to the next.",
@@ -869,8 +890,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
         try {
           const wfStatus = await runCrewmate(targetDir, ["workflow", "status", "--agent-summary"]).catch(() => null)
           if (wfStatus?.ok && wfStatus.data?.status === "running") {
-            const activeNodes = wfStatus.data.activeNodes || []
-            for (const node of activeNodes) {
+            const node = wfStatus.data.currentNode
+            if (node) {
               if (Array.isArray(node.deniedTools) && node.deniedTools.includes(toolName)) {
                 throw new Error(\`Gate restriction: tool '\${toolName}' is forbidden during the '\${node.name || node.id}' step.\`)
               }
