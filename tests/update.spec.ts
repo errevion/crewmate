@@ -29,7 +29,7 @@ describe('OpenCodeAdapter install and update', () => {
     const manifest = readManifest(tmpDir);
     expect(manifest).not.toBeNull();
     expect(manifest?.harness).toBe('opencode');
-    expect(manifest?.version).toBe('0.3.0');
+    expect(manifest?.version).toBe('0.4.5');
     expect(Object.keys(manifest!.files).length).toBe(result.filesWritten.length);
   });
 

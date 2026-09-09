@@ -11,7 +11,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/cli' },
       {
-        text: 'v0.3.0',
+        text: 'v0.4.5',
         items: [
           { text: 'Changelog', link: 'https://github.com/errevion/crewmate/releases' },
           { text: 'Contributing', link: 'https://github.com/errevion/crewmate' },

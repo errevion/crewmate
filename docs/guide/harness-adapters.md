@@ -362,7 +362,7 @@ When an adapter installs or updates files, Crewmate writes metadata and SHA-256 
 
 ```json
 {
-  "version": "0.3.0",
+  "version": "0.4.5",
   "harness": "opencode",
   "installedAt": "2026-09-03T18:15:28.123Z",
   "updatedAt": "2026-09-03T18:30:00.456Z",
@@ -457,7 +457,7 @@ crewmate update --json
 #### Example Output:
 
 ```text
-Updated crewmate integration for opencode (v0.3.0)
+Updated crewmate integration for opencode (v0.4.5)
 
 Files:
   [UNCHANGED]         .opencode/commands/workflow.md

@@ -60,7 +60,7 @@ Verify that the CLI is installed and available in your environment:
 
 ```bash
 crewmate --version
-# Output: 0.3.0
+# Output: 0.4.5
 ```
 
 ---
@@ -153,7 +153,7 @@ crewmate update --dry-run
 
 Output:
 ```text
-Updated crewmate integration for opencode (v0.3.0) [DRY RUN]
+Updated crewmate integration for opencode (v0.4.5) [DRY RUN]
 
 Files:
   [UNCHANGED]         .opencode/plugins/crewmate.ts
