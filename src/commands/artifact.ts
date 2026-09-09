@@ -14,76 +14,15 @@ import {
   getArtifactById,
   invalidateArtifact,
   supersedeArtifact,
+  nextIssueNumber,
+  searchArtifacts,
+  precheckFile,
+  generateBriefing,
+  generateContext,
 } from '../db/artifact-repo.js';
+import type { ArtifactOutcome } from '../models/artifact.js';
 
-interface AddArtifactResult {
-  ok: true;
-  id: string;
-  taskId: string | null;
-  briefId: string;
-  type: string;
-  content: string;
-  status: string;
-  supersededBy: string | null;
-  tags: string[];
-}
-
-interface GetArtifactResult {
-  ok: true;
-  artifact: {
-    id: string;
-    taskId: string | null;
-    briefId: string;
-    type: string;
-    content: string;
-    status: string;
-    supersededBy: string | null;
-    tags: string[];
-    createdAt: string;
-  };
-}
-
-interface ListArtifactsResult {
-  ok: true;
-  artifacts: Array<{
-    id: string;
-    taskId: string | null;
-    briefId: string;
-    type: string;
-    content: string;
-    status: string;
-    supersededBy: string | null;
-    tags: string[];
-    createdAt: string;
-  }>;
-}
-
-interface InvalidateArtifactResult {
-  ok: true;
-  id: string;
-  status: 'invalidated';
-}
-
-interface SupersedeArtifactResult {
-  ok: true;
-  supersededId: string;
-  byId: string;
-}
-
-interface ErrorOutput {
-  ok: false;
-  error: string;
-}
-
-function out(
-  result:
-    | AddArtifactResult
-    | GetArtifactResult
-    | ListArtifactsResult
-    | InvalidateArtifactResult
-    | SupersedeArtifactResult
-    | ErrorOutput
-): void {
+function out(result: Record<string, unknown>): void {
   process.stdout.write(JSON.stringify(result) + '\n');
 }
 
@@ -110,6 +49,7 @@ export function registerArtifactCommand(program: Command): void {
     .option('--base64', 'Interpret content as base64-encoded string')
     .option('--brief <briefId>', 'Optional brief ID (defaults to task brief or latest)')
     .option('--tags <tags...>', 'Optional tags for categorization', [])
+    .option('--at <location>', 'File location to capture in the artifact')
     .action((taskId, opts) => {
       if (!opts.type) {
         fail(`--type is required (${ARTIFACT_TYPES.join(' | ')})`);
@@ -173,8 +113,8 @@ export function registerArtifactCommand(program: Command): void {
           effectiveTaskId,
           resolvedBriefId,
           opts.type as ArtifactType,
-          opts.content.trim(),
-          { tags }
+          content.trim(),
+          { tags, location: opts.at }
         );
 
         out({
@@ -187,6 +127,9 @@ export function registerArtifactCommand(program: Command): void {
           status: artifact.status,
           supersededBy: artifact.supersededBy,
           tags: artifact.tags,
+          location: artifact.location,
+          outcome: artifact.outcome,
+          issueId: artifact.issueId,
         });
       } catch (err: unknown) {
         fail(err instanceof Error ? err.message : 'Failed to create artifact');
@@ -318,5 +261,243 @@ export function registerArtifactCommand(program: Command): void {
         supersededId: oldId,
         byId: newId,
       });
+    });
+
+  function resolveBriefAndTask(opts: { brief?: string; task?: string }): {
+    resolvedBriefId: string;
+    effectiveTaskId: string | null;
+  } {
+    let resolvedBriefId: string | null = opts.brief || null;
+    const effectiveTaskId: string | null = opts.task || null;
+
+    if (effectiveTaskId) {
+      const task = getTaskById(getDb(), effectiveTaskId);
+      if (!task) {
+        fail(`Task not found: ${effectiveTaskId}`);
+      }
+      if (resolvedBriefId && resolvedBriefId !== task.briefId) {
+        fail(`Task ${effectiveTaskId} belongs to brief ${task.briefId}, not ${resolvedBriefId}`);
+      }
+      resolvedBriefId = task.briefId;
+    }
+
+    if (!resolvedBriefId) {
+      const latest = getLatestBrief();
+      if (latest) {
+        resolvedBriefId = latest.id;
+      }
+    }
+
+    if (!resolvedBriefId) {
+      fail('Brief not found. Provide --brief or an existing task ID');
+    }
+
+    return { resolvedBriefId, effectiveTaskId };
+  }
+
+  artifactGroup
+    .command('log')
+    .description('Log an issue')
+    .argument('<summary>', 'Summary of the issue')
+    .option('--at <location>', 'File location')
+    .option('--brief <briefId>', 'Optional brief ID')
+    .option('--task <taskId>', 'Optional task ID')
+    .action((summary, opts) => {
+      const db = getDb();
+      const { resolvedBriefId, effectiveTaskId } = resolveBriefAndTask(opts);
+
+      const issueNumber = nextIssueNumber(db, resolvedBriefId);
+      const content = JSON.stringify({ summary, issueNumber, location: opts.at });
+
+      try {
+        const artifact = createArtifact(db, effectiveTaskId, resolvedBriefId, 'issue', content, {
+          location: opts.at,
+        });
+        out({ ok: true, artifact });
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to create artifact');
+      }
+    });
+
+  artifactGroup
+    .command('attempt')
+    .description('Record an attempt')
+    .argument('<summary>', 'Summary of the attempt')
+    .option('--failed', 'Mark attempt as failed')
+    .option('--worked', 'Mark attempt as worked')
+    .option('--partial', 'Mark attempt as partial')
+    .option('--at <location>', 'File location')
+    .option('--issue <issueId>', 'Associated issue ID')
+    .option('--brief <briefId>', 'Optional brief ID')
+    .option('--task <taskId>', 'Optional task ID')
+    .action((summary, opts) => {
+      const db = getDb();
+      const { resolvedBriefId, effectiveTaskId } = resolveBriefAndTask(opts);
+
+      let outcome: ArtifactOutcome = 'failed';
+      if (opts.worked) {
+        outcome = 'worked';
+      }
+      if (opts.partial) {
+        outcome = 'partial';
+      }
+
+      let issueId = opts.issue;
+      if (!issueId) {
+        const issue = db
+          .prepare(
+            "SELECT id FROM execution_artifacts WHERE type = 'issue' AND status = 'active' AND brief_id = ? ORDER BY created_at DESC LIMIT 1"
+          )
+          .get(resolvedBriefId) as { id: string } | undefined;
+        if (issue) {
+          issueId = issue.id;
+        }
+      }
+
+      const content = JSON.stringify({ summary, outcome, location: opts.at });
+
+      try {
+        const artifact = createArtifact(db, effectiveTaskId, resolvedBriefId, 'attempt', content, {
+          location: opts.at,
+          outcome,
+          issueId,
+        });
+        out({ ok: true, artifact });
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to create artifact');
+      }
+    });
+
+  artifactGroup
+    .command('fix')
+    .description('Record a fix')
+    .argument('<summary>', 'Summary of the fix')
+    .option('--at <location>', 'File location')
+    .option('--issue <issueId>', 'Associated issue ID')
+    .option('--brief <briefId>', 'Optional brief ID')
+    .option('--task <taskId>', 'Optional task ID')
+    .action((summary, opts) => {
+      const db = getDb();
+      const { resolvedBriefId, effectiveTaskId } = resolveBriefAndTask(opts);
+
+      let issueId = opts.issue;
+      if (!issueId) {
+        const issue = db
+          .prepare(
+            "SELECT id FROM execution_artifacts WHERE type = 'issue' AND status = 'active' AND brief_id = ? ORDER BY created_at DESC LIMIT 1"
+          )
+          .get(resolvedBriefId) as { id: string } | undefined;
+        if (issue) {
+          issueId = issue.id;
+        }
+      }
+
+      const content = JSON.stringify({ summary, location: opts.at });
+
+      try {
+        const artifact = createArtifact(db, effectiveTaskId, resolvedBriefId, 'fix', content, {
+          location: opts.at,
+          issueId,
+        });
+        if (issueId) {
+          db.prepare("UPDATE execution_artifacts SET status = 'resolved' WHERE id = ?").run(
+            issueId
+          );
+        }
+        out({ ok: true, artifact });
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to create artifact');
+      }
+    });
+
+  artifactGroup
+    .command('search')
+    .description('Search artifacts')
+    .argument('<query>', 'Search query')
+    .option('--brief <id>', 'Filter by brief ID')
+    .option('--type <type>', 'Filter by artifact type')
+    .option('--status <status>', 'Filter by artifact status')
+    .option('--failed-only', 'Show only failed artifacts')
+    .option('--limit <n>', 'Limit number of results', parseInt)
+    .action((query, opts) => {
+      const db = getDb();
+      try {
+        const artifacts = searchArtifacts(db, query, opts);
+        out({ ok: true, artifacts });
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to search artifacts');
+      }
+    });
+
+  artifactGroup
+    .command('precheck')
+    .description('Precheck a file')
+    .argument('<filepath>', 'File path to precheck')
+    .option('--brief <id>', 'Brief ID')
+    .action((filepath, opts) => {
+      const db = getDb();
+      let resolvedBriefId = opts.brief;
+      if (!resolvedBriefId) {
+        const latest = getLatestBrief();
+        if (latest) {
+          resolvedBriefId = latest.id;
+        } else {
+          fail('Brief not found. Provide --brief');
+        }
+      }
+      try {
+        const warnings = precheckFile(db, filepath, resolvedBriefId);
+        out({ ok: true, warnings });
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to precheck file');
+      }
+    });
+
+  artifactGroup
+    .command('brief')
+    .description('Generate briefing')
+    .option('--brief <id>', 'Brief ID')
+    .action((opts) => {
+      const db = getDb();
+      let resolvedBriefId = opts.brief;
+      if (!resolvedBriefId) {
+        const latest = getLatestBrief();
+        if (latest) {
+          resolvedBriefId = latest.id;
+        } else {
+          fail('Brief not found. Provide --brief');
+        }
+      }
+      try {
+        const briefing = generateBriefing(db, resolvedBriefId);
+        out({ ok: true, briefing });
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to generate briefing');
+      }
+    });
+
+  artifactGroup
+    .command('context')
+    .description('Generate context')
+    .option('--brief <id>', 'Brief ID')
+    .option('--tokens <n>', 'Token limit', parseInt)
+    .option('--focus <path>', 'Focus path')
+    .action((opts) => {
+      const db = getDb();
+      let resolvedBriefId = opts.brief;
+      if (!resolvedBriefId) {
+        const latest = getLatestBrief();
+        if (latest) {
+          resolvedBriefId = latest.id;
+        } else {
+          fail('Brief not found. Provide --brief');
+        }
+      }
+      try {
+        const context = generateContext(db, resolvedBriefId, opts);
+        out({ ok: true, context });
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to generate context');
+      }
     });
 }

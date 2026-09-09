@@ -52,11 +52,14 @@ export function runMigrations(db: Database.Database): void {
       id            TEXT PRIMARY KEY,
       task_id       TEXT REFERENCES tasks(id) ON DELETE CASCADE,
       brief_id      TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
-      type          TEXT NOT NULL CHECK(type IN ('fact', 'decision', 'api_contract', 'constraint', 'note', 'log')),
+      type          TEXT NOT NULL,
       content       TEXT NOT NULL,
-      status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'invalidated')),
+      status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'invalidated', 'resolved')),
       superseded_by TEXT REFERENCES execution_artifacts(id) ON DELETE SET NULL,
       tags          TEXT NOT NULL DEFAULT '[]',
+      location      TEXT,
+      outcome       TEXT CHECK(outcome IS NULL OR outcome IN ('worked', 'failed', 'partial')),
+      issue_id      TEXT,
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
@@ -181,6 +184,26 @@ export function runMigrations(db: Database.Database): void {
   }
 
   try {
+    db.exec(`ALTER TABLE execution_artifacts ADD COLUMN location TEXT`);
+  } catch {
+    // column already exists
+  }
+
+  try {
+    db.exec(
+      `ALTER TABLE execution_artifacts ADD COLUMN outcome TEXT CHECK(outcome IS NULL OR outcome IN ('worked', 'failed', 'partial'))`
+    );
+  } catch {
+    // column already exists
+  }
+
+  try {
+    db.exec(`ALTER TABLE execution_artifacts ADD COLUMN issue_id TEXT`);
+  } catch {
+    // column already exists
+  }
+
+  try {
     db.exec(`ALTER TABLE stage_runs ADD COLUMN current_node TEXT`);
   } catch {
     // column already exists
@@ -204,6 +227,15 @@ export function runMigrations(db: Database.Database): void {
     `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_status ON execution_artifacts (status)`
   );
   db.exec(`CREATE INDEX IF NOT EXISTS idx_execution_artifacts_type ON execution_artifacts (type)`);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_location ON execution_artifacts (location)`
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_issue_id ON execution_artifacts (issue_id)`
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_execution_artifacts_outcome ON execution_artifacts (outcome)`
+  );
   db.exec(
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_session_liveness_brief_harness ON session_liveness (brief_id, harness)`
   );

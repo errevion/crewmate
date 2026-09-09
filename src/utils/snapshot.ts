@@ -77,6 +77,8 @@ export interface WorkflowSnapshot {
   completedCount: number;
   totalCount: number;
   eventCount: number;
+  openIssueCount: number;
+  failedAttemptCount: number;
   updatedAt: string;
   dispatchEdges: DispatchEdge[];
   frontmanState: 'thinking' | 'asking' | 'idle';
@@ -130,6 +132,8 @@ export function buildEmptySnapshot(): WorkflowSnapshot {
     completedCount: 0,
     totalCount: 0,
     eventCount: 0,
+    openIssueCount: 0,
+    failedAttemptCount: 0,
     updatedAt: new Date().toISOString(),
     dispatchEdges: [],
     frontmanState: 'idle',
@@ -160,6 +164,13 @@ export function buildSnapshot(
   const events = listEvents(db, { briefId: brief.id, limit: options.eventLimit ?? 200 });
   const eventCount = countEvents(db, brief.id);
   const workflowRun = getActiveWorkflowRunByBrief(db, brief.id);
+
+  const openIssueCount = artifacts.filter(
+    (a) => a.type === 'issue' && a.status === 'active'
+  ).length;
+  const failedAttemptCount = artifacts.filter(
+    (a) => a.type === 'attempt' && a.outcome === 'failed'
+  ).length;
 
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   const completedIds = new Set(tasks.filter((t) => t.status === 'completed').map((t) => t.id));
@@ -351,6 +362,8 @@ export function buildSnapshot(
     completedCount,
     totalCount: taskViews.length,
     eventCount,
+    openIssueCount,
+    failedAttemptCount,
     updatedAt: new Date().toISOString(),
     dispatchEdges: effectiveDispatchEdges,
     frontmanState,

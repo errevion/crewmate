@@ -1,11 +1,15 @@
 import type {
   ArtifactType,
+  ArtifactOutcome,
   FactPayload,
   DecisionPayload,
   ApiContractPayload,
   ConstraintPayload,
   NotePayload,
   LogPayload,
+  IssuePayload,
+  AttemptPayload,
+  FixPayload,
   StructuredArtifactPayload,
 } from '../models/artifact.js';
 
@@ -20,6 +24,54 @@ export interface ValidationResult<T = StructuredArtifactPayload> {
 }
 
 /**
+ * Detects if a string is base64 encoded and decodes it safely to UTF-8.
+ * Returns null if the string is not valid base64 or decodes to non-text / binary.
+ */
+export function tryDecodeBase64(input: string): string | null {
+  if (!input || typeof input !== 'string') {
+    return null;
+  }
+  const trimmed = input.trim();
+  if (trimmed.length < 8 || trimmed.includes('\n') || trimmed.includes(' ')) {
+    return null;
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const isLikelyBase64 = trimmed.startsWith('ey') || trimmed.endsWith('=') || trimmed.length >= 20;
+  if (!isLikelyBase64) {
+    return null;
+  }
+
+  try {
+    const buf = Buffer.from(trimmed, 'base64');
+    if (buf.length === 0) {
+      return null;
+    }
+    const decoded = buf.toString('utf-8');
+    for (let i = 0; i < decoded.length; i++) {
+      const code = decoded.charCodeAt(i);
+      if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+        return null;
+      }
+    }
+    const decodedTrimmed = decoded.trim();
+    if (
+      decodedTrimmed.startsWith('{') ||
+      decodedTrimmed.startsWith('[') ||
+      decoded.includes(' ') ||
+      decoded.length >= 4
+    ) {
+      return decoded;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
  * Safely attempts to parse a string that might be JSON, double-escaped JSON,
  * or an unquoted JavaScript object literal (e.g. `{ files: [a, b], signatures: [c] }`).
  */
@@ -30,6 +82,14 @@ export function parseRelaxedObject(input: string): Record<string, unknown> | nul
   const trimmed = input.trim();
   if (!trimmed) {
     return null;
+  }
+
+  const b64 = tryDecodeBase64(trimmed);
+  if (b64) {
+    const parsedB64 = parseRelaxedObject(b64);
+    if (parsedB64) {
+      return parsedB64;
+    }
   }
 
   // 1. Try standard JSON.parse directly
@@ -174,6 +234,10 @@ function cleanTextValue(val: unknown): string {
     return '';
   }
   const str = String(val).trim();
+  const b64 = tryDecodeBase64(str);
+  if (b64) {
+    return cleanTextValue(b64);
+  }
   // If string contains escaped JSON wrappers like {"statement": "..."}
   if (str.startsWith('{"') || str.startsWith('{\\"') || str.startsWith('{')) {
     const parsed = parseRelaxedObject(str);
@@ -232,15 +296,62 @@ export function isMeaningfulContent(str: string): boolean {
 }
 
 /**
- * Validates and normalizes artifact payloads
+ * Extracts the file path from a location string, stripping line/column suffixes.
+ * Handles formats: file:line:col, file:line, file, and Windows drive prefixes.
+ */
+export function locationToFile(location: string | null | undefined): string | null {
+  if (!location || typeof location !== 'string') {
+    return null;
+  }
+  const trimmed = location.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const driveMatch = /^([A-Za-z]:[/\\])/.exec(trimmed);
+  if (driveMatch) {
+    const rest = trimmed.slice(driveMatch[1].length);
+    const sepIdx = rest.lastIndexOf(':');
+    if (sepIdx > 0) {
+      const afterSep = rest.slice(sepIdx + 1);
+      if (/^\d+(?::\d+)?$/.test(afterSep)) {
+        return driveMatch[1] + rest.slice(0, sepIdx);
+      }
+    }
+    return trimmed;
+  }
+
+  const lastColon = trimmed.lastIndexOf(':');
+  if (lastColon <= 0) {
+    return trimmed;
+  }
+  const afterColon = trimmed.slice(lastColon + 1);
+  if (/^\d+(?::\d+)?$/.test(afterColon)) {
+    const beforeColon = trimmed.slice(0, lastColon);
+    const prevColon = beforeColon.lastIndexOf(':');
+    if (prevColon > 0 && /^\d+$/.test(beforeColon.slice(prevColon + 1))) {
+      return beforeColon.slice(0, prevColon);
+    }
+    return beforeColon;
+  }
+  return trimmed;
+}
+
+/**
+ *
  */
 export function parseAndValidateArtifactPayload(
   type: ArtifactType,
   rawContent: string
 ): ValidationResult {
-  const trimmed = rawContent.trim();
+  let trimmed = rawContent.trim();
   if (!trimmed) {
     return { valid: false, error: 'Artifact content cannot be empty' };
+  }
+
+  const b64 = tryDecodeBase64(trimmed);
+  if (b64) {
+    trimmed = b64.trim();
   }
 
   const parsed = parseRelaxedObject(trimmed);
@@ -438,6 +549,80 @@ export function parseAndValidateArtifactPayload(
       return { valid: true, data: payload, rawString: JSON.stringify(payload) };
     }
 
+    case 'issue': {
+      if (parsed) {
+        const summary = cleanTextValue(parsed.summary ?? parsed.issue ?? parsed.bug);
+        if (summary && isMeaningfulContent(summary)) {
+          const payload: IssuePayload = {
+            summary,
+            location: parsed.location ? cleanTextValue(parsed.location) : undefined,
+            issueNumber: parsed.issueNumber ? cleanTextValue(parsed.issueNumber) : undefined,
+          };
+          return { valid: true, data: payload, rawString: JSON.stringify(payload) };
+        }
+      }
+      const summary = cleanTextValue(trimmed);
+      if (!isMeaningfulContent(summary)) {
+        return {
+          valid: false,
+          error: 'Issue summary must contain meaningful text (not empty or punctuation only)',
+        };
+      }
+      const payload: IssuePayload = { summary };
+      return { valid: true, data: payload, rawString: JSON.stringify(payload) };
+    }
+
+    case 'attempt': {
+      if (parsed) {
+        const summary = cleanTextValue(parsed.summary ?? parsed.attempt ?? parsed.approach);
+        if (summary && isMeaningfulContent(summary)) {
+          const rawOutcome = String(parsed.outcome ?? '').toLowerCase();
+          const outcome: ArtifactOutcome = (['worked', 'failed', 'partial'] as const).includes(
+            rawOutcome as ArtifactOutcome
+          )
+            ? (rawOutcome as ArtifactOutcome)
+            : 'failed';
+          const payload: AttemptPayload = {
+            summary,
+            outcome,
+            location: parsed.location ? cleanTextValue(parsed.location) : undefined,
+          };
+          return { valid: true, data: payload, rawString: JSON.stringify(payload) };
+        }
+      }
+      const summary = cleanTextValue(trimmed);
+      if (!isMeaningfulContent(summary)) {
+        return {
+          valid: false,
+          error: 'Attempt summary must contain meaningful text (not empty or punctuation only)',
+        };
+      }
+      const payload: AttemptPayload = { summary, outcome: 'failed' };
+      return { valid: true, data: payload, rawString: JSON.stringify(payload) };
+    }
+
+    case 'fix': {
+      if (parsed) {
+        const summary = cleanTextValue(parsed.summary ?? parsed.fix ?? parsed.solution);
+        if (summary && isMeaningfulContent(summary)) {
+          const payload: FixPayload = {
+            summary,
+            location: parsed.location ? cleanTextValue(parsed.location) : undefined,
+          };
+          return { valid: true, data: payload, rawString: JSON.stringify(payload) };
+        }
+      }
+      const summary = cleanTextValue(trimmed);
+      if (!isMeaningfulContent(summary)) {
+        return {
+          valid: false,
+          error: 'Fix summary must contain meaningful text (not empty or punctuation only)',
+        };
+      }
+      const payload: FixPayload = { summary };
+      return { valid: true, data: payload, rawString: JSON.stringify(payload) };
+    }
+
     default:
       return { valid: false, error: `Unsupported artifact type: ${type}` };
   }
@@ -478,6 +663,20 @@ export function summarizeArtifactContent(type: ArtifactType, content: string): s
     if (parsed.rule) {
       const sev = parsed.severity ? `[${String(parsed.severity).toUpperCase()}] ` : '';
       return `${sev}${cleanTextValue(parsed.rule)}`;
+    }
+    if (type === 'issue' && (parsed.summary || parsed.issue || parsed.bug)) {
+      const summary = cleanTextValue(parsed.summary ?? parsed.issue ?? parsed.bug);
+      const prefix = parsed.issueNumber ? `#${cleanTextValue(parsed.issueNumber)} ` : '';
+      return `${prefix}${summary}`;
+    }
+    if (type === 'attempt' && (parsed.summary || parsed.attempt || parsed.approach)) {
+      const summary = cleanTextValue(parsed.summary ?? parsed.attempt ?? parsed.approach);
+      const outcome = String(parsed.outcome ?? 'failed').toUpperCase();
+      return `[${outcome}] ${summary}`;
+    }
+    if (type === 'fix' && (parsed.summary || parsed.fix || parsed.solution)) {
+      const summary = cleanTextValue(parsed.summary ?? parsed.fix ?? parsed.solution);
+      return summary;
     }
     if (parsed.summary) {
       return cleanTextValue(parsed.summary);
@@ -616,6 +815,57 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
       }
       if (details) {
         lines.push(`    {gray-fg}${escapeForBlessed(details)}{/gray-fg}`);
+      }
+      break;
+    }
+
+    case 'issue': {
+      const summary = cleanTextValue(parsed.summary ?? parsed.issue ?? parsed.bug);
+      const location = parsed.location ? cleanTextValue(parsed.location) : '';
+      const issueNumber = parsed.issueNumber ? cleanTextValue(parsed.issueNumber) : '';
+
+      if (summary) {
+        const prefix = issueNumber ? `{cyan-fg}#${escapeForBlessed(issueNumber)}{/cyan-fg} ` : '';
+        lines.push(`  ${prefix}{white-fg}${escapeForBlessed(summary)}{/white-fg}`);
+      }
+      if (location) {
+        lines.push(`  {bold}Location:{/bold}   {gray-fg}${escapeForBlessed(location)}{/gray-fg}`);
+      }
+      break;
+    }
+
+    case 'attempt': {
+      const summary = cleanTextValue(parsed.summary ?? parsed.attempt ?? parsed.approach);
+      const rawOutcome = String(parsed.outcome ?? 'failed').toLowerCase();
+      const outcome = (['worked', 'failed', 'partial'] as const).includes(
+        rawOutcome as ArtifactOutcome
+      )
+        ? rawOutcome
+        : 'failed';
+      const location = parsed.location ? cleanTextValue(parsed.location) : '';
+
+      const outcomeColor = outcome === 'worked' ? 'green' : outcome === 'failed' ? 'red' : 'yellow';
+      lines.push(
+        `  {bold}{${outcomeColor}-fg}[${outcome.toUpperCase()}]{/${outcomeColor}-fg}{/bold}`
+      );
+      if (summary) {
+        lines.push(`  {white-fg}${escapeForBlessed(summary)}{/white-fg}`);
+      }
+      if (location) {
+        lines.push(`  {bold}Location:{/bold}   {gray-fg}${escapeForBlessed(location)}{/gray-fg}`);
+      }
+      break;
+    }
+
+    case 'fix': {
+      const summary = cleanTextValue(parsed.summary ?? parsed.fix ?? parsed.solution);
+      const location = parsed.location ? cleanTextValue(parsed.location) : '';
+
+      if (summary) {
+        lines.push(`  {white-fg}${escapeForBlessed(summary)}{/white-fg}`);
+      }
+      if (location) {
+        lines.push(`  {bold}Location:{/bold}   {gray-fg}${escapeForBlessed(location)}{/gray-fg}`);
       }
       break;
     }

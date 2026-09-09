@@ -511,7 +511,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           "Add an execution artifact / incremental knowledge fact for a task or brief.",
           "Optional: taskId (omit for brief-level facts/constraints discovered during briefing).",
           "REQUIRED: type (fact | decision | api_contract | constraint | note | log), content (plain string or structured JSON).",
-          "Optional: briefId, tags.",
+          "Optional: briefId, tags, location.",
         ].join(" "),
         args: {
           type: z
@@ -521,6 +521,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           taskId: z.string().optional().describe("Optional: The task ID creating this artifact (omit for brief-level findings)"),
           briefId: z.string().optional().describe("Optional: Brief ID"),
           tags: z.array(z.string()).optional().describe("Optional: Categorization tags"),
+          location: z.string().optional().describe("Optional: The file path, module, or component where this artifact applies"),
         },
         async execute(args, context) {
           const cmdParts = [
@@ -544,11 +545,167 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           if (args.tags && args.tags.length > 0) {
             cmdParts.push("--tags", ...args.tags)
           }
+          if (args.location) {
+            cmdParts.push("--at", args.location)
+          }
           const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
           return {
             title: \`Added \${args.type} artifact\${args.taskId ? \` for task \${args.taskId}\` : ""}\`,
             output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_log_issue: tool({
+        description: "Log an issue encountered during execution.",
+        args: {
+          summary: z.string().min(1).describe("REQUIRED: Summary of the issue"),
+          location: z.string().optional().describe("Optional: Location of the issue"),
+          taskId: z.string().optional().describe("Optional: Task ID"),
+          briefId: z.string().optional().describe("Optional: Brief ID"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "log", args.summary]
+          if (args.location) cmdParts.push("--at", args.location)
+          if (args.taskId) cmdParts.push("--task", args.taskId)
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Logged issue: \${args.summary}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_record_attempt: tool({
+        description: "Record a solution attempt for an issue.",
+        args: {
+          summary: z.string().min(1).describe("REQUIRED: Summary of the attempt"),
+          outcome: z.enum(["worked", "failed", "partial"]).describe("REQUIRED: Outcome of the attempt"),
+          location: z.string().optional().describe("Optional: Location of the attempt"),
+          issueId: z.string().optional().describe("Optional: Associated issue ID"),
+          taskId: z.string().optional().describe("Optional: Task ID"),
+          briefId: z.string().optional().describe("Optional: Brief ID"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "attempt", args.summary, \`--\${args.outcome}\`]
+          if (args.location) cmdParts.push("--at", args.location)
+          if (args.issueId) cmdParts.push("--issue", args.issueId)
+          if (args.taskId) cmdParts.push("--task", args.taskId)
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Recorded \${args.outcome} attempt: \${args.summary}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_record_fix: tool({
+        description: "Record a confirmed fix for an issue.",
+        args: {
+          summary: z.string().min(1).describe("REQUIRED: Summary of the fix"),
+          location: z.string().optional().describe("Optional: Location of the fix"),
+          issueId: z.string().optional().describe("Optional: Associated issue ID"),
+          taskId: z.string().optional().describe("Optional: Task ID"),
+          briefId: z.string().optional().describe("Optional: Brief ID"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "fix", args.summary]
+          if (args.location) cmdParts.push("--at", args.location)
+          if (args.issueId) cmdParts.push("--issue", args.issueId)
+          if (args.taskId) cmdParts.push("--task", args.taskId)
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Recorded fix: \${args.summary}\`,
+            output: JSON.stringify(json),
+          }
+        },
+      }),
+
+      crewmate_search_artifacts: tool({
+        description: "Search artifacts by query string.",
+        args: {
+          query: z.string().min(1).describe("REQUIRED: Search query"),
+          type: z.enum(["fact", "decision", "api_contract", "constraint", "note", "log", "issue", "attempt", "fix"]).optional().describe("Optional: Artifact type filter"),
+          status: z.enum(["active", "superseded", "invalidated", "all"]).optional().describe("Optional: Artifact status filter"),
+          failedOnly: z.boolean().optional().describe("Optional: Only include failed attempts"),
+          limit: z.number().optional().describe("Optional: Maximum results to return"),
+          briefId: z.string().optional().describe("Optional: Brief ID filter"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "search", args.query]
+          if (args.type) cmdParts.push("--type", args.type)
+          if (args.status) cmdParts.push("--status", args.status)
+          if (args.failedOnly) cmdParts.push("--failed-only")
+          if (args.limit) cmdParts.push("--limit", String(args.limit))
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Search results for: \${args.query}\`,
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_precheck_file: tool({
+        description: "Check a file for known constraints, issues, and API contracts before editing.",
+        args: {
+          filePath: z.string().min(1).describe("REQUIRED: Path to the file"),
+          briefId: z.string().optional().describe("Optional: Brief ID"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "precheck", args.filePath]
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: \`Precheck for \${args.filePath}\`,
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_get_briefing: tool({
+        description: "Get a comprehensive briefing of the current project state, including brief details, tasks, and key artifacts.",
+        args: {
+          briefId: z.string().optional().describe("Optional: Brief ID (defaults to active)"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "brief"]
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: "Project Briefing",
+            output: JSON.stringify(json, null, 2),
+          }
+        },
+      }),
+
+      crewmate_get_context: tool({
+        description: "Get an optimized context payload including important artifacts and brief status within a token budget.",
+        args: {
+          tokens: z.number().optional().describe("Optional: Maximum token budget"),
+          focus: z.string().optional().describe("Optional: File path or topic to focus context on"),
+          briefId: z.string().optional().describe("Optional: Brief ID"),
+        },
+        async execute(args, context) {
+          const cmdParts = ["artifact", "context"]
+          if (args.tokens) cmdParts.push("--tokens", String(args.tokens))
+          if (args.focus) cmdParts.push("--focus", args.focus)
+          if (args.briefId) cmdParts.push("--brief", args.briefId)
+          const json = await runCrewmate(context.directory, cmdParts)
+          if (!json.ok) throw new Error(json.error)
+          return {
+            title: "Project Context",
+            output: JSON.stringify(json, null, 2),
           }
         },
       }),
@@ -1011,6 +1168,19 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
                   } catch {
                     // plain text
                   }
+                  
+                  if (a.type === "attempt") {
+                    const outcomeStr = a.outcome ? \`[\${a.outcome.toUpperCase()}] \` : ""
+                    return \`- [ATTEMPT] \${outcomeStr}\${payloadSummary}\`
+                  }
+                  if (a.type === "issue") {
+                    const issueIdStr = a.id ? \`[#\${a.id}] \` : ""
+                    return \`- [ISSUE] \${issueIdStr}\${payloadSummary}\`
+                  }
+                  if (a.type === "fix") {
+                    return \`- [FIX] \${payloadSummary}\`
+                  }
+                  
                   return \`- [\${a.type.toUpperCase()}] \${payloadSummary}\`
                 })
 

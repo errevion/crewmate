@@ -458,7 +458,13 @@ export function formatArtifactListItem(
           ? 'cyan'
           : a.type === 'fact'
             ? 'green'
-            : 'white';
+            : a.type === 'issue'
+              ? 'magenta'
+              : a.type === 'attempt'
+                ? 'blue'
+                : a.type === 'fix'
+                  ? 'green'
+                  : 'white';
 
   const statusBadge =
     a.status === 'active'
@@ -471,7 +477,18 @@ export function formatArtifactListItem(
     ? ` · {gray-fg}task:{/gray-fg} {bold}${truncate(tasksMap.get(a.taskId)?.title ?? a.taskId, 32)}{/bold}`
     : ' · {gray-fg}scope:{/gray-fg} {bold}brief{/bold}';
 
-  const summary = summarizeArtifactContent(a.type, a.content);
+  let summary = summarizeArtifactContent(a.type, a.content);
+  if (a.type === 'issue' && a.issueId) {
+    summary = `[#${a.issueId}] ${summary}`;
+  } else if (a.type === 'attempt' && a.outcome) {
+    const outcomeBadge =
+      a.outcome === 'worked'
+        ? '{green-fg}[WORKED]{/green-fg}'
+        : a.outcome === 'failed'
+          ? '{red-fg}[FAILED]{/red-fg}'
+          : '{yellow-fg}[PARTIAL]{/yellow-fg}';
+    summary = `${outcomeBadge} ${summary}`;
+  }
   return `${statusBadge} {bold}{${typeColor}-fg}[${a.type.toUpperCase()}]{/${typeColor}-fg}{/bold} ${truncate(summary, 50)}${taskSuffix}`;
 }
 
@@ -503,9 +520,27 @@ export function formatArtifactDetail(
           ? 'cyan'
           : a.type === 'fact'
             ? 'green'
-            : 'white';
+            : a.type === 'issue'
+              ? 'magenta'
+              : a.type === 'attempt'
+                ? 'blue'
+                : a.type === 'fix'
+                  ? 'green'
+                  : 'white';
 
   lines.push(`{bold}{cyan-fg}Artifact ID:{/cyan-fg}{/bold} ${a.id}`);
+  if (a.issueId) {
+    lines.push(`{bold}{cyan-fg}Issue ID:{/cyan-fg}{/bold}    ${a.issueId}`);
+  }
+  if (a.outcome) {
+    const oColor = a.outcome === 'worked' ? 'green' : a.outcome === 'failed' ? 'red' : 'yellow';
+    lines.push(
+      `{bold}{cyan-fg}Outcome:{/cyan-fg}{/bold}     {${oColor}-fg}${a.outcome.toUpperCase()}{/${oColor}-fg}`
+    );
+  }
+  if (a.location) {
+    lines.push(`{bold}{cyan-fg}Location:{/cyan-fg}{/bold}    ${a.location}`);
+  }
   lines.push(
     `{bold}{cyan-fg}Category:{/cyan-fg}{/bold}    {bold}{${typeColor}-fg}${a.type.toUpperCase()}{/${typeColor}-fg}{/bold}`
   );
@@ -832,6 +867,39 @@ function runDashboard(opts: WatchOptions): void {
     hidden: true,
   });
 
+  const issueListModal = blessed.list({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    bottom: 2,
+    label: ' Open Issues (Enter: view details) ',
+    border: { type: 'line' },
+    style: {
+      fg: 'white',
+      border: { fg: 'magenta' },
+      bg: 'black',
+      selected: {
+        bg: 'magenta',
+        fg: 'black',
+        bold: true,
+      },
+      item: {
+        fg: 'white',
+      },
+    },
+    tags: true,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollable: true,
+    scrollbar: {
+      ch: '│',
+      style: { fg: 'magenta' },
+    },
+    hidden: true,
+  });
+
   const artifactListModal = blessed.list({
     parent: screen,
     top: 0,
@@ -951,6 +1019,7 @@ function runDashboard(opts: WatchOptions): void {
   let selectedTaskId: string | null = null;
   let currentArtifacts: ExecutionArtifact[] = [];
   let selectedArtifactId: string | null = null;
+  let currentIssues: ExecutionArtifact[] = [];
   let currentEvents: ExecutionEvent[] = [];
   let selectedEventId: string | null = null;
 
@@ -1179,6 +1248,19 @@ function runDashboard(opts: WatchOptions): void {
       }
     }
 
+    if (!issueListModal.hidden) {
+      const brief = resolveBrief(currentBriefId);
+      if (brief) {
+        currentIssues = listArtifacts(getDb(), { briefId: brief.id, status: 'active' }).filter(
+          (a) => a.type === 'issue'
+        );
+        const allTasks = listTasksByBrief(getDb(), brief.id);
+        if (currentIssues.length > 0) {
+          issueListModal.setItems(currentIssues.map((a) => formatArtifactListItem(a, allTasks)));
+        }
+      }
+    }
+
     screen.render();
   }
 
@@ -1204,7 +1286,7 @@ function runDashboard(opts: WatchOptions): void {
   const animTimer = setInterval(tickAnim, ANIMATION_TICK_MS);
 
   const MAIN_FOOTER =
-    ' q / Ctrl-C: quit · b: briefs · t: tasks · a: artifacts · e: events · w: workflow ';
+    ' q / Ctrl-C: quit · b: briefs · t: tasks · i: issues · a: artifacts · e: events · w: workflow ';
   const BRIEF_LIST_FOOTER =
     ' q / Ctrl-C: quit · Enter: select · v: view details · b / Esc: close · ↑/↓/k/j: navigate ';
   const BRIEF_DETAIL_FOOTER =
@@ -1217,6 +1299,8 @@ function runDashboard(opts: WatchOptions): void {
     ' q / Ctrl-C: quit · Enter: view event · e / Esc: close events · ↑/↓/k/j: navigate ';
   const EVENT_DETAIL_FOOTER =
     ' q / Ctrl-C: quit · Esc: back to event list · e: close events · ↑/↓/k/j/PgUp/PgDn: scroll ';
+  const ISSUE_LIST_FOOTER =
+    ' q / Ctrl-C: quit · Enter: view issue · i / Esc: close issues · ↑/↓/k/j: navigate ';
   const WORKFLOW_FOOTER =
     ' q / Ctrl-C: quit · w / Esc: close workflow · ↑/↓/k/j/PgUp/PgDn: scroll ';
   const TASK_LIST_FOOTER =
@@ -1233,6 +1317,8 @@ function runDashboard(opts: WatchOptions): void {
       footer.setContent(ARTIFACT_DETAIL_FOOTER);
     } else if (!artifactListModal.hidden) {
       footer.setContent(ARTIFACT_LIST_FOOTER);
+    } else if (!issueListModal.hidden) {
+      footer.setContent(ISSUE_LIST_FOOTER);
     } else if (!eventDetailModal.hidden) {
       footer.setContent(EVENT_DETAIL_FOOTER);
     } else if (!eventListModal.hidden) {
@@ -1272,6 +1358,9 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!workflowModal.hidden) {
       workflowModal.hide();
+    }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
     }
     currentBriefs = listBriefs(getDb());
     if (currentBriefs.length === 0) {
@@ -1349,6 +1438,9 @@ function runDashboard(opts: WatchOptions): void {
     if (!workflowModal.hidden) {
       workflowModal.hide();
     }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
+    }
     const brief = resolveBrief(currentBriefId);
     if (!brief) {
       taskListModal.setItems([
@@ -1417,6 +1509,9 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!workflowModal.hidden) {
       workflowModal.hide();
+    }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
     }
     const brief = resolveBrief(currentBriefId);
     if (!brief) {
@@ -1489,6 +1584,9 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!workflowModal.hidden) {
       workflowModal.hide();
+    }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
     }
     const brief = resolveBrief(currentBriefId);
     if (!brief) {
@@ -1567,6 +1665,9 @@ function runDashboard(opts: WatchOptions): void {
     if (!workflowModal.hidden) {
       workflowModal.hide();
     }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
+    }
     openTaskListModal();
   }
 
@@ -1602,6 +1703,9 @@ function runDashboard(opts: WatchOptions): void {
     }
     if (!workflowModal.hidden) {
       workflowModal.hide();
+    }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
     }
     openBriefListModal();
   }
@@ -1639,6 +1743,9 @@ function runDashboard(opts: WatchOptions): void {
     if (!workflowModal.hidden) {
       workflowModal.hide();
     }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
+    }
     openArtifactListModal();
   }
 
@@ -1675,10 +1782,19 @@ function runDashboard(opts: WatchOptions): void {
     if (!workflowModal.hidden) {
       workflowModal.hide();
     }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
+    }
     openEventListModal();
   }
 
   function toggleWorkflowModal(): void {
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
     if (!taskListModal.hidden) {
       taskListModal.hide();
     }
@@ -1703,21 +1819,87 @@ function runDashboard(opts: WatchOptions): void {
     if (!eventDetailModal.hidden) {
       eventDetailModal.hide();
     }
-    if (workflowModal.hidden) {
-      const brief = resolveBrief(currentBriefId);
-      const workflowRun = getActiveWorkflowRunByBrief(getDb(), brief?.id);
-      workflowModal.setContent(renderWorkflowDetails(workflowRun, spinnerFrame));
-      workflowModal.scrollTo(0);
-      workflowModal.show();
-      workflowModal.focus();
-      updateFooter();
-      screen.render();
-    } else {
-      workflowModal.hide();
-      updateFooter();
-      screen.render();
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
     }
+    const brief = resolveBrief(currentBriefId);
+    const workflowRun = getActiveWorkflowRunByBrief(getDb(), brief?.id);
+    workflowModal.setContent(renderWorkflowDetails(workflowRun, spinnerFrame));
+    workflowModal.scrollTo(0);
+    workflowModal.show();
+    workflowModal.focus();
+    updateFooter();
+    screen.render();
   }
+
+  function openIssueListModal(): void {
+    if (!briefListModal.hidden) {
+      briefListModal.hide();
+    }
+    if (!briefDetailModal.hidden) {
+      briefDetailModal.hide();
+    }
+    if (!taskListModal.hidden) {
+      taskListModal.hide();
+    }
+    if (!taskDetailModal.hidden) {
+      taskDetailModal.hide();
+    }
+    if (!artifactDetailModal.hidden) {
+      artifactDetailModal.hide();
+    }
+    if (!artifactListModal.hidden) {
+      artifactListModal.hide();
+    }
+    if (!eventListModal.hidden) {
+      eventListModal.hide();
+    }
+    if (!eventDetailModal.hidden) {
+      eventDetailModal.hide();
+    }
+    if (!workflowModal.hidden) {
+      workflowModal.hide();
+    }
+    const brief = resolveBrief(currentBriefId);
+    if (!brief) {
+      issueListModal.setItems([
+        '{yellow-fg}(no brief created yet — run /workflow or `crewmate workflow start`){/yellow-fg}',
+      ]);
+      currentIssues = [];
+    } else {
+      currentIssues = listArtifacts(getDb(), { briefId: brief.id, status: 'active' }).filter(
+        (a) => a.type === 'issue'
+      );
+      const allTasks = listTasksByBrief(getDb(), brief.id);
+      if (currentIssues.length === 0) {
+        issueListModal.setItems(['{yellow-fg}(no open issues recorded){/yellow-fg}']);
+      } else {
+        issueListModal.setItems(currentIssues.map((a) => formatArtifactListItem(a, allTasks)));
+        issueListModal.select(0);
+      }
+    }
+    issueListModal.show();
+    issueListModal.focus();
+    updateFooter();
+    screen.render();
+  }
+
+  function toggleIssueModal(): void {
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
+    openIssueListModal();
+  }
+
+  issueListModal.on('select', (_item, index) => {
+    const issue = currentIssues[index];
+    if (issue) {
+      showArtifactDetail(issue.id);
+    }
+  });
 
   screen.key(['b', 'B'], () => {
     toggleBriefModal();
@@ -1729,6 +1911,10 @@ function runDashboard(opts: WatchOptions): void {
 
   screen.key(['a', 'A'], () => {
     toggleArtifactModal();
+  });
+
+  screen.key(['i', 'I'], () => {
+    toggleIssueModal();
   });
 
   screen.key(['e', 'E'], () => {
@@ -1790,6 +1976,12 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
       return;
     }
+    if (!issueListModal.hidden) {
+      issueListModal.hide();
+      updateFooter();
+      screen.render();
+      return;
+    }
     clearInterval(pollTimer);
     clearInterval(animTimer);
     cleanup();
@@ -1821,6 +2013,9 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!workflowModal.hidden) {
       workflowModal.scroll(-1);
       screen.render();
+    } else if (!issueListModal.hidden) {
+      issueListModal.scroll(-1);
+      screen.render();
     }
   });
 
@@ -1839,6 +2034,9 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
     } else if (!workflowModal.hidden) {
       workflowModal.scroll(1);
+      screen.render();
+    } else if (!issueListModal.hidden) {
+      issueListModal.scroll(1);
       screen.render();
     }
   });
@@ -1859,6 +2057,9 @@ function runDashboard(opts: WatchOptions): void {
     } else if (!workflowModal.hidden) {
       workflowModal.scroll(-5);
       screen.render();
+    } else if (!issueListModal.hidden) {
+      issueListModal.scroll(-5);
+      screen.render();
     }
   });
 
@@ -1877,6 +2078,9 @@ function runDashboard(opts: WatchOptions): void {
       screen.render();
     } else if (!workflowModal.hidden) {
       workflowModal.scroll(5);
+      screen.render();
+    } else if (!issueListModal.hidden) {
+      issueListModal.scroll(5);
       screen.render();
     }
   });

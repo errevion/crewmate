@@ -4,9 +4,13 @@ import type {
   ExecutionArtifact,
   ArtifactType,
   ArtifactStatus,
+  ArtifactOutcome,
   ApiContractPayload,
 } from '../models/artifact.js';
-import { parseAndValidateArtifactPayload } from '../utils/artifact-validation.js';
+import {
+  parseAndValidateArtifactPayload,
+  summarizeArtifactContent,
+} from '../utils/artifact-validation.js';
 import { getTaskById, listTasksByBrief } from './task-repo.js';
 
 /**
@@ -35,6 +39,9 @@ function rowToArtifact(row: Record<string, unknown>): ExecutionArtifact {
     status: (row.status as ArtifactStatus) || 'active',
     supersededBy: (row.superseded_by as string) || null,
     tags,
+    location: (row.location as string) || null,
+    outcome: (row.outcome as ArtifactOutcome) || null,
+    issueId: (row.issue_id as string) || null,
     createdAt: row.created_at as string,
   };
 }
@@ -47,6 +54,9 @@ export interface CreateArtifactOptions {
   status?: ArtifactStatus;
   supersededBy?: string;
   autoSupersede?: boolean;
+  location?: string;
+  outcome?: ArtifactOutcome;
+  issueId?: string;
 }
 
 /**
@@ -72,12 +82,27 @@ export function createArtifact(
   const tags = options?.tags ?? [];
   const supersededBy = options?.supersededBy ?? null;
   const autoSupersede = options?.autoSupersede ?? true;
+  const location = options?.location ?? null;
+  const outcome = options?.outcome ?? null;
+  const issueId = options?.issueId ?? null;
 
   const tx = db.transaction(() => {
     db.prepare(
-      `INSERT INTO execution_artifacts (id, task_id, brief_id, type, content, status, superseded_by, tags)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(id, taskId, briefId, type, payloadString, status, supersededBy, JSON.stringify(tags));
+      `INSERT INTO execution_artifacts (id, task_id, brief_id, type, content, status, superseded_by, tags, location, outcome, issue_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id,
+      taskId,
+      briefId,
+      type,
+      payloadString,
+      status,
+      supersededBy,
+      JSON.stringify(tags),
+      location,
+      outcome,
+      issueId
+    );
 
     // If this is an active api_contract and autoSupersede is enabled, check for previous active contracts
     if (type === 'api_contract' && status === 'active' && autoSupersede && validation.data) {
@@ -148,12 +173,15 @@ export interface ListArtifactsFilter {
 }
 
 const TYPE_PRIORITY: Record<ArtifactType, number> = {
+  issue: 0,
   constraint: 1,
   api_contract: 2,
   decision: 3,
   fact: 4,
   note: 5,
   log: 6,
+  attempt: 7,
+  fix: 8,
 };
 
 /**
@@ -281,6 +309,18 @@ export function checkTaskArtifactCompliance(
   }
 
   const artifacts = listArtifacts(db, { taskId, status: 'active' });
+  const openIssues = artifacts.filter((a) => a.type === 'issue' && a.status === 'active');
+
+  if (openIssues.length > 0) {
+    return {
+      compliant: false,
+      recorded: artifacts.length,
+      required: task.artifactRequirements ?? [],
+      missing: [],
+      error: `Cannot complete task — there are ${openIssues.length} unresolved issues associated with this task.`,
+    };
+  }
+
   const recordedTypes = new Set(artifacts.map((a) => a.type));
 
   const required = task.artifactRequirements ?? [];
@@ -337,4 +377,315 @@ export function supersedeArtifact(db: Database.Database, oldId: string, newId: s
  */
 export function invalidateArtifact(db: Database.Database, id: string): void {
   db.prepare(`UPDATE execution_artifacts SET status = 'invalidated' WHERE id = ?`).run(id);
+}
+
+/**
+ *
+ */
+export function nextIssueNumber(db: Database.Database, briefId: string): string {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) as count FROM execution_artifacts WHERE brief_id = ? AND type = 'issue'`
+    )
+    .get(briefId) as { count: number } | undefined;
+  return String((row?.count ?? 0) + 1).padStart(4, '0');
+}
+
+/**
+ *
+ */
+export interface SearchArtifactsOptions {
+  briefId?: string;
+  type?: ArtifactType | ArtifactType[];
+  status?: ArtifactStatus | 'all';
+  failedOnly?: boolean;
+  limit?: number;
+}
+
+/**
+ *
+ */
+export function searchArtifacts(
+  db: Database.Database,
+  query: string,
+  options?: SearchArtifactsOptions
+): ExecutionArtifact[] {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  conditions.push('content LIKE ? COLLATE NOCASE');
+  params.push(`%${query}%`);
+
+  if (options?.briefId) {
+    conditions.push('brief_id = ?');
+    params.push(options.briefId);
+  }
+
+  if (options?.type) {
+    if (Array.isArray(options.type)) {
+      if (options.type.length > 0) {
+        const placeholders = options.type.map(() => '?').join(', ');
+        conditions.push(`type IN (${placeholders})`);
+        params.push(...options.type);
+      }
+    } else {
+      conditions.push('type = ?');
+      params.push(options.type);
+    }
+  }
+
+  const statusFilter = options?.status ?? 'active';
+  if (statusFilter !== 'all') {
+    conditions.push('status = ?');
+    params.push(statusFilter);
+  }
+
+  if (options?.failedOnly) {
+    conditions.push("type = 'attempt'");
+    conditions.push("outcome = 'failed'");
+  }
+
+  const limit = options?.limit ?? 20;
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const stmt = db.prepare(
+    `SELECT * FROM execution_artifacts ${whereClause} ORDER BY created_at DESC LIMIT ?`
+  );
+  const rows = stmt.all(...params, limit) as Record<string, unknown>[];
+  return rows.map(rowToArtifact);
+}
+
+/**
+ *
+ */
+export interface PrecheckWarning {
+  severity: 'warning' | 'danger';
+  title: string;
+  details: string[];
+}
+
+/**
+ *
+ */
+export function precheckFile(
+  db: Database.Database,
+  filePath: string,
+  briefId?: string
+): PrecheckWarning[] {
+  const warnings: PrecheckWarning[] = [];
+  const conditions: string[] = ['location LIKE ? COLLATE NOCASE'];
+  const params: unknown[] = [`%${filePath}%`];
+
+  if (briefId) {
+    conditions.push('brief_id = ?');
+    params.push(briefId);
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  const activeIssues = db
+    .prepare(
+      `SELECT * FROM execution_artifacts WHERE ${whereClause} AND type = 'issue' AND status = 'active'`
+    )
+    .all(...params) as Record<string, unknown>[];
+
+  if (activeIssues.length > 0) {
+    const issueArtifacts = activeIssues.map(rowToArtifact);
+    warnings.push({
+      severity: 'danger',
+      title: `${activeIssues.length} active issue(s) at this location`,
+      details: issueArtifacts.map((a) => summarizeArtifactContent(a.type, a.content)),
+    });
+  }
+
+  const failedAttempts = db
+    .prepare(
+      `SELECT * FROM execution_artifacts WHERE ${whereClause} AND type = 'attempt' AND outcome = 'failed' AND status = 'active'`
+    )
+    .all(...params) as Record<string, unknown>[];
+
+  if (failedAttempts.length > 0) {
+    const attemptArtifacts = failedAttempts.map(rowToArtifact);
+    warnings.push({
+      severity: 'warning',
+      title: `${failedAttempts.length} previously failed approach(es) at this location`,
+      details: attemptArtifacts.map((a) => summarizeArtifactContent(a.type, a.content)),
+    });
+  }
+
+  const allAtLocation = db
+    .prepare(`SELECT COUNT(*) as count FROM execution_artifacts WHERE ${whereClause}`)
+    .get(...params) as { count: number } | undefined;
+
+  if ((allAtLocation?.count ?? 0) > 5) {
+    warnings.push({
+      severity: 'warning',
+      title: `High churn: ${allAtLocation?.count ?? 0} artifacts at this location`,
+      details: ['This file has been modified frequently — review before making further changes.'],
+    });
+  }
+
+  return warnings;
+}
+
+/**
+ *
+ */
+export interface SessionBriefing {
+  openIssues: ExecutionArtifact[];
+  recentFixes: ExecutionArtifact[];
+  recentDecisions: ExecutionArtifact[];
+  failedAttempts: ExecutionArtifact[];
+  activeConstraints: ExecutionArtifact[];
+  totalArtifacts: number;
+}
+
+/**
+ *
+ */
+export function generateBriefing(db: Database.Database, briefId: string): SessionBriefing {
+  const openIssues = (
+    db
+      .prepare(
+        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'issue' AND status = 'active'`
+      )
+      .all(briefId) as Record<string, unknown>[]
+  ).map(rowToArtifact);
+
+  const recentFixes = (
+    db
+      .prepare(
+        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'fix' ORDER BY created_at DESC LIMIT 5`
+      )
+      .all(briefId) as Record<string, unknown>[]
+  ).map(rowToArtifact);
+
+  const recentDecisions = (
+    db
+      .prepare(
+        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'decision' AND status = 'active' ORDER BY created_at DESC LIMIT 5`
+      )
+      .all(briefId) as Record<string, unknown>[]
+  ).map(rowToArtifact);
+
+  const failedAttempts = (
+    db
+      .prepare(
+        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'attempt' AND outcome = 'failed' AND status = 'active' ORDER BY created_at DESC LIMIT 10`
+      )
+      .all(briefId) as Record<string, unknown>[]
+  ).map(rowToArtifact);
+
+  const activeConstraints = (
+    db
+      .prepare(
+        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'constraint' AND status = 'active'`
+      )
+      .all(briefId) as Record<string, unknown>[]
+  ).map(rowToArtifact);
+
+  const totalRow = db
+    .prepare(`SELECT COUNT(*) as count FROM execution_artifacts WHERE brief_id = ?`)
+    .get(briefId) as { count: number } | undefined;
+  const totalArtifacts = totalRow?.count ?? 0;
+
+  return {
+    openIssues,
+    recentFixes,
+    recentDecisions,
+    failedAttempts,
+    activeConstraints,
+    totalArtifacts,
+  };
+}
+
+/**
+ *
+ */
+export interface ContextOptions {
+  tokens?: number;
+  focus?: string;
+}
+
+/**
+ *
+ */
+export function generateContext(
+  db: Database.Database,
+  briefId: string,
+  options?: ContextOptions
+): string {
+  const maxTokens = options?.tokens ?? 2000;
+  const maxChars = maxTokens * 4;
+  const focus = options?.focus?.toLowerCase();
+
+  const briefing = generateBriefing(db, briefId);
+  const sections: string[] = [];
+
+  if (briefing.openIssues.length > 0) {
+    const lines = ['## Open Issues'];
+    const sorted = focus
+      ? [...briefing.openIssues].sort((a, b) => {
+          const aMatch =
+            a.content.toLowerCase().includes(focus) ||
+            (a.location?.toLowerCase().includes(focus) ?? false);
+          const bMatch =
+            b.content.toLowerCase().includes(focus) ||
+            (b.location?.toLowerCase().includes(focus) ?? false);
+          return aMatch === bMatch ? 0 : aMatch ? -1 : 1;
+        })
+      : briefing.openIssues;
+    for (const a of sorted) {
+      lines.push(`- [${a.id}] ${summarizeArtifactContent(a.type, a.content)}`);
+    }
+    sections.push(lines.join('\n'));
+  }
+
+  if (briefing.failedAttempts.length > 0) {
+    const lines = ['## Failed Approaches (DO NOT retry)'];
+    const sorted = focus
+      ? [...briefing.failedAttempts].sort((a, b) => {
+          const aMatch =
+            a.content.toLowerCase().includes(focus) ||
+            (a.location?.toLowerCase().includes(focus) ?? false);
+          const bMatch =
+            b.content.toLowerCase().includes(focus) ||
+            (b.location?.toLowerCase().includes(focus) ?? false);
+          return aMatch === bMatch ? 0 : aMatch ? -1 : 1;
+        })
+      : briefing.failedAttempts;
+    for (const a of sorted) {
+      lines.push(`- [${a.id}] ${summarizeArtifactContent(a.type, a.content)}`);
+    }
+    sections.push(lines.join('\n'));
+  }
+
+  if (briefing.recentDecisions.length > 0) {
+    const lines = ['## Active Decisions'];
+    const sorted = focus
+      ? [...briefing.recentDecisions].sort((a, b) => {
+          const aMatch = a.content.toLowerCase().includes(focus);
+          const bMatch = b.content.toLowerCase().includes(focus);
+          return aMatch === bMatch ? 0 : aMatch ? -1 : 1;
+        })
+      : briefing.recentDecisions;
+    for (const a of sorted) {
+      lines.push(`- [${a.id}] ${summarizeArtifactContent(a.type, a.content)}`);
+    }
+    sections.push(lines.join('\n'));
+  }
+
+  if (briefing.activeConstraints.length > 0) {
+    const lines = ['## Constraints'];
+    for (const a of briefing.activeConstraints) {
+      lines.push(`- [${a.id}] ${summarizeArtifactContent(a.type, a.content)}`);
+    }
+    sections.push(lines.join('\n'));
+  }
+
+  let result = sections.join('\n\n');
+  if (result.length > maxChars) {
+    result = result.slice(0, maxChars - 3) + '...';
+  }
+
+  return result;
 }
