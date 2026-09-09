@@ -102,7 +102,7 @@ crewmate update [options]
 {
   "ok": true,
   "harness": "opencode",
-  "version": "0.3.0",
+  "version": "0.4.5",
   "dryRun": false,
   "files": [
     {

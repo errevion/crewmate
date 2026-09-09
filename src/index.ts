@@ -13,7 +13,7 @@ import { registerWorkflowCommands } from './commands/workflow.js';
 
 const program = new Command();
 
-program.name('crewmate').description('AI agent workflow CLI tool').version('0.3.0');
+program.name('crewmate').description('AI agent workflow CLI tool').version('0.4.5');
 
 registerBriefCommand(program);
 registerInitCommand(program);
