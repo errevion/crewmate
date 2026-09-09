@@ -7,6 +7,7 @@ import {
   getWorkflowRunById,
   getActiveWorkflowRunByBrief,
   advanceWorkflowRun,
+  advanceNodeInWorkflowRun,
   skipStageInWorkflowRun,
   setStageInWorkflowRun,
   updateWorkflowRunStatus,
@@ -34,7 +35,10 @@ describe('Workflow Repository & Run State Persistence', () => {
     expect(run.stageRuns).toHaveLength(5);
     expect(run.stageRuns[0].stageId).toBe('discussion');
     expect(run.stageRuns[0].status).toBe('running');
+    expect(run.stageRuns[0].currentNode).toBe('frontman-interview');
+    expect(run.stageRuns[0].completedNodes).toEqual([]);
     expect(run.stageRuns[1].status).toBe('pending');
+    expect(run.stageRuns[1].currentNode).toBeNull();
   });
 
   it('fetches the active workflow run by brief', () => {
@@ -120,5 +124,67 @@ describe('Workflow Repository & Run State Persistence', () => {
     const brief1Runs = listWorkflowRuns(db, brief1.id);
     expect(brief1Runs).toHaveLength(1);
     expect(brief1Runs[0].briefId).toBe(brief1.id);
+  });
+
+  it('advances nodes within a stage following edge conditions', () => {
+    const brief = createBrief(db, 'software', 'Test node advance');
+    const run = createWorkflowRun(db, brief.id, DEFAULT_WORKFLOW);
+
+    expect(run.stageRuns[0].currentNode).toBe('frontman-interview');
+    expect(run.stageRuns[0].completedNodes).toEqual([]);
+
+    const afterNode1 = advanceNodeInWorkflowRun(db, run.id, { interviewDone: true });
+    expect(afterNode1.currentStage).toBe('discussion');
+    const discussionStage = afterNode1.stageRuns.find((s) => s.stageId === 'discussion');
+    expect(discussionStage?.currentNode).toBe('validate-brief');
+    expect(discussionStage?.completedNodes).toEqual(['frontman-interview']);
+  });
+
+  it('auto-advances stage when advancing past exit node', () => {
+    const brief = createBrief(db, 'software', 'Test exit node');
+    const run = createWorkflowRun(db, brief.id, DEFAULT_WORKFLOW);
+
+    advanceNodeInWorkflowRun(db, run.id, {});
+    const afterExitNode = advanceNodeInWorkflowRun(db, run.id, { isComplete: true });
+
+    expect(afterExitNode.currentStage).toBe('research');
+    expect(afterExitNode.stageRuns.find((s) => s.stageId === 'discussion')?.status).toBe(
+      'completed'
+    );
+    expect(afterExitNode.stageRuns.find((s) => s.stageId === 'research')?.status).toBe('running');
+    expect(afterExitNode.stageRuns.find((s) => s.stageId === 'research')?.currentNode).toBe(
+      'scout-explore'
+    );
+  });
+
+  it('sets entry node when advancing to a new stage via advanceWorkflowRun', () => {
+    const brief = createBrief(db, 'software', 'Test stage advance entry node');
+    const run = createWorkflowRun(db, brief.id, DEFAULT_WORKFLOW);
+
+    const afterAdvance = advanceWorkflowRun(db, run.id, { briefDone: true });
+    expect(afterAdvance.currentStage).toBe('research');
+    const researchStage = afterAdvance.stageRuns.find((s) => s.stageId === 'research');
+    expect(researchStage?.currentNode).toBe('scout-explore');
+    expect(researchStage?.completedNodes).toEqual([]);
+  });
+
+  it('sets entry node when skipping to a new stage', () => {
+    const brief = createBrief(db, 'software', 'Test skip entry node');
+    const run = createWorkflowRun(db, brief.id, DEFAULT_WORKFLOW);
+
+    const afterSkip = skipStageInWorkflowRun(db, run.id, 'discussion');
+    expect(afterSkip.currentStage).toBe('research');
+    const researchStage = afterSkip.stageRuns.find((s) => s.stageId === 'research');
+    expect(researchStage?.currentNode).toBe('scout-explore');
+  });
+
+  it('preserves or sets entry node when jumping to a stage via set-stage', () => {
+    const brief = createBrief(db, 'software', 'Test set-stage entry node');
+    const run = createWorkflowRun(db, brief.id, DEFAULT_WORKFLOW);
+
+    const jumped = setStageInWorkflowRun(db, run.id, 'execution');
+    expect(jumped.currentStage).toBe('execution');
+    const executionStage = jumped.stageRuns.find((s) => s.stageId === 'execution');
+    expect(executionStage?.currentNode).toBe('executor-run');
   });
 });

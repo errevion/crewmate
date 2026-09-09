@@ -14,6 +14,7 @@ import {
   getWorkflowRunById,
   getActiveWorkflowRunByBrief,
   advanceWorkflowRun,
+  advanceNodeInWorkflowRun,
   skipStageInWorkflowRun,
   setStageInWorkflowRun,
   updateWorkflowRunStatus,
@@ -27,20 +28,30 @@ import type { WorkflowRunView, WorkflowSummary } from '../models/workflow-run.js
 function formatAgentSummary(run: WorkflowRunView): WorkflowSummary {
   const currentStageDef = run.workflowDef.stages.find((s) => s.id === run.currentStage);
   const stageRunMap = new Map((run.stageRuns || []).map((sr) => [sr.stageId, sr.status]));
+  const activeStageRun = run.stageRuns.find((sr) => sr.stageId === run.currentStage);
 
-  const activeNodes = (currentStageDef?.graph?.nodes || []).map((node) => {
-    const isAgent = node.type === 'agent';
-    const agentConfig = isAgent ? (node.config as AgentNodeConfig) : undefined;
-    return {
-      id: node.id,
-      name: node.name,
-      type: node.type,
-      prompt: agentConfig?.prompt,
-      allowedTools: agentConfig?.allowedTools,
-      deniedTools: agentConfig?.deniedTools,
-      config: node.config,
-    };
-  });
+  let currentNode: WorkflowSummary['currentNode'] | undefined;
+  if (activeStageRun?.currentNode && currentStageDef?.graph) {
+    const nodeDef = currentStageDef.graph.nodes.find((n) => n.id === activeStageRun.currentNode);
+    if (nodeDef) {
+      const isAgent = nodeDef.type === 'agent';
+      const agentConfig = isAgent ? (nodeDef.config as AgentNodeConfig) : undefined;
+      currentNode = {
+        id: nodeDef.id,
+        name: nodeDef.name,
+        type: nodeDef.type,
+        prompt: agentConfig?.prompt,
+        allowedTools: agentConfig?.allowedTools,
+        deniedTools: agentConfig?.deniedTools,
+        config: nodeDef.config,
+      };
+    }
+  }
+
+  const completedNodes =
+    activeStageRun?.completedNodes && activeStageRun.completedNodes.length > 0
+      ? activeStageRun.completedNodes
+      : undefined;
 
   const stagesSummary = (run.workflowDef.stages || []).map((stage) => ({
     id: stage.id,
@@ -71,7 +82,8 @@ function formatAgentSummary(run: WorkflowRunView): WorkflowSummary {
     stageDescription: currentStageDef?.description,
     startedAt: run.startedAt,
     completedAt: run.completedAt,
-    activeNodes,
+    currentNode,
+    completedNodes,
     edges: edges.length > 0 ? edges : undefined,
     context: Object.keys(run.context || {}).length > 0 ? run.context : undefined,
     stages: stagesSummary,
@@ -303,6 +315,48 @@ export function registerWorkflowCommands(program: Command): void {
         }
 
         const updated = advanceWorkflowRun(db, run.id, stageOutputs);
+        const outputData = options.agentSummary ? formatAgentSummary(updated) : updated;
+        process.stdout.write(JSON.stringify(success(outputData), null, 2) + '\n');
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        process.stdout.write(JSON.stringify(failure(errorMsg), null, 2) + '\n');
+        process.exitCode = 1;
+      }
+    });
+
+  workflowCmd
+    .command('advance-node')
+    .description(
+      'Advance to the next node within the current stage (auto-advances stage at exit nodes)'
+    )
+    .option('--run <runId>', 'Workflow run ID (defaults to active run)')
+    .option('-o, --outputs <jsonString>', 'Node outputs JSON to pass downstream')
+    .option('--agent-summary', 'Return a concise summary tailored for AI agents')
+    .action((options: { run?: string; outputs?: string; agentSummary?: boolean }) => {
+      try {
+        const db = getDb();
+        const run = options.run
+          ? getWorkflowRunById(db, options.run)
+          : getActiveWorkflowRunByBrief(db);
+
+        if (!run) {
+          process.stdout.write(
+            JSON.stringify(failure('No active workflow run found.'), null, 2) + '\n'
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        let nodeOutputs: Record<string, unknown> = {};
+        if (options.outputs) {
+          try {
+            nodeOutputs = JSON.parse(options.outputs);
+          } catch {
+            nodeOutputs = {};
+          }
+        }
+
+        const updated = advanceNodeInWorkflowRun(db, run.id, nodeOutputs);
         const outputData = options.agentSummary ? formatAgentSummary(updated) : updated;
         process.stdout.write(JSON.stringify(success(outputData), null, 2) + '\n');
       } catch (err: unknown) {
@@ -553,5 +607,23 @@ export function registerWorkflowCommands(program: Command): void {
         process.stdout.write(JSON.stringify(failure(errorMsg, err), null, 2) + '\n');
         process.exitCode = 1;
       }
+    });
+
+  // Register 'edit' as a subcommand under 'workflow'
+  workflowCmd
+    .command('edit')
+    .description('Launch the interactive terminal TUI workflow editor')
+    .option('-f, --file <path>', 'Path to custom workflow JSON file to edit')
+    .option('-n, --new', 'Create and edit a brand new empty workflow')
+    .action(async (opts: { file?: string; new?: boolean }) => {
+      const { runEditor } = await import('./workflow-edit.js');
+      if (!process.stdout.isTTY) {
+        process.stdout.write(
+          JSON.stringify({ ok: false, error: 'TUI editor requires an interactive TTY terminal' }) +
+            '\n'
+        );
+        process.exit(1);
+      }
+      runEditor(opts);
     });
 }

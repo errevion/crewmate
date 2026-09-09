@@ -5,6 +5,7 @@ import {
   summarizeArtifactContent,
   formatArtifactBody,
   escapeForBlessed,
+  tryDecodeBase64,
 } from '../src/utils/artifact-validation.js';
 import { formatArtifactListItem, formatArtifactDetail } from '../src/commands/watch.js';
 import type { ExecutionArtifact } from '../models/artifact.js';
@@ -140,5 +141,34 @@ describe('artifact validation & relaxed parsing', () => {
     expect(detail).toContain('Fast styling with utility classes');
     expect(detail).toContain('Tags:');
     expect(detail).toContain('ui, config');
+  });
+
+  it('should automatically decode base64 strings in artifacts', () => {
+    // Base64 encoded constraint rule
+    const ruleText = 'The workspace must use absolute paths';
+    const b64Rule = Buffer.from(JSON.stringify({ rule: ruleText })).toString('base64');
+    const constraintRaw = JSON.stringify({
+      rule: b64Rule,
+      severity: 'must',
+    });
+    const constraintBody = formatArtifactBody('constraint', constraintRaw).join('\n');
+    expect(constraintBody).toContain(ruleText);
+    expect(constraintBody).not.toContain('ey');
+
+    // Base64 encoded decision choice
+    const choiceText = 'Architectural decision for storage';
+    const b64Choice = Buffer.from(choiceText).toString('base64');
+    const decisionRaw = JSON.stringify({
+      choice: b64Choice,
+      rationale: 'Documented architectural choice',
+    });
+    const decisionBody = formatArtifactBody('decision', decisionRaw).join('\n');
+    expect(decisionBody).toContain(choiceText);
+    expect(decisionBody).not.toContain(b64Choice);
+
+    // tryDecodeBase64 tests
+    expect(tryDecodeBase64(b64Choice)).toBe(choiceText);
+    expect(tryDecodeBase64('normal word')).toBe(null);
+    expect(tryDecodeBase64('')).toBe(null);
   });
 });

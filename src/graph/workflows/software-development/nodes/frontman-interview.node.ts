@@ -22,6 +22,7 @@ export const frontmanInterviewNode: NodeDefinition<'agent'> = {
       'crewmate_get_activity',
       'crewmate_workflow_status',
       'crewmate_workflow_advance',
+      'crewmate_workflow_advance_node',
       'crewmate_add_task',
       'crewmate_list_tasks',
       'crewmate_remove_task',

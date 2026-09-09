@@ -9,6 +9,9 @@ export const ARTIFACT_TYPES = [
   'constraint',
   'note',
   'log',
+  'issue',
+  'attempt',
+  'fix',
 ] as const;
 
 /**
@@ -16,7 +19,14 @@ export const ARTIFACT_TYPES = [
  */
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
 
-export const ARTIFACT_STATUSES = ['active', 'superseded', 'invalidated'] as const;
+export const ARTIFACT_STATUSES = ['active', 'superseded', 'invalidated', 'resolved'] as const;
+
+export const ARTIFACT_OUTCOMES = ['worked', 'failed', 'partial'] as const;
+
+/**
+ *
+ */
+export type ArtifactOutcome = (typeof ARTIFACT_OUTCOMES)[number];
 
 /**
  *
@@ -81,8 +91,42 @@ export interface LogPayload {
 /**
  *
  */
+export interface IssuePayload {
+  summary: string;
+  location?: string;
+  issueNumber?: string;
+}
+
+/**
+ *
+ */
+export interface AttemptPayload {
+  summary: string;
+  outcome: 'worked' | 'failed' | 'partial';
+  location?: string;
+}
+
+/**
+ *
+ */
+export interface FixPayload {
+  summary: string;
+  location?: string;
+}
+
+/**
+ *
+ */
 export type StructuredArtifactPayload =
-  FactPayload | DecisionPayload | ApiContractPayload | ConstraintPayload | NotePayload | LogPayload;
+  | FactPayload
+  | DecisionPayload
+  | ApiContractPayload
+  | ConstraintPayload
+  | NotePayload
+  | LogPayload
+  | IssuePayload
+  | AttemptPayload
+  | FixPayload;
 
 /**
  *
@@ -96,6 +140,9 @@ export interface ExecutionArtifact {
   status: ArtifactStatus;
   supersededBy: string | null;
   tags: string[];
+  location: string | null;
+  outcome: ArtifactOutcome | null;
+  issueId: string | null;
   createdAt: string;
 }
 
@@ -108,6 +155,9 @@ export const ARTIFACT_FIELDS = [
   'status',
   'supersededBy',
   'tags',
+  'location',
+  'outcome',
+  'issueId',
   'createdAt',
 ] as const;
 
@@ -125,6 +175,9 @@ export const ARTIFACT_FIELD_TO_COLUMN: Record<string, string> = {
   status: 'status',
   supersededBy: 'superseded_by',
   tags: 'tags',
+  location: 'location',
+  outcome: 'outcome',
+  issueId: 'issue_id',
   createdAt: 'created_at',
 };
 

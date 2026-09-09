@@ -209,6 +209,14 @@ export class TaskNodeRunner implements NodeRunner {
                 rule: 'Must follow specifications',
                 severity: 'must',
               });
+            } else if (reqType === 'issue') {
+              contentStr = JSON.stringify({
+                description: 'Open issue for node ' + node.id,
+              });
+            } else if (reqType === 'attempt') {
+              contentStr = JSON.stringify({
+                description: 'Failed attempt for node ' + node.id,
+              });
             } else {
               contentStr = JSON.stringify({ summary: `Compliance note for node ${node.id}` });
             }
