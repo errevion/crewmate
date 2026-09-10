@@ -6,8 +6,15 @@ import {
   listArtifacts,
   getArtifactById,
   checkTaskArtifactCompliance,
+  precheckFile,
+  generateBriefing,
+  generateContext,
 } from '../src/db/artifact-repo.js';
 import { createTask } from '../src/db/task-repo.js';
+import { deleteBrief } from '../src/db/brief-repo.js';
+import { redactSecrets } from '../src/utils/redaction.js';
+import { checkArtifactStaleness } from '../src/utils/staleness.js';
+import { generateDistilledSummary } from '../src/utils/summary.js';
 
 describe('execution artifacts repository', () => {
   let db: Database.Database;
@@ -169,5 +176,171 @@ describe('execution artifacts repository', () => {
     const comp2Full = checkTaskArtifactCompliance(db, t2.id);
     expect(comp2Full.compliant).toBe(true);
     expect(comp2Full.missing).toEqual([]);
+  });
+
+  describe('decoupled project-wide artifacts', () => {
+    it('should allow creating an artifact with null briefId (project-wide memory)', () => {
+      const art = createArtifact(
+        db,
+        null,
+        null,
+        'constraint',
+        JSON.stringify({ rule: 'Use strict TypeScript', severity: 'must' })
+      );
+
+      expect(art).toBeDefined();
+      expect(art.briefId).toBeNull();
+      expect(art.type).toBe('constraint');
+
+      const fetched = getArtifactById(db, art.id);
+      expect(fetched?.briefId).toBeNull();
+
+      // Should be returned when listing all or listing for a brief
+      const all = listArtifacts(db, {});
+      expect(all.some((a) => a.id === art.id)).toBe(true);
+
+      const forBrief1 = listArtifacts(db, { briefId: 'brief-1' });
+      expect(forBrief1.some((a) => a.id === art.id)).toBe(true);
+    });
+
+    it('should retain artifacts when a brief is deleted (ON DELETE SET NULL)', () => {
+      const art = createArtifact(
+        db,
+        null,
+        'brief-2',
+        'decision',
+        JSON.stringify({ choice: 'Use SQLite WAL mode', rationale: 'High performance' })
+      );
+
+      expect(art.briefId).toBe('brief-2');
+
+      // Delete brief-2
+      const deleted = deleteBrief('brief-2', db);
+      expect(deleted).toBe(true);
+
+      // Artifact must survive with briefId set to null
+      const surviving = getArtifactById(db, art.id);
+      expect(surviving).not.toBeNull();
+      expect(surviving?.id).toBe(art.id);
+      expect(surviving?.briefId).toBeNull();
+      expect(surviving?.status).toBe('active');
+    });
+
+    it('should generate briefing and context across project without requiring a brief', () => {
+      createArtifact(db, null, null, 'decision', 'Project-wide decision');
+      createArtifact(
+        db,
+        null,
+        null,
+        'constraint',
+        JSON.stringify({ rule: 'No raw shell edits', severity: 'must' })
+      );
+
+      const briefing = generateBriefing(db);
+      expect(briefing.totalArtifacts).toBeGreaterThanOrEqual(2);
+      expect(briefing.recentDecisions.length).toBeGreaterThan(0);
+      expect(briefing.activeConstraints.length).toBeGreaterThan(0);
+
+      const context = generateContext(db);
+      expect(context).toContain('## Active Decisions');
+      expect(context).toContain('## Constraints');
+      expect(context).toContain('No raw shell edits');
+    });
+
+    it('should precheck files without requiring a brief', () => {
+      createArtifact(
+        db,
+        null,
+        null,
+        'issue',
+        JSON.stringify({ summary: 'Syntax error in utils', location: 'src/utils/math.ts' }),
+        { location: 'src/utils/math.ts' }
+      );
+
+      const warnings = precheckFile(db, 'src/utils/math.ts');
+      expect(warnings.length).toBeGreaterThanOrEqual(1);
+      expect(warnings[0].title).toContain('active issue');
+    });
+  });
+
+  describe('secret redaction', () => {
+    it('should redact API keys, tokens, and private keys from artifact content', () => {
+      const textWithSecrets = [
+        'Connecting with OpenAI key sk-1234567890abcdef1234567890abcdef',
+        'Using GitHub token ghp_1234567890abcdef1234567890abcdef1234',
+        'AWS Key AKIAIOSFODNN7EXAMPLE',
+        'Authorization: Bearer secret_access_token_1234567890',
+        'Raw token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-IDcSemACt8x4iTMCda8Yhe3iZaWbvV5XKSTbuAn0M',
+      ].join('\n');
+
+      const redacted = redactSecrets(textWithSecrets);
+      expect(redacted).not.toContain('sk-1234567890abcdef');
+      expect(redacted).not.toContain('ghp_1234567890abcdef');
+      expect(redacted).not.toContain('AKIAIOSFODNN7EXAMPLE');
+      expect(redacted).toContain('[REDACTED:API_KEY]');
+      expect(redacted).toContain('[REDACTED:GITHUB_TOKEN]');
+      expect(redacted).toContain('[REDACTED:AWS_KEY]');
+      expect(redacted).toContain('[REDACTED:BEARER_TOKEN]');
+    });
+
+    it('should automatically redact secrets when creating artifacts in database', () => {
+      const art = createArtifact(
+        db,
+        null,
+        null,
+        'fact',
+        'Found API key sk-abcdef1234567890abcdef123456 in configuration'
+      );
+
+      expect(art.content).not.toContain('sk-abcdef1234567890abcdef123456');
+      expect(art.content).toContain('[REDACTED:API_KEY]');
+    });
+  });
+
+  describe('git staleness detection', () => {
+    it('should flag an artifact as stale if its referenced file does not exist', () => {
+      const staleness = checkArtifactStaleness({
+        location: 'nonexistent/file/path.ts:42',
+        createdAt: '2026-01-01 00:00:00',
+      });
+
+      expect(staleness.isStale).toBe(true);
+      expect(staleness.reason).toBe('file_deleted');
+    });
+
+    it('should return non-stale for artifacts without a location', () => {
+      const staleness = checkArtifactStaleness({
+        location: null,
+        createdAt: '2026-01-01 00:00:00',
+      });
+
+      expect(staleness.isStale).toBe(false);
+    });
+  });
+
+  describe('distilled summary projection', () => {
+    it('should generate a markdown summary from active artifacts', () => {
+      createArtifact(
+        db,
+        null,
+        null,
+        'decision',
+        JSON.stringify({ choice: 'Adopt Blessed for TUI', rationale: 'Alternate screen buffer' })
+      );
+      createArtifact(
+        db,
+        null,
+        null,
+        'constraint',
+        JSON.stringify({ rule: 'Always use parameterized SQL queries', severity: 'must' })
+      );
+
+      const summary = generateDistilledSummary(db);
+      expect(summary).toContain('# Project Memory Summary');
+      expect(summary).toContain('## Active Decisions');
+      expect(summary).toContain('Adopt Blessed for TUI');
+      expect(summary).toContain('## Invariants & Constraints');
+      expect(summary).toContain('Always use parameterized SQL queries');
+    });
   });
 });

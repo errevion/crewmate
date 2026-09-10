@@ -16,6 +16,7 @@ import { renderWorkflowSection, renderWorkflowDetails } from '../utils/workflow-
 import type { FileLock } from '../models/lock.js';
 import type { ExecutionArtifact } from '../models/artifact.js';
 import { formatArtifactBody, summarizeArtifactContent } from '../utils/artifact-validation.js';
+import { checkArtifactStaleness } from '../utils/staleness.js';
 
 // Resolve blessed default export for CJS/ESM interop
 const blessed = ((blessedModule as unknown as { default?: typeof blessedModule }).default ||
@@ -550,17 +551,32 @@ export function formatArtifactDetail(
     statusText = `{gray-fg}superseded [⟲]${a.supersededBy ? ` by ${a.supersededBy}` : ''}{/gray-fg}`;
   } else if (a.status === 'invalidated') {
     statusText = '{red-fg}invalidated [✗]{/red-fg}';
+  } else if (a.status === 'active') {
+    const staleness = checkArtifactStaleness(a);
+    if (staleness.isStale) {
+      if (staleness.reason === 'file_deleted') {
+        statusText += ' {bold}{red-fg}[STALE: FILE DELETED]{/red-fg}{/bold}';
+      } else if (staleness.reason === 'code_drift') {
+        statusText += ` {bold}{yellow-fg}[STALE: ${staleness.commitCount} COMMITS DRIFT]{/yellow-fg}{/bold}`;
+      }
+    }
   }
   lines.push(`{bold}{cyan-fg}Status:{/cyan-fg}{/bold}      ${statusText}`);
-  lines.push(`{bold}{cyan-fg}Brief ID:{/cyan-fg}{/bold}    ${a.briefId}`);
+  lines.push(
+    `{bold}{cyan-fg}Brief ID:{/cyan-fg}{/bold}    ${a.briefId || '{gray-fg}(none - project memory){/gray-fg}'}`
+  );
 
   if (a.taskId) {
     const task = tasksMap.get(a.taskId);
     const title = task ? task.title : a.taskId;
     lines.push(`{bold}{cyan-fg}Task:{/cyan-fg}{/bold}        ${a.taskId} · {bold}${title}{/bold}`);
-  } else {
+  } else if (a.briefId) {
     lines.push(
       `{bold}{cyan-fg}Scope:{/cyan-fg}{/bold}       {bold}brief-level{/bold} (discovered during briefing)`
+    );
+  } else {
+    lines.push(
+      `{bold}{cyan-fg}Scope:{/cyan-fg}{/bold}       {bold}project-level{/bold} (persistent memory)`
     );
   }
 

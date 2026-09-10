@@ -227,6 +227,62 @@ export function escapeForBlessed(str: string): string {
 }
 
 /**
+ * Safely attempts to parse a value if it is a JSON string or already an object
+ */
+export function tryParseJsonOrObject(val: unknown): Record<string, unknown> | unknown[] | null {
+  if (val === null || val === undefined) {
+    return null;
+  }
+  if (typeof val === 'object') {
+    return val as Record<string, unknown> | unknown[];
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+      try {
+        const direct = JSON.parse(trimmed);
+        if (typeof direct === 'object' && direct !== null) {
+          return direct;
+        }
+      } catch {
+        const relaxed = parseRelaxedObject(trimmed);
+        if (relaxed && Object.keys(relaxed).length > 0) {
+          return relaxed;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Formats a JavaScript object or array into pretty-printed, indented lines for Blessed rendering
+ */
+export function formatJsonLines(obj: unknown, baseIndent: string = '    '): string[] {
+  let jsonStr: string;
+  try {
+    jsonStr = JSON.stringify(obj, null, 2);
+  } catch {
+    jsonStr = String(obj);
+  }
+
+  const result: string[] = [];
+  for (const line of jsonStr.split(/\r?\n/)) {
+    const escaped = escapeForBlessed(line);
+    // Highlight "key": with cyan and value with white
+    const highlighted = escaped.replace(
+      /^(\s*)"([^"]+)":\s*(.*)$/,
+      '$1{cyan-fg}"$2"{/cyan-fg}: {white-fg}$3{/white-fg}'
+    );
+    result.push(`${baseIndent}${highlighted}`);
+  }
+  return result;
+}
+
+/**
  * Cleans string from accidental raw JSON quotation artifacts
  */
 function cleanTextValue(val: unknown): string {
@@ -359,14 +415,35 @@ export function parseAndValidateArtifactPayload(
   switch (type) {
     case 'fact': {
       if (parsed) {
-        const statement = cleanTextValue(parsed.statement ?? parsed.fact ?? parsed.info);
+        const statement = cleanTextValue(
+          parsed.statement ??
+            parsed.fact ??
+            parsed.info ??
+            parsed.summary ??
+            parsed.description ??
+            parsed.details ??
+            parsed.title
+        );
+        const scope = ['project', 'module', 'file'].includes(parsed.scope as string)
+          ? (parsed.scope as 'project' | 'module' | 'file')
+          : undefined;
+
         if (statement && isMeaningfulContent(statement)) {
           const payload: FactPayload = {
             statement,
             evidence: parsed.evidence ? cleanTextValue(parsed.evidence) : undefined,
-            scope: ['project', 'module', 'file'].includes(parsed.scope as string)
-              ? (parsed.scope as 'project' | 'module' | 'file')
-              : undefined,
+            scope,
+          };
+          return { valid: true, data: payload, rawString: JSON.stringify(payload) };
+        }
+
+        // If parsed is a structured object with custom fact keys (e.g. { who_tiers: ... })
+        const customKeys = Object.keys(parsed).filter((k) => !['scope', 'evidence'].includes(k));
+        if (customKeys.length > 0) {
+          const payload: FactPayload = {
+            statement: trimmed,
+            evidence: parsed.evidence ? cleanTextValue(parsed.evidence) : undefined,
+            scope: scope ?? 'project',
           };
           return { valid: true, data: payload, rawString: JSON.stringify(payload) };
         }
@@ -638,7 +715,15 @@ export function summarizeArtifactContent(type: ArtifactType, content: string): s
   const parsed = parseRelaxedObject(content);
   if (parsed) {
     if (parsed.statement) {
-      return cleanTextValue(parsed.statement);
+      const stmt = cleanTextValue(parsed.statement);
+      const jsonObj = tryParseJsonOrObject(stmt);
+      if (jsonObj && typeof jsonObj === 'object') {
+        const keys = Array.isArray(jsonObj)
+          ? `${jsonObj.length} items`
+          : Object.keys(jsonObj).slice(0, 3).join(', ');
+        return `Data: { ${keys} }`;
+      }
+      return stmt;
     }
     if (parsed.choice) {
       const rationale = parsed.rationale ? ` (${cleanTextValue(parsed.rationale)})` : '';
@@ -681,6 +766,19 @@ export function summarizeArtifactContent(type: ArtifactType, content: string): s
     if (parsed.summary) {
       return cleanTextValue(parsed.summary);
     }
+    const contentKeys = Object.keys(parsed).filter(
+      (k) => !['scope', 'evidence', 'tags', 'id', 'type', 'status'].includes(k)
+    );
+    if (contentKeys.length > 0) {
+      return `Data: { ${contentKeys.slice(0, 3).join(', ')} }`;
+    }
+  }
+  const rawObj = tryParseJsonOrObject(content);
+  if (rawObj && typeof rawObj === 'object') {
+    const keys = Array.isArray(rawObj)
+      ? `${rawObj.length} items`
+      : Object.keys(rawObj).slice(0, 3).join(', ');
+    return `Data: { ${keys} }`;
   }
   return cleanTextValue(content.split(/\r?\n/)[0].slice(0, 120));
 }
@@ -696,8 +794,15 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
   const lines: string[] = [];
 
   if (!parsed) {
-    const cleaned = escapeForBlessed(cleanTextValue(content));
-    lines.push(`  ${cleaned}`);
+    const rawObj = tryParseJsonOrObject(content);
+    if (rawObj) {
+      lines.push(...formatJsonLines(rawObj, '  '));
+      return lines;
+    }
+    const cleaned = cleanTextValue(content);
+    for (const line of cleaned.split(/\r?\n/)) {
+      lines.push(`  ${escapeForBlessed(line)}`);
+    }
     return lines;
   }
 
@@ -739,9 +844,20 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
         lines.push(`  {bold}Export:{/bold}     {cyan-fg}${escapeForBlessed(exportName)}{/cyan-fg}`);
       }
       if (signatures && signatures !== files) {
-        lines.push(
-          `  {bold}Contracts:{/bold}  {yellow-fg}${escapeForBlessed(signatures)}{/yellow-fg}`
-        );
+        const sigObj = tryParseJsonOrObject(signatures);
+        if (sigObj) {
+          lines.push(`  {bold}Contracts:{/bold}`);
+          lines.push(...formatJsonLines(sigObj, '    '));
+        } else if (signatures.includes('\n')) {
+          lines.push(`  {bold}Contracts:{/bold}`);
+          for (const line of signatures.split(/\r?\n/)) {
+            lines.push(`    {yellow-fg}${escapeForBlessed(line)}{/yellow-fg}`);
+          }
+        } else {
+          lines.push(
+            `  {bold}Contracts:{/bold}  {yellow-fg}${escapeForBlessed(signatures)}{/yellow-fg}`
+          );
+        }
       }
       if (consumers) {
         lines.push(`  {bold}Consumers:{/bold}  {gray-fg}${escapeForBlessed(consumers)}{/gray-fg}`);
@@ -760,7 +876,18 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
         `  {bold}Severity:{/bold}   {bold}{${sevColor}-fg}[${severity}]{/${sevColor}-fg}{/bold}${scope ? ` · {gray-fg}scope: ${escapeForBlessed(scope)}{/gray-fg}` : ''}`
       );
       if (rule) {
-        lines.push(`  {bold}Rule:{/bold}       {white-fg}${escapeForBlessed(rule)}{/white-fg}`);
+        const ruleObj = tryParseJsonOrObject(rule);
+        if (ruleObj) {
+          lines.push(`  {bold}Rule:{/bold}`);
+          lines.push(...formatJsonLines(ruleObj, '    '));
+        } else if (rule.includes('\n')) {
+          lines.push(`  {bold}Rule:{/bold}`);
+          for (const line of rule.split(/\r?\n/)) {
+            lines.push(`    {white-fg}${escapeForBlessed(line)}{/white-fg}`);
+          }
+        } else {
+          lines.push(`  {bold}Rule:{/bold}       {white-fg}${escapeForBlessed(rule)}{/white-fg}`);
+        }
       }
       if (violation) {
         lines.push(`  {bold}Violation:{/bold}  {red-fg}${escapeForBlessed(violation)}{/red-fg}`);
@@ -777,10 +904,29 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
           : '';
 
       if (choice) {
-        lines.push(`  {bold}Choice:{/bold}     {white-fg}${escapeForBlessed(choice)}{/white-fg}`);
+        const choiceObj = tryParseJsonOrObject(choice);
+        if (choiceObj) {
+          lines.push(`  {bold}Choice:{/bold}`);
+          lines.push(...formatJsonLines(choiceObj, '    '));
+        } else {
+          lines.push(`  {bold}Choice:{/bold}     {white-fg}${escapeForBlessed(choice)}{/white-fg}`);
+        }
       }
       if (rationale && rationale !== 'Documented decision') {
-        lines.push(`  {bold}Rationale:{/bold}  {gray-fg}${escapeForBlessed(rationale)}{/gray-fg}`);
+        const rationaleObj = tryParseJsonOrObject(rationale);
+        if (rationaleObj) {
+          lines.push(`  {bold}Rationale:{/bold}`);
+          lines.push(...formatJsonLines(rationaleObj, '    '));
+        } else if (rationale.includes('\n')) {
+          lines.push(`  {bold}Rationale:{/bold}`);
+          for (const line of rationale.split(/\r?\n/)) {
+            lines.push(`    {gray-fg}${escapeForBlessed(line)}{/gray-fg}`);
+          }
+        } else {
+          lines.push(
+            `  {bold}Rationale:{/bold}  {gray-fg}${escapeForBlessed(rationale)}{/gray-fg}`
+          );
+        }
       }
       if (alternatives) {
         lines.push(
@@ -791,14 +937,36 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
     }
 
     case 'fact': {
-      const statement = cleanTextValue(parsed.statement ?? parsed.fact);
+      const rawStatement = parsed.statement ?? parsed.fact;
+      const statementObj = tryParseJsonOrObject(rawStatement);
       const evidence = parsed.evidence ? cleanTextValue(parsed.evidence) : '';
       const scope = parsed.scope ? cleanTextValue(parsed.scope) : '';
+      const scopeStr = scope ? ` {gray-fg}(${escapeForBlessed(scope)}){/gray-fg}` : '';
 
-      if (statement) {
-        lines.push(
-          `  • {white-fg}${escapeForBlessed(statement)}{/white-fg}${scope ? ` {gray-fg}(${escapeForBlessed(scope)}){/gray-fg}` : ''}`
-        );
+      if (statementObj) {
+        lines.push(`  • {bold}{yellow-fg}Fact Data{/yellow-fg}{/bold}${scopeStr}:`);
+        lines.push(...formatJsonLines(statementObj, '    '));
+      } else if (rawStatement) {
+        const statement = cleanTextValue(rawStatement);
+        if (statement.includes('\n')) {
+          const parts = statement.split(/\r?\n/);
+          lines.push(`  • {white-fg}${escapeForBlessed(parts[0])}{/white-fg}${scopeStr}`);
+          for (let i = 1; i < parts.length; i++) {
+            lines.push(`    {white-fg}${escapeForBlessed(parts[i])}{/white-fg}`);
+          }
+        } else {
+          lines.push(`  • {white-fg}${escapeForBlessed(statement)}{/white-fg}${scopeStr}`);
+        }
+      } else {
+        const contentKeys = Object.keys(parsed).filter((k) => !['scope', 'evidence'].includes(k));
+        if (contentKeys.length > 0) {
+          const dataToRender =
+            contentKeys.length === 1 && typeof parsed[contentKeys[0]] === 'object'
+              ? parsed[contentKeys[0]]
+              : parsed;
+          lines.push(`  • {bold}{yellow-fg}Fact Data{/yellow-fg}{/bold}${scopeStr}:`);
+          lines.push(...formatJsonLines(dataToRender, '    '));
+        }
       }
       if (evidence) {
         lines.push(`    {gray-fg}evidence: ${escapeForBlessed(evidence)}{/gray-fg}`);
@@ -811,10 +979,24 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
       const summary = cleanTextValue(parsed.summary ?? parsed.content);
       const details = parsed.details ? cleanTextValue(parsed.details) : '';
       if (summary) {
-        lines.push(`  {white-fg}${escapeForBlessed(summary)}{/white-fg}`);
+        const summaryObj = tryParseJsonOrObject(summary);
+        if (summaryObj) {
+          lines.push(`  {bold}{yellow-fg}Summary Data:{/yellow-fg}{/bold}`);
+          lines.push(...formatJsonLines(summaryObj, '    '));
+        } else {
+          lines.push(`  {white-fg}${escapeForBlessed(summary)}{/white-fg}`);
+        }
       }
       if (details) {
-        lines.push(`    {gray-fg}${escapeForBlessed(details)}{/gray-fg}`);
+        const detailsObj = tryParseJsonOrObject(details);
+        if (detailsObj) {
+          lines.push(`  {bold}{gray-fg}Details:{/gray-fg}{/bold}`);
+          lines.push(...formatJsonLines(detailsObj, '    '));
+        } else {
+          for (const line of details.split(/\r?\n/)) {
+            lines.push(`    {gray-fg}${escapeForBlessed(line)}{/gray-fg}`);
+          }
+        }
       }
       break;
     }
@@ -872,7 +1054,15 @@ export function formatArtifactBody(type: ArtifactType, content: string): string[
   }
 
   if (lines.length === 0) {
-    lines.push(`  ${escapeForBlessed(cleanTextValue(content))}`);
+    const rawObj = tryParseJsonOrObject(content);
+    if (rawObj) {
+      lines.push(...formatJsonLines(rawObj, '  '));
+    } else {
+      const cleaned = cleanTextValue(content);
+      for (const line of cleaned.split(/\r?\n/)) {
+        lines.push(`  ${escapeForBlessed(line)}`);
+      }
+    }
   }
 
   return lines;

@@ -50,8 +50,8 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS execution_artifacts (
       id            TEXT PRIMARY KEY,
-      task_id       TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-      brief_id      TEXT NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+      task_id       TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+      brief_id      TEXT REFERENCES briefs(id) ON DELETE SET NULL,
       type          TEXT NOT NULL,
       content       TEXT NOT NULL,
       status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'invalidated', 'resolved')),
@@ -213,6 +213,38 @@ export function runMigrations(db: Database.Database): void {
     db.exec(`ALTER TABLE stage_runs ADD COLUMN completed_nodes TEXT NOT NULL DEFAULT '[]'`);
   } catch {
     // column already exists
+  }
+
+  // Migrate execution_artifacts table if brief_id is still NOT NULL or has CASCADE delete
+  try {
+    const tableInfo = db.prepare(`PRAGMA table_info(execution_artifacts)`).all() as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    const briefCol = tableInfo.find((col) => col.name === 'brief_id');
+    if (briefCol && briefCol.notnull === 1) {
+      db.exec(`
+        CREATE TABLE execution_artifacts_migration (
+          id            TEXT PRIMARY KEY,
+          task_id       TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+          brief_id      TEXT REFERENCES briefs(id) ON DELETE SET NULL,
+          type          TEXT NOT NULL,
+          content       TEXT NOT NULL,
+          status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'invalidated', 'resolved')),
+          superseded_by TEXT REFERENCES execution_artifacts(id) ON DELETE SET NULL,
+          tags          TEXT NOT NULL DEFAULT '[]',
+          location      TEXT,
+          outcome       TEXT CHECK(outcome IS NULL OR outcome IN ('worked', 'failed', 'partial')),
+          issue_id      TEXT,
+          created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO execution_artifacts_migration SELECT * FROM execution_artifacts;
+        DROP TABLE execution_artifacts;
+        ALTER TABLE execution_artifacts_migration RENAME TO execution_artifacts;
+      `);
+    }
+  } catch {
+    // column migration error or table doesn't exist
   }
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_brief_id ON tasks (brief_id)`);
