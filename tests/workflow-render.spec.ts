@@ -173,13 +173,13 @@ describe('Workflow Rendering in Watch Dashboard', () => {
       expect(text).toContain('▼');
     });
 
-    it('renders open bullet for single-node graph (research stage)', () => {
-      const researchStage = DEFAULT_WORKFLOW.stages[1];
-      const lines = renderStageGraph(researchStage, 'running', 0);
+    it('renders open bullet for single-node graph (execution stage)', () => {
+      const executionStage = DEFAULT_WORKFLOW.stages[3];
+      const lines = renderStageGraph(executionStage, 'running', 0);
       const text = lines.join('\n');
-      expect(text).toContain('scout-explore');
+      expect(text).toContain('executor-run');
       expect(text).toContain('agent');
-      expect(text).toContain('(scout)');
+      expect(text).toContain('(executor)');
       expect(text).toContain('entry node · single step');
     });
 

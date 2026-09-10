@@ -1037,8 +1037,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
       const args = output?.args || input?.args || {}
 
       // Enforce active workflow node gates (tool permissions)
-      // Orchestration tools (subagent dispatching, user questions, workflow lifecycle) bypass node-level gates
-      const ORCHESTRATION_BYPASS = ["task", "question"]
+      // Orchestration tools (subagent dispatching, user questions, activity tracking, workflow lifecycle) bypass node-level gates
+      const ORCHESTRATION_BYPASS = ["task", "question", "crewmate_set_activity", "crewmate_get_activity"]
       if (
         toolName &&
         !toolName.startsWith("crewmate_workflow_") &&

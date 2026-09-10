@@ -85,6 +85,15 @@ export interface WorkflowSummary {
     deniedTools?: string[];
     config?: Record<string, unknown>;
   };
+  activeNodes?: {
+    id: string;
+    name?: string;
+    type: string;
+    prompt?: string;
+    allowedTools?: string[];
+    deniedTools?: string[];
+    config?: Record<string, unknown>;
+  }[];
   completedNodes?: string[];
   edges?: {
     from: string;

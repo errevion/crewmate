@@ -153,7 +153,7 @@ describe('Workflow Repository & Run State Persistence', () => {
     );
     expect(afterExitNode.stageRuns.find((s) => s.stageId === 'research')?.status).toBe('running');
     expect(afterExitNode.stageRuns.find((s) => s.stageId === 'research')?.currentNode).toBe(
-      'scout-explore'
+      'scout-approval'
     );
   });
 
@@ -164,7 +164,7 @@ describe('Workflow Repository & Run State Persistence', () => {
     const afterAdvance = advanceWorkflowRun(db, run.id, { briefDone: true });
     expect(afterAdvance.currentStage).toBe('research');
     const researchStage = afterAdvance.stageRuns.find((s) => s.stageId === 'research');
-    expect(researchStage?.currentNode).toBe('scout-explore');
+    expect(researchStage?.currentNode).toBe('scout-approval');
     expect(researchStage?.completedNodes).toEqual([]);
   });
 
@@ -175,7 +175,7 @@ describe('Workflow Repository & Run State Persistence', () => {
     const afterSkip = skipStageInWorkflowRun(db, run.id, 'discussion');
     expect(afterSkip.currentStage).toBe('research');
     const researchStage = afterSkip.stageRuns.find((s) => s.stageId === 'research');
-    expect(researchStage?.currentNode).toBe('scout-explore');
+    expect(researchStage?.currentNode).toBe('scout-approval');
   });
 
   it('preserves or sets entry node when jumping to a stage via set-stage', () => {
