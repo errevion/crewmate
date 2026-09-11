@@ -174,7 +174,7 @@ describe('crewmate init', () => {
       expect(executorContent).toContain('edit: allow');
       expect(executorContent).toContain('bash: allow');
       expect(executorContent).toContain('crewmate_acquire_lock: allow');
-      expect(executorContent).toContain('crewmate_release_lock: allow');
+      expect(executorContent).not.toContain('crewmate_release_lock: allow');
       expect(executorContent).toContain('crewmate_add_artifact: allow');
     });
 

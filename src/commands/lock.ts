@@ -115,10 +115,17 @@ export function registerLockCommand(program: Command): void {
     .description('Release file locks held by a task')
     .argument('<task-id>', 'The task ID releasing the lock')
     .option('--files <files...>', 'Specific file paths to release (optional)')
-    .action((taskId, opts) => {
+    .option('--force', 'Force release locks even if task is in_progress')
+    .action((taskId, opts: { files?: string[]; force?: boolean }) => {
       const task = getTaskById(getDb(), taskId);
       if (!task) {
         fail(`Task not found: ${taskId}`);
+      }
+
+      if (task.status === 'in_progress' && !opts.force) {
+        fail(
+          `Cannot release locks for task ${taskId}: task is currently in_progress. Releasing active locks while a task is running causes race conditions. Use --force for administrative recovery, or wait for the task to complete.`
+        );
       }
 
       const files = opts.files && opts.files.length > 0 ? opts.files : undefined;

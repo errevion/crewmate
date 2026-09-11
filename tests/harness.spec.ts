@@ -160,4 +160,20 @@ describe('harness registry', () => {
     expect(CREWMATE_PLUGIN).toContain('session", "stop"');
     expect(CREWMATE_PLUGIN).toContain('dispose: async () =>');
   });
+
+  it('should enforce lock authorization and prevent subagents from releasing locks', () => {
+    expect(CREWMATE_PLUGIN).toContain(
+      'toolName === "crewmate_release_lock" || toolName === "crewmate_clear_locks"'
+    );
+    expect(CREWMATE_PLUGIN).toContain('Unauthorized: Subagent');
+    expect(CREWMATE_PLUGIN).toContain('is not permitted to call');
+    expect(CREWMATE_PLUGIN).toContain('Session is bound to task');
+    expect(CREWMATE_PLUGIN).toContain('Lock violation: File');
+    expect(CREWMATE_PLUGIN).toContain('toolName === "bash" && args');
+    expect(CREWMATE_PLUGIN).toContain('isCrewmateCli');
+    expect(CREWMATE_PLUGIN).toContain('Unauthorized CLI execution');
+    expect(CREWMATE_PLUGIN).toContain(
+      "strictly forbidden from executing 'crewmate' CLI commands via bash"
+    );
+  });
 });

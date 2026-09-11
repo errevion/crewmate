@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { randomBytes } from 'node:crypto';
+import { releaseLocks } from './lock-repo.js';
 import type { Task } from '../models/task.js';
 import type { ArtifactType } from '../models/artifact.js';
 
@@ -137,6 +138,9 @@ export function updateTaskStatus(db: Database.Database, id: string, status: Task
     status,
     id
   );
+  if (status === 'completed') {
+    releaseLocks(db, id);
+  }
 }
 
 /**
@@ -197,6 +201,10 @@ export function updateTask(
   values.push(id);
   const sql = `UPDATE tasks SET ${setClauses.join(', ')} WHERE id = ?`;
   db.prepare(sql).run(...values);
+
+  if (updates.status === 'completed') {
+    releaseLocks(db, id);
+  }
 
   return getTaskById(db, id);
 }

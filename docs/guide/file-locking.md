@@ -106,6 +106,22 @@ Crewmate enforces safety at the harness boundary. In the OpenCode/agent plugin t
 
 ```typescript
 // Plugin lifecycle: intercept before tool execution
+// 1. Guard against subagents invoking lock release or clear tools
+if (toolName === "crewmate_release_lock" || toolName === "crewmate_clear_locks") {
+  if (trackedForSession) {
+    throw new Error(`Unauthorized: Subagent '${trackedForSession.agent}' cannot call '${toolName}'. Locks are managed automatically upon task completion.`);
+  }
+}
+
+// 2. Guard against subagents attempting to bypass tools via CLI / bash
+if (toolName === "bash" && args && trackedForSession) {
+  const cmd = String(args.command || args.cmd || "");
+  if (/\b(?:crewmate|index\.(?:m?js|ts))\b/i.test(cmd) || /\block\s+(?:release|clear|unlock|clean-stale)\b/i.test(cmd)) {
+    throw new Error(`Permission denied: Subagent '${trackedForSession.agent}' cannot execute 'crewmate' CLI commands via bash. Use authorized plugin tools instead.`);
+  }
+}
+
+// 3. Guard file-modifying tools (edit/write) against lock violations
 if ((toolName === "edit" || toolName === "write") && args) {
   const filePath = args.filePath || args.file_path || args.path || "";
   if (typeof filePath === "string" && filePath.trim()) {
@@ -131,7 +147,7 @@ if ((toolName === "edit" || toolName === "write") && args) {
 
           // Throwing an error aborts the edit/write tool before execution
           throw new Error(
-            `File is locked by task ${lockForFile.taskId}: ${rel}. Acquire the lock first or wait for the task to complete.`
+            `Lock violation: File '${rel}' is locked by task ${lockForFile.taskId}. You are strictly forbidden from modifying this file or attempting to release/unlock it (via tools or bash CLI). You must ABORT this task immediately and return a lock conflict report to Frontman.`
           );
         }
       }
@@ -142,10 +158,10 @@ if ((toolName === "edit" || toolName === "write") && args) {
 
 ### How the Guard Works
 
-1. **Interception**: Whenever any agent invokes `edit` or `write`, the plugin intercepts the call before the filesystem operation runs.
-2. **Path Resolution**: Resolves and normalizes the target path against the project root.
-3. **Ownership Verification**: Queries the database for active locks on that file and checks if the calling session owns the matching `taskId`.
-4. **Hard Rejection**: If another task owns the lock (or if the file is locked and caller has no task ID), execution throws an error immediately, blocking changes to disk and emitting an error event to the live watch dashboard.
+1. **Interception**: Whenever any agent invokes `edit`, `write`, `bash`, or lock management tools, the plugin intercepts the call before execution.
+2. **Path & Command Resolution**: Inspects target file paths or shell commands against lock invariants.
+3. **Ownership & Role Verification**: Verifies that calling sessions are authorized for the given task and tool.
+4. **Hard Rejection**: If another task owns the lock, or if a subagent attempts to release locks or execute `crewmate lock` commands in `bash`, execution throws an error immediately, blocking changes to disk and emitting an error event to the live watch dashboard.
 
 ---
 
@@ -186,8 +202,8 @@ Release locks held by a task. If `--files` is omitted, all locks held by the tas
 # Release specific files
 crewmate lock release <task-id> --files <path1> [path2...]
 
-# Release all locks held by task
-crewmate lock release <task-id>
+# Release all locks held by task (requires --force if task is in_progress)
+crewmate lock release <task-id> [--force]
 ```
 
 **Example:**
@@ -299,7 +315,7 @@ Inside agent harnesses (such as OpenCode), agents interact with locks via specia
 | Agent Tool | Parameters | CLI Equivalent | Description |
 | :--- | :--- | :--- | :--- |
 | `crewmate_acquire_lock` | `taskId: string`, `files: string[]` | `crewmate lock acquire` | Claim write leases on target files before editing. Fails atomically if any file is taken. |
-| `crewmate_release_lock` | `taskId: string`, `files?: string[]` | `crewmate lock release` | Release leases when a task completes, fails, or no longer needs specific files. |
+| `crewmate_release_lock` | `taskId: string`, `files?: string[]` | `crewmate lock release` | Orchestrator/recovery tool to release leases when a task completes, fails, or transitions. Subagents cannot call this directly. |
 | `crewmate_list_locks` | `taskId?: string` | `crewmate lock list` | Inspect current locks to see which files are active or held by other workers. |
 | `crewmate_clear_locks` | `taskId?: string` | `crewmate lock clear` | Administrative recovery tool to forcibly unlock files on deadlock or crash. |
 
@@ -337,8 +353,6 @@ await crewmate_add_artifact({
   content: "Refactored user controller to use async repository pattern"
 });
 
+// 5. Mark task completed (held file locks are automatically released upon completion)
 await crewmate_update_task({ taskId: "8a2f1b4c", status: "completed" });
-
-// 5. Clean up locks
-await crewmate_release_lock({ taskId: "8a2f1b4c" });
 ```
