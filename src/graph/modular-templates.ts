@@ -1,7 +1,9 @@
 import { frontmanInterviewNode } from './workflows/software-development/nodes/frontman-interview.node.js';
 import { validateBriefNode } from './workflows/software-development/nodes/validate-brief.node.js';
+import { scoutApprovalNode } from './workflows/software-development/nodes/scout-approval.node.js';
 import { scoutExploreNode } from './workflows/software-development/nodes/scout-explore.node.js';
 import { plannerDecomposeNode } from './workflows/software-development/nodes/planner-decompose.node.js';
+import { taskApprovalNode } from './workflows/software-development/nodes/task-approval.node.js';
 import { executorRunNode } from './workflows/software-development/nodes/executor-run.node.js';
 import { verifyArtifactsNode } from './workflows/software-development/nodes/verify-artifacts.node.js';
 
@@ -19,11 +21,17 @@ export function getModularWorkflowFiles(): Record<string, string> {
   files['.crewmate/workflows/nodes/validate-brief.json'] =
     JSON.stringify(validateBriefNode, null, 2) + '\n';
 
+  files['.crewmate/workflows/nodes/scout-approval.json'] =
+    JSON.stringify(scoutApprovalNode, null, 2) + '\n';
+
   files['.crewmate/workflows/nodes/scout-explore.json'] =
     JSON.stringify(scoutExploreNode, null, 2) + '\n';
 
   files['.crewmate/workflows/nodes/planner-decompose.json'] =
     JSON.stringify(plannerDecomposeNode, null, 2) + '\n';
+
+  files['.crewmate/workflows/nodes/task-approval.json'] =
+    JSON.stringify(taskApprovalNode, null, 2) + '\n';
 
   files['.crewmate/workflows/nodes/executor-run.json'] =
     JSON.stringify(executorRunNode, null, 2) + '\n';
@@ -62,8 +70,14 @@ export function getModularWorkflowFiles(): Record<string, string> {
         description: 'Scout codebase exploration and architecture discovery.',
         graph: {
           id: 'research-graph',
-          nodes: ['../nodes/scout-explore.json'],
-          edges: [],
+          nodes: ['../nodes/scout-approval.json', '../nodes/scout-explore.json'],
+          edges: [
+            {
+              from: 'scout-approval',
+              to: 'scout-explore',
+              condition: { type: 'predicate', field: 'approved', operator: 'truthy' },
+            },
+          ],
         },
       },
       null,
@@ -78,8 +92,14 @@ export function getModularWorkflowFiles(): Record<string, string> {
         description: 'Planner task decomposition into DAG with artifact requirements.',
         graph: {
           id: 'planning-graph',
-          nodes: ['../nodes/planner-decompose.json'],
-          edges: [],
+          nodes: ['../nodes/planner-decompose.json', '../nodes/task-approval.json'],
+          edges: [
+            {
+              from: 'planner-decompose',
+              to: 'task-approval',
+              condition: { type: 'on_success' },
+            },
+          ],
         },
       },
       null,

@@ -21,6 +21,7 @@ import {
   generateContext,
 } from '../db/artifact-repo.js';
 import type { ArtifactOutcome } from '../models/artifact.js';
+import { generateDistilledSummary, writeSummaryFile } from '../utils/summary.js';
 
 function out(result: Record<string, unknown>): void {
   process.stdout.write(JSON.stringify(result) + '\n');
@@ -93,13 +94,11 @@ export function registerArtifactCommand(program: Command): void {
         }
       }
 
-      if (!resolvedBriefId) {
-        fail('Brief not found. Provide --brief or an existing task ID');
-      }
-
-      const brief = getBriefById(resolvedBriefId);
-      if (!brief) {
-        fail(`Brief not found: ${resolvedBriefId}`);
+      if (resolvedBriefId) {
+        const brief = getBriefById(resolvedBriefId);
+        if (!brief) {
+          fail(`Brief not found: ${resolvedBriefId}`);
+        }
       }
 
       let tags: string[] = [];
@@ -264,7 +263,7 @@ export function registerArtifactCommand(program: Command): void {
     });
 
   function resolveBriefAndTask(opts: { brief?: string; task?: string }): {
-    resolvedBriefId: string;
+    resolvedBriefId: string | null;
     effectiveTaskId: string | null;
   } {
     let resolvedBriefId: string | null = opts.brief || null;
@@ -286,10 +285,6 @@ export function registerArtifactCommand(program: Command): void {
       if (latest) {
         resolvedBriefId = latest.id;
       }
-    }
-
-    if (!resolvedBriefId) {
-      fail('Brief not found. Provide --brief or an existing task ID');
     }
 
     return { resolvedBriefId, effectiveTaskId };
@@ -433,7 +428,7 @@ export function registerArtifactCommand(program: Command): void {
     .command('precheck')
     .description('Precheck a file')
     .argument('<filepath>', 'File path to precheck')
-    .option('--brief <id>', 'Brief ID')
+    .option('--brief <id>', 'Optional brief ID filter')
     .action((filepath, opts) => {
       const db = getDb();
       let resolvedBriefId = opts.brief;
@@ -441,8 +436,6 @@ export function registerArtifactCommand(program: Command): void {
         const latest = getLatestBrief();
         if (latest) {
           resolvedBriefId = latest.id;
-        } else {
-          fail('Brief not found. Provide --brief');
         }
       }
       try {
@@ -456,7 +449,7 @@ export function registerArtifactCommand(program: Command): void {
   artifactGroup
     .command('brief')
     .description('Generate briefing')
-    .option('--brief <id>', 'Brief ID')
+    .option('--brief <id>', 'Optional brief ID filter')
     .action((opts) => {
       const db = getDb();
       let resolvedBriefId = opts.brief;
@@ -464,8 +457,6 @@ export function registerArtifactCommand(program: Command): void {
         const latest = getLatestBrief();
         if (latest) {
           resolvedBriefId = latest.id;
-        } else {
-          fail('Brief not found. Provide --brief');
         }
       }
       try {
@@ -479,7 +470,7 @@ export function registerArtifactCommand(program: Command): void {
   artifactGroup
     .command('context')
     .description('Generate context')
-    .option('--brief <id>', 'Brief ID')
+    .option('--brief <id>', 'Optional brief ID filter')
     .option('--tokens <n>', 'Token limit', parseInt)
     .option('--focus <path>', 'Focus path')
     .action((opts) => {
@@ -489,8 +480,6 @@ export function registerArtifactCommand(program: Command): void {
         const latest = getLatestBrief();
         if (latest) {
           resolvedBriefId = latest.id;
-        } else {
-          fail('Brief not found. Provide --brief');
         }
       }
       try {
@@ -498,6 +487,24 @@ export function registerArtifactCommand(program: Command): void {
         out({ ok: true, context });
       } catch (err: unknown) {
         fail(err instanceof Error ? err.message : 'Failed to generate context');
+      }
+    });
+
+  artifactGroup
+    .command('summary')
+    .description('Generate a distilled markdown summary of active project memory (~500 tokens)')
+    .option('--brief <id>', 'Optional brief ID filter')
+    .option('--write', 'Write summary to .crewmate/summary.md', false)
+    .action((opts) => {
+      const db = getDb();
+      try {
+        const summary = generateDistilledSummary(db, opts.brief);
+        if (opts.write) {
+          writeSummaryFile(db, process.cwd(), opts.brief);
+        }
+        process.stdout.write(summary);
+      } catch (err: unknown) {
+        fail(err instanceof Error ? err.message : 'Failed to generate summary');
       }
     });
 }

@@ -83,6 +83,7 @@ function formatAgentSummary(run: WorkflowRunView): WorkflowSummary {
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     currentNode,
+    activeNodes: currentNode ? [currentNode] : [],
     completedNodes,
     edges: edges.length > 0 ? edges : undefined,
     context: Object.keys(run.context || {}).length > 0 ? run.context : undefined,

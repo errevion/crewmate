@@ -12,6 +12,9 @@ import {
   summarizeArtifactContent,
 } from '../utils/artifact-validation.js';
 import { getTaskById, listTasksByBrief } from './task-repo.js';
+import { redactSecrets } from '../utils/redaction.js';
+import { checkArtifactStaleness } from '../utils/staleness.js';
+import { writeSummaryFile } from '../utils/summary.js';
 
 /**
  * Generates an 8-character hex ID
@@ -33,7 +36,7 @@ function rowToArtifact(row: Record<string, unknown>): ExecutionArtifact {
   return {
     id: row.id as string,
     taskId: (row.task_id as string) || null,
-    briefId: row.brief_id as string,
+    briefId: (row.brief_id as string) || null,
     type: row.type as ArtifactType,
     content: row.content as string,
     status: (row.status as ArtifactStatus) || 'active',
@@ -66,18 +69,20 @@ export interface CreateArtifactOptions {
 export function createArtifact(
   db: Database.Database,
   taskId: string | null,
-  briefId: string,
+  briefId: string | null | undefined,
   type: ArtifactType,
   content: string,
   options?: CreateArtifactOptions
 ): ExecutionArtifact {
-  const validation = parseAndValidateArtifactPayload(type, content);
+  const sanitizedContent = redactSecrets(content);
+  const validation = parseAndValidateArtifactPayload(type, sanitizedContent);
   if (!validation.valid) {
     throw new Error(validation.error || 'Invalid artifact payload');
   }
 
-  const payloadString = validation.rawString || content.trim();
+  const payloadString = validation.rawString || sanitizedContent.trim();
   const id = generateId();
+  const effectiveBriefId = briefId || null;
   const status = options?.status ?? 'active';
   const tags = options?.tags ?? [];
   const supersededBy = options?.supersededBy ?? null;
@@ -93,7 +98,7 @@ export function createArtifact(
     ).run(
       id,
       taskId,
-      briefId,
+      effectiveBriefId,
       type,
       payloadString,
       status,
@@ -110,9 +115,9 @@ export function createArtifact(
       if (contractPayload.filePath) {
         const existingActive = db
           .prepare(
-            `SELECT id, content FROM execution_artifacts WHERE brief_id = ? AND type = 'api_contract' AND status = 'active' AND id != ?`
+            `SELECT id, content FROM execution_artifacts WHERE (brief_id = ? OR brief_id IS NULL OR ? IS NULL) AND type = 'api_contract' AND status = 'active' AND id != ?`
           )
-          .all(briefId, id) as Array<{ id: string; content: string }>;
+          .all(effectiveBriefId, effectiveBriefId, id) as Array<{ id: string; content: string }>;
 
         for (const prev of existingActive) {
           try {
@@ -138,6 +143,12 @@ export function createArtifact(
   });
 
   tx();
+
+  try {
+    writeSummaryFile(db, process.cwd(), effectiveBriefId ?? undefined);
+  } catch {
+    // Ignore summary writing in in-memory test environments
+  }
 
   const row = db.prepare(`SELECT * FROM execution_artifacts WHERE id = ?`).get(id) as
     Record<string, unknown> | undefined;
@@ -225,8 +236,8 @@ export function listArtifacts(
   const conditions: string[] = [];
   const params: unknown[] = [];
 
-  if (briefId) {
-    conditions.push('brief_id = ?');
+  if (briefId && briefId !== 'all') {
+    conditions.push('(brief_id = ? OR brief_id IS NULL)');
     params.push(briefId);
   }
 
@@ -370,6 +381,11 @@ export function supersedeArtifact(db: Database.Database, oldId: string, newId: s
   db.prepare(
     `UPDATE execution_artifacts SET status = 'superseded', superseded_by = ? WHERE id = ?`
   ).run(newId, oldId);
+  try {
+    writeSummaryFile(db);
+  } catch {
+    // Ignore summary writing in in-memory test environments
+  }
 }
 
 /**
@@ -377,17 +393,29 @@ export function supersedeArtifact(db: Database.Database, oldId: string, newId: s
  */
 export function invalidateArtifact(db: Database.Database, id: string): void {
   db.prepare(`UPDATE execution_artifacts SET status = 'invalidated' WHERE id = ?`).run(id);
+  try {
+    writeSummaryFile(db);
+  } catch {
+    // Ignore summary writing in in-memory test environments
+  }
 }
 
 /**
  *
  */
-export function nextIssueNumber(db: Database.Database, briefId: string): string {
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) as count FROM execution_artifacts WHERE brief_id = ? AND type = 'issue'`
-    )
-    .get(briefId) as { count: number } | undefined;
+export function nextIssueNumber(db: Database.Database, briefId?: string | null): string {
+  let row: { count: number } | undefined;
+  if (briefId) {
+    row = db
+      .prepare(
+        `SELECT COUNT(*) as count FROM execution_artifacts WHERE (brief_id = ? OR brief_id IS NULL) AND type = 'issue'`
+      )
+      .get(briefId) as { count: number } | undefined;
+  } else {
+    row = db
+      .prepare(`SELECT COUNT(*) as count FROM execution_artifacts WHERE type = 'issue'`)
+      .get() as { count: number } | undefined;
+  }
   return String((row?.count ?? 0) + 1).padStart(4, '0');
 }
 
@@ -416,8 +444,8 @@ export function searchArtifacts(
   conditions.push('content LIKE ? COLLATE NOCASE');
   params.push(`%${query}%`);
 
-  if (options?.briefId) {
-    conditions.push('brief_id = ?');
+  if (options?.briefId && options.briefId !== 'all') {
+    conditions.push('(brief_id = ? OR brief_id IS NULL)');
     params.push(options.briefId);
   }
 
@@ -475,8 +503,8 @@ export function precheckFile(
   const conditions: string[] = ['location LIKE ? COLLATE NOCASE'];
   const params: unknown[] = [`%${filePath}%`];
 
-  if (briefId) {
-    conditions.push('brief_id = ?');
+  if (briefId && briefId !== 'all') {
+    conditions.push('(brief_id = ? OR brief_id IS NULL)');
     params.push(briefId);
   }
 
@@ -512,6 +540,34 @@ export function precheckFile(
     });
   }
 
+  const allActiveAtLocation = db
+    .prepare(`SELECT * FROM execution_artifacts WHERE ${whereClause} AND status = 'active'`)
+    .all(...params) as Record<string, unknown>[];
+
+  const activeArtifacts = allActiveAtLocation.map(rowToArtifact);
+  for (const art of activeArtifacts) {
+    const staleness = checkArtifactStaleness(art);
+    if (staleness.isStale) {
+      if (staleness.reason === 'file_deleted') {
+        warnings.push({
+          severity: 'danger',
+          title: `Stale artifact: referenced file was deleted`,
+          details: [
+            `Artifact [${art.id}] (${art.type}) references ${staleness.filePath} which does not exist on disk.`,
+          ],
+        });
+      } else if (staleness.reason === 'code_drift') {
+        warnings.push({
+          severity: 'warning',
+          title: `Stale context: code drift detected (${staleness.commitCount} commits since recorded)`,
+          details: [
+            `Artifact [${art.id}] (${art.type}) predates ${staleness.commitCount} commits to ${staleness.filePath}. Review or supersede before modifying.`,
+          ],
+        });
+      }
+    }
+  }
+
   const allAtLocation = db
     .prepare(`SELECT COUNT(*) as count FROM execution_artifacts WHERE ${whereClause}`)
     .get(...params) as { count: number } | undefined;
@@ -542,50 +598,54 @@ export interface SessionBriefing {
 /**
  *
  */
-export function generateBriefing(db: Database.Database, briefId: string): SessionBriefing {
+export function generateBriefing(db: Database.Database, briefId?: string): SessionBriefing {
+  const briefWhere = briefId && briefId !== 'all' ? 'WHERE (brief_id = ? OR brief_id IS NULL)' : '';
+  const briefAnd = briefId && briefId !== 'all' ? 'AND (brief_id = ? OR brief_id IS NULL)' : '';
+  const params = briefId && briefId !== 'all' ? [briefId] : [];
+
   const openIssues = (
     db
       .prepare(
-        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'issue' AND status = 'active'`
+        `SELECT * FROM execution_artifacts WHERE type = 'issue' AND status = 'active' ${briefAnd}`
       )
-      .all(briefId) as Record<string, unknown>[]
+      .all(...params) as Record<string, unknown>[]
   ).map(rowToArtifact);
 
   const recentFixes = (
     db
       .prepare(
-        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'fix' ORDER BY created_at DESC LIMIT 5`
+        `SELECT * FROM execution_artifacts WHERE type = 'fix' ${briefAnd} ORDER BY created_at DESC LIMIT 5`
       )
-      .all(briefId) as Record<string, unknown>[]
+      .all(...params) as Record<string, unknown>[]
   ).map(rowToArtifact);
 
   const recentDecisions = (
     db
       .prepare(
-        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'decision' AND status = 'active' ORDER BY created_at DESC LIMIT 5`
+        `SELECT * FROM execution_artifacts WHERE type = 'decision' AND status = 'active' ${briefAnd} ORDER BY created_at DESC LIMIT 5`
       )
-      .all(briefId) as Record<string, unknown>[]
+      .all(...params) as Record<string, unknown>[]
   ).map(rowToArtifact);
 
   const failedAttempts = (
     db
       .prepare(
-        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'attempt' AND outcome = 'failed' AND status = 'active' ORDER BY created_at DESC LIMIT 10`
+        `SELECT * FROM execution_artifacts WHERE type = 'attempt' AND outcome = 'failed' AND status = 'active' ${briefAnd} ORDER BY created_at DESC LIMIT 10`
       )
-      .all(briefId) as Record<string, unknown>[]
+      .all(...params) as Record<string, unknown>[]
   ).map(rowToArtifact);
 
   const activeConstraints = (
     db
       .prepare(
-        `SELECT * FROM execution_artifacts WHERE brief_id = ? AND type = 'constraint' AND status = 'active'`
+        `SELECT * FROM execution_artifacts WHERE type = 'constraint' AND status = 'active' ${briefAnd}`
       )
-      .all(briefId) as Record<string, unknown>[]
+      .all(...params) as Record<string, unknown>[]
   ).map(rowToArtifact);
 
   const totalRow = db
-    .prepare(`SELECT COUNT(*) as count FROM execution_artifacts WHERE brief_id = ?`)
-    .get(briefId) as { count: number } | undefined;
+    .prepare(`SELECT COUNT(*) as count FROM execution_artifacts ${briefWhere}`)
+    .get(...params) as { count: number } | undefined;
   const totalArtifacts = totalRow?.count ?? 0;
 
   return {
@@ -611,7 +671,7 @@ export interface ContextOptions {
  */
 export function generateContext(
   db: Database.Database,
-  briefId: string,
+  briefId?: string,
   options?: ContextOptions
 ): string {
   const maxTokens = options?.tokens ?? 2000;

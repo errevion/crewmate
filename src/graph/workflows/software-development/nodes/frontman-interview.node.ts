@@ -7,7 +7,7 @@ export const frontmanInterviewNode: NodeDefinition<'agent'> = {
   config: {
     agent: 'frontman',
     prompt:
-      'Interactively interview the user to elicit and persist brief fields (workType, goal, scope, functionalRequirements, acceptanceCriteria). Use the question tool for decisions and persist fields via crewmate_update_field. This step is complete when crewmate_check_status reports complete and the brief is finalized with crewmate_finish_brief.',
+      'Conduct an extensive, in-depth interview with the user to thoroughly clarify and elicit all brief fields (workType, goal, scope, functionalRequirements, acceptanceCriteria). Clarify more and guess less: avoid making unilateral assumptions about user preferences, business logic, UX/UI, edge cases, error handling, or constraints. Ask progressive follow-up questions across multiple turns to drill into specific behaviors, boundary conditions, input validation, and visual design. Before completing, present a synthesized draft of the entire brief (workType, goal, scope, functionalRequirements, acceptanceCriteria) to the user via the question tool for explicit confirmation. Persist fields via crewmate_update_field. This step is complete only after user confirmation, when crewmate_check_status reports complete, and the brief is finalized with crewmate_finish_brief.',
     allowedTools: [
       'crewmate_create_brief',
       'crewmate_update_field',

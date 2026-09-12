@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../src/db/migrations.js';
 import { acquireLocks, releaseLocks, listLocks, normalizeFilePath } from '../src/db/lock-repo.js';
+import { updateTaskStatus, updateTask } from '../src/db/task-repo.js';
 
 describe('file locks repository', () => {
   let db: Database.Database;
@@ -120,6 +121,22 @@ describe('file locks repository', () => {
       const remaining = listLocks(db, 'task-1');
       expect(remaining.length).toBe(1);
       expect(remaining[0].filePath).toBe('src/b.ts');
+    });
+
+    it('should automatically release locks when task status is updated to completed', () => {
+      acquireLocks(db, 'task-1', ['src/a.ts', 'src/b.ts']);
+      expect(listLocks(db, 'task-1').length).toBe(2);
+
+      updateTaskStatus(db, 'task-1', 'completed');
+      expect(listLocks(db, 'task-1').length).toBe(0);
+    });
+
+    it('should automatically release locks when updateTask updates status to completed', () => {
+      acquireLocks(db, 'task-1', ['src/a.ts']);
+      expect(listLocks(db, 'task-1').length).toBe(1);
+
+      updateTask(db, 'task-1', { status: 'completed' });
+      expect(listLocks(db, 'task-1').length).toBe(0);
     });
   });
 

@@ -116,8 +116,8 @@ Planner reads the completed brief and the codebase structure, then decomposes th
 | Property | Value |
 | --- | --- |
 | Mode | `subagent` |
-| Can use | `edit`, `bash`, `read`, `glob`, `grep`, `crewmate_update_task`, `crewmate_show_brief`, `crewmate_get_field`, `crewmate_acquire_lock`, `crewmate_release_lock`, `crewmate_list_locks`, `crewmate_add_artifact`, `crewmate_list_artifacts`, `crewmate_list_tasks`, `crewmate_add_event`, `crewmate_list_events` |
-| Cannot use | `crewmate_create_brief`, `crewmate_update_field`, `crewmate_finish_brief`, `crewmate_add_task`, `crewmate_remove_task` |
+| Can use | `edit`, `bash`, `read`, `glob`, `grep`, `crewmate_update_task`, `crewmate_show_brief`, `crewmate_get_field`, `crewmate_acquire_lock`, `crewmate_list_locks`, `crewmate_add_artifact`, `crewmate_list_artifacts`, `crewmate_list_tasks`, `crewmate_add_event`, `crewmate_list_events` |
+| Cannot use | `crewmate_create_brief`, `crewmate_update_field`, `crewmate_finish_brief`, `crewmate_add_task`, `crewmate_remove_task`, `crewmate_release_lock`, `crewmate_clear_locks` |
 
 Executor is the only agent that modifies files. It follows a strict protocol:
 
@@ -125,7 +125,7 @@ Executor is the only agent that modifies files. It follows a strict protocol:
 2. **Lock** — Acquire file locks; abort immediately on conflict
 3. **Implement** — Edit files, run tests and lint via bash
 4. **Document** — Record decisions, API contracts, and constraints as artifacts
-5. **Complete** — Mark task done, emit completion event, release locks
+5. **Complete** — Mark task done; held file locks are automatically released by the system
 
 ## Customizing templates
 

@@ -19,7 +19,6 @@ export const executorRunNode: NodeDefinition<'agent'> = {
       'crewmate_show_brief',
       'crewmate_get_field',
       'crewmate_acquire_lock',
-      'crewmate_release_lock',
       'crewmate_list_locks',
       'crewmate_add_artifact',
       'crewmate_list_artifacts',

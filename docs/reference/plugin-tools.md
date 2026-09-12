@@ -21,7 +21,7 @@ Unless otherwise noted, the `output` string parses to a JSON object with `{ ok: 
 | :--- | :--- | :--- |
 | [Brief Tools](#brief-tools) | `crewmate_create_brief`, `crewmate_update_field`, `crewmate_get_field`, `crewmate_show_brief`, `crewmate_check_status`, `crewmate_finish_brief`, `crewmate_reopen_brief`, `crewmate_delete_brief` | Frontman, Scout, Planner |
 | [Task Tools](#task-tools) | `crewmate_add_task`, `crewmate_list_tasks`, `crewmate_update_task`, `crewmate_remove_task`, `crewmate_clear_tasks` | Planner, Executor, Frontman |
-| [Lock Tools](#lock-tools) | `crewmate_acquire_lock`, `crewmate_release_lock`, `crewmate_list_locks`, `crewmate_clear_locks` | Executor |
+| [Lock Tools](#lock-tools) | `crewmate_acquire_lock`, `crewmate_release_lock`, `crewmate_list_locks`, `crewmate_clear_locks` | Executor (`acquire`, `list`), Frontman (`release`, `clear`, `list`) |
 | [Artifact Tools](#artifact-tools) | `crewmate_add_artifact`, `crewmate_list_artifacts`, `crewmate_supersede_artifact`, `crewmate_invalidate_artifact` | Scout, Planner, Executor, Frontman |
 | [Event & Activity Tools](#event--activity-tools) | `crewmate_add_event`, `crewmate_list_events`, `crewmate_set_activity`, `crewmate_get_activity` | Frontman, Scout, Planner, Executor |
 | [Workflow Tools](#workflow-tools) | `crewmate_workflow_start`, `crewmate_workflow_status`, `crewmate_workflow_advance`, `crewmate_workflow_skip`, `crewmate_workflow_cancel` | Frontman, Planner |
@@ -421,9 +421,9 @@ Acquires exclusive write locks on one or more files for a task.
 
 ### `crewmate_release_lock`
 
-Releases file locks held by a task after completion or error.
+Releases file locks held by a task (orchestrator tool for manual recovery or stage transition; subagents are not permitted to call this).
 
-- **Description**: Release file locks held by a task after execution completes or on failure. REQUIRED: taskId. Optional: files.
+- **Description**: Release file locks held by a task (orchestrator tool for manual recovery or stage transition; subagents are not permitted to call this). REQUIRED: taskId. Optional: files.
 - **Parameters**:
   - `taskId` (string, **required**): The task ID releasing locks.
   - `files` (array of strings, *optional*): Specific paths to release. If omitted, releases all locks for the task.

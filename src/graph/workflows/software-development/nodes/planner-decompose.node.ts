@@ -7,7 +7,7 @@ export const plannerDecomposeNode: NodeDefinition<'agent'> = {
   config: {
     agent: 'planner',
     prompt:
-      'Dispatch Planner to analyze the completed brief and artifacts, decomposing the work into dependency-ordered tasks with artifact requirements. Present the resulting task plan as a markdown table for user review via the question tool. Persist approved tasks in dependency order via crewmate_add_task.',
+      'Dispatch Planner to analyze the completed brief and artifacts, decomposing the work into dependency-ordered tasks with artifact requirements. Planner outputs a structured task breakdown for user review and persistence in the next step.',
     allowedTools: [
       'read',
       'glob',

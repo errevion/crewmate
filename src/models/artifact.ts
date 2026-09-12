@@ -134,7 +134,7 @@ export type StructuredArtifactPayload =
 export interface ExecutionArtifact {
   id: string;
   taskId: string | null;
-  briefId: string;
+  briefId: string | null;
   type: ArtifactType;
   content: string;
   status: ArtifactStatus;

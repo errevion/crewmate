@@ -90,6 +90,29 @@ describe('crewmate lock & artifact CLI', () => {
       });
       await expectSuccess(lock2Result);
     });
+
+    it('should prevent releasing locks for in_progress tasks without --force', async () => {
+      await runCli(['lock', 'acquire', taskId1, '--files', 'src/active.ts'], { cwd: tmpDir });
+      await runCli(['task', 'update', taskId1, '--status', 'in_progress'], { cwd: tmpDir });
+
+      const releaseResult = await runCli(['lock', 'release', taskId1], { cwd: tmpDir });
+      await expectFailure(releaseResult, /task is currently in_progress/i);
+
+      // Verify locks are still held
+      const listResult = await runCli(['lock', 'list', '--task', taskId1], { cwd: tmpDir });
+      await expectSuccess(listResult);
+      const listOutput = parseJsonOutput(listResult.stdout);
+      expect(listOutput.locks.length).toBe(1);
+
+      // Releasing with --force should succeed
+      const forceReleaseResult = await runCli(['lock', 'release', taskId1, '--force'], {
+        cwd: tmpDir,
+      });
+      await expectSuccess(forceReleaseResult);
+      const forceOutput = parseJsonOutput(forceReleaseResult.stdout);
+      expect(forceOutput.ok).toBe(true);
+      expect(forceOutput.released).toBe(1);
+    });
   });
 
   describe('artifact command', () => {

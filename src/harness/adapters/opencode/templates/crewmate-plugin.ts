@@ -451,15 +451,19 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
 
       crewmate_release_lock: tool({
         description:
-          "Release file locks held by a task after execution completes or on failure. REQUIRED: taskId. Optional: files.",
+          "Release file locks held by a task (orchestrator tool for manual recovery or stage transition; subagents are not permitted to call this). REQUIRED: taskId. Optional: files, force.",
         args: {
           taskId: z.string().min(1).describe("REQUIRED: The task ID releasing locks"),
           files: z.array(z.string()).optional().describe("Optional: Specific file paths to release"),
+          force: z.boolean().optional().describe("Optional: Force release locks even if task is in_progress"),
         },
         async execute(args, context) {
           const cmdParts = ["lock", "release", args.taskId]
           if (args.files && args.files.length > 0) {
             cmdParts.push("--files", ...args.files)
+          }
+          if (args.force) {
+            cmdParts.push("--force")
           }
           const json = await runCrewmate(context.directory, cmdParts)
           if (!json.ok) throw new Error(json.error)
@@ -1037,8 +1041,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
       const args = output?.args || input?.args || {}
 
       // Enforce active workflow node gates (tool permissions)
-      // Orchestration tools (subagent dispatching, user questions, workflow lifecycle) bypass node-level gates
-      const ORCHESTRATION_BYPASS = ["task", "question"]
+      // Orchestration tools (subagent dispatching, user questions, activity tracking, workflow lifecycle) bypass node-level gates
+      const ORCHESTRATION_BYPASS = ["task", "question", "crewmate_set_activity", "crewmate_get_activity"]
       if (
         toolName &&
         !toolName.startsWith("crewmate_workflow_") &&
@@ -1061,6 +1065,61 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
           if (gateErr?.message && gateErr.message.startsWith("Gate restriction:")) {
             throw gateErr
           }
+        }
+      }
+
+      // Enforce lock management authorization: subagents are not permitted to release or clear locks
+      if (toolName === "crewmate_release_lock" || toolName === "crewmate_clear_locks") {
+        const currentSessionId = input?.sessionID || input?.sessionId
+        const trackedForSession = currentSessionId ? sessionAgentMap.get(currentSessionId) : null
+        if (trackedForSession) {
+          await runCrewmate(targetDir, [
+            "event", "add",
+            "--actor", trackedForSession.agent,
+            "--type", "error",
+            ...(trackedForSession.taskId ? ["--task", trackedForSession.taskId] : []),
+            "--message", \`Unauthorized lock management: \${toolName} blocked for \${trackedForSession.agent}\`,
+          ]).catch(() => {})
+          throw new Error(
+            \`Unauthorized: Subagent '\${trackedForSession.agent}' is not permitted to call '\${toolName}'. File locks are managed automatically by the orchestrator upon task completion.\`
+          )
+        }
+      }
+
+      // Enforce CLI execution guard: subagents cannot invoke 'crewmate' CLI commands or manipulate lock DB via bash
+      if (toolName === "bash" && args) {
+        const currentSessionId = input?.sessionID || input?.sessionId
+        const trackedForSession = currentSessionId ? sessionAgentMap.get(currentSessionId) : null
+        if (trackedForSession) {
+          const cmd = String(args.command || args.cmd || "")
+          const isCrewmateCli =
+            /\\b(?:crewmate|index\\.(?:m?js|ts))\\b/i.test(cmd) ||
+            /\\block\\s+(?:release|clear|unlock|clean-stale)\\b/i.test(cmd) ||
+            /\\bcrewmate\\.db\\b/i.test(cmd)
+
+          if (isCrewmateCli) {
+            await runCrewmate(targetDir, [
+              "event", "add",
+              "--actor", trackedForSession.agent,
+              "--type", "error",
+              ...(trackedForSession.taskId ? ["--task", trackedForSession.taskId] : []),
+              "--message", \`Unauthorized CLI execution: blocked '\${cmd.slice(0, 60)}' for \${trackedForSession.agent}\`,
+            ]).catch(() => {})
+            throw new Error(
+              \`Permission denied: Subagent '\${trackedForSession.agent}' is strictly forbidden from executing 'crewmate' CLI commands via bash. Subagents must exclusively use their authorized 'crewmate_*' plugin tools. If you encountered a lock conflict or error, ABORT immediately and report it to Frontman.\`
+            )
+          }
+        }
+      }
+
+      // Enforce lock acquisition identity: subagents cannot acquire locks under another task's ID
+      if (toolName === "crewmate_acquire_lock" && args?.taskId) {
+        const currentSessionId = input?.sessionID || input?.sessionId
+        const trackedForSession = currentSessionId ? sessionAgentMap.get(currentSessionId) : null
+        if (trackedForSession?.taskId && trackedForSession.taskId !== args.taskId) {
+          throw new Error(
+            \`Unauthorized: Subagent '\${trackedForSession.agent}' cannot acquire locks for task '\${args.taskId}'. Session is bound to task '\${trackedForSession.taskId}'.\`
+          )
         }
       }
 
@@ -1104,7 +1163,7 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
                   "--task", lockForFile.taskId,
                   "--message", \`Lock violation: \${toolName} on \${rel} locked by task \${lockForFile.taskId}\`,
                 ]).catch(() => {})
-                throw new Error(\`File is locked by task \${lockForFile.taskId}: \${rel}. Acquire the lock first or wait for the task to complete.\`)
+                throw new Error(\`Lock violation: File '\${rel}' is locked by task \${lockForFile.taskId}. You are strictly forbidden from modifying this file or attempting to release/unlock it (via tools or bash CLI). You must ABORT this task immediately and return a lock conflict report to Frontman.\`)
               }
             }
           }
@@ -1281,6 +1340,8 @@ const CrewmatePlugin: Plugin = async ({ directory }: any) => {
             ]).catch(() => {})
           } else if (status === "completed") {
             completedTaskSet.add(taskId)
+            activeLockedTasks.delete(taskId)
+            await runCrewmate(targetDir, ["lock", "release", taskId]).catch(() => {})
             const taskTitle = parsedOutput?.title || taskId
             await runCrewmate(targetDir, [
               "event",

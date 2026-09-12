@@ -171,4 +171,51 @@ describe('artifact validation & relaxed parsing', () => {
     expect(tryDecodeBase64('normal word')).toBe(null);
     expect(tryDecodeBase64('')).toBe(null);
   });
+
+  it('should format structured JSON fact data across indented lines instead of a single raw string', () => {
+    const rawFact = JSON.stringify({
+      who_tiers: [
+        { name: 'Underweight', min: 0, max: 18.49, badgeColor: '#3b82f6' },
+        { name: 'Normal weight', min: 18.5, max: 24.99, badgeColor: '#10b981' },
+      ],
+      formulas: {
+        metric: 'weight_kg / (height_m * height_m)',
+        imperial: '703 * weight_lbs / (height_inches * height_inches)',
+      },
+    });
+
+    const body = formatArtifactBody('fact', rawFact);
+    const joined = body.join('\n');
+
+    expect(joined).toContain('Fact Data');
+    expect(joined).toContain('"who_tiers"');
+    expect(joined).toContain('"Underweight"');
+    expect(joined).toContain('"formulas"');
+    expect(body.length).toBeGreaterThan(5); // Multiple lines formatted nicely
+
+    // Summary should extract keys instead of raw JSON
+    const summary = summarizeArtifactContent('fact', rawFact);
+    expect(summary).toBe('Data: { who_tiers, formulas }');
+  });
+
+  it('should pretty-print stringified JSON stored inside fact statement', () => {
+    const rawFact = JSON.stringify({
+      statement: JSON.stringify({
+        who_tiers: [{ name: 'Underweight' }],
+        formulas: { metric: 'weight / height^2' },
+      }),
+      scope: 'project',
+    });
+
+    const body = formatArtifactBody('fact', rawFact);
+    const joined = body.join('\n');
+
+    expect(joined).toContain('Fact Data');
+    expect(joined).toContain('(project)');
+    expect(joined).toContain('"who_tiers"');
+    expect(body.length).toBeGreaterThan(3);
+
+    const summary = summarizeArtifactContent('fact', rawFact);
+    expect(summary).toBe('Data: { who_tiers, formulas }');
+  });
 });

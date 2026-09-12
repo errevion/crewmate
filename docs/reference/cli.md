@@ -505,14 +505,15 @@ crewmate lock acquire <taskId> --files src/auth.ts src/types.ts
 ```
 
 #### `lock release <task-id>`
-Release locks held by a task upon task completion or failure.
+Release locks held by a task upon task completion or failure. If the task is currently `in_progress`, `--force` is required to prevent accidental concurrency collisions.
 
 ```bash
-crewmate lock release <taskId> [--files src/auth.ts]
+crewmate lock release <taskId> [--files src/auth.ts] [--force]
 ```
 
 - `<task-id>`: Task ID releasing locks.
 - `--files <files...>`: Optional subset of files to release (releases all if omitted).
+- `--force`: Force release locks even if task is currently `in_progress`.
 
 ```json
 {

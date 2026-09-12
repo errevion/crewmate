@@ -7,8 +7,10 @@ import { verificationStage } from './stages/verification.stage.js';
 
 export * from './nodes/frontman-interview.node.js';
 export * from './nodes/validate-brief.node.js';
+export * from './nodes/scout-approval.node.js';
 export * from './nodes/scout-explore.node.js';
 export * from './nodes/planner-decompose.node.js';
+export * from './nodes/task-approval.node.js';
 export * from './nodes/executor-run.node.js';
 export * from './nodes/verify-artifacts.node.js';
 
