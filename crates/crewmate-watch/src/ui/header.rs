@@ -23,7 +23,9 @@ pub fn render_header(f: &mut Frame, app: &App, area: Rect, subtitle: Option<&str
     let retry_str = format!("{}/{}", retry_count, max_retries);
 
     let retry_style = if retry_count > 0 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::White)
     };
@@ -32,19 +34,30 @@ pub fn render_header(f: &mut Frame, app: &App, area: Rect, subtitle: Option<&str
     let workflow_name = app.workflow_display_name();
 
     // 1. <workflow name>
-    let mut line_spans = vec![
-        Span::styled(format!(" {} ", workflow_name), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-    ];
+    let mut line_spans = vec![Span::styled(
+        format!(" {} ", workflow_name),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )];
 
     if let Some(ref run_id) = app.state.current_run_id {
-        line_spans.push(Span::styled(format!("({}) ", run_id), Style::default().fg(Color::DarkGray)));
+        line_spans.push(Span::styled(
+            format!("({}) ", run_id),
+            Style::default().fg(Color::DarkGray),
+        ));
     }
 
     // 2. | Node: <node> (<i>/<n>)
     // 3. | Retries: <r>/<max>
     line_spans.extend(vec![
         Span::styled("│ Node: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(node_name, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            node_name,
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" "),
         Span::styled(pos_display, Style::default().fg(Color::DarkGray)),
         Span::styled(" │ Retries: ", Style::default().fg(Color::DarkGray)),
@@ -52,8 +65,14 @@ pub fn render_header(f: &mut Frame, app: &App, area: Rect, subtitle: Option<&str
     ]);
 
     if let Some(ref target) = app.state.escalation_target {
-        line_spans.push(Span::styled(" │ Escalated: ", Style::default().fg(Color::DarkGray)));
-        line_spans.push(Span::styled(target, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)));
+        line_spans.push(Span::styled(
+            " │ Escalated: ",
+            Style::default().fg(Color::DarkGray),
+        ));
+        line_spans.push(Span::styled(
+            target,
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ));
     }
 
     // 4. | Harness: <state> (<runtime> <session_id>)
@@ -62,18 +81,29 @@ pub fn render_header(f: &mut Frame, app: &App, area: Rect, subtitle: Option<&str
         "IDLE" => (Color::Cyan, "IDLE"),
         _ => (Color::Red, "OFFLINE"),
     };
-    line_spans.push(Span::styled(" │ Harness: ", Style::default().fg(Color::DarkGray)));
-    line_spans.push(Span::styled(harness_text, Style::default().fg(harness_color).add_modifier(Modifier::BOLD)));
+    line_spans.push(Span::styled(
+        " │ Harness: ",
+        Style::default().fg(Color::DarkGray),
+    ));
+    line_spans.push(Span::styled(
+        harness_text,
+        Style::default()
+            .fg(harness_color)
+            .add_modifier(Modifier::BOLD),
+    ));
 
     if app.heartbeat.is_alive {
         let harness_label = app.heartbeat.harness_name.as_deref().unwrap_or("OpenCode");
-        let short_sid = app.heartbeat.session_id.as_deref().map(|sid| {
-            if sid.len() > 8 {
-                &sid[..8]
-            } else {
-                sid
-            }
-        });
+        let short_sid =
+            app.heartbeat.session_id.as_deref().map(
+                |sid| {
+                    if sid.len() > 8 {
+                        &sid[..8]
+                    } else {
+                        sid
+                    }
+                },
+            );
 
         let label = match short_sid {
             Some(sid) => format!(" ({} {})", harness_label, sid),
@@ -81,7 +111,10 @@ pub fn render_header(f: &mut Frame, app: &App, area: Rect, subtitle: Option<&str
         };
         line_spans.push(Span::styled(label, Style::default().fg(Color::DarkGray)));
     } else if let Some(ref h) = app.heartbeat.harness_name {
-        line_spans.push(Span::styled(format!(" ({})", h), Style::default().fg(Color::DarkGray)));
+        line_spans.push(Span::styled(
+            format!(" ({})", h),
+            Style::default().fg(Color::DarkGray),
+        ));
     }
 
     let mut block = Block::default()

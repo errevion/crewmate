@@ -17,7 +17,9 @@ pub fn render_recent_events(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             title,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     if events.is_empty() {
@@ -52,17 +54,28 @@ pub fn render_recent_events(f: &mut Frame, app: &App, area: Rect) {
             let is_selected = actual_idx == selected_idx;
 
             let type_style = if ev.event_type == "START" {
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else if ev.event_type.contains("completed") {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             } else if ev.event_type.contains("failed") {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             };
 
             let pointer_span = if is_selected {
-                Span::styled("▶ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    "▶ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::raw("  ")
             };
@@ -81,7 +94,9 @@ pub fn render_recent_events(f: &mut Frame, app: &App, area: Rect) {
             };
 
             let label_style = if is_selected {
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -93,7 +108,10 @@ pub fn render_recent_events(f: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(Color::DarkGray),
                 ),
                 Span::styled(format!("{: <14} ", ev.event_type), type_style),
-                Span::styled(format!("{} ", ev.short_id), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{} ", ev.short_id),
+                    Style::default().fg(Color::DarkGray),
+                ),
                 Span::styled(format!("{}: ", ev.agent), Style::default().fg(Color::Cyan)),
                 Span::styled(label_display, label_style),
             ];
@@ -133,17 +151,25 @@ pub fn render_event_detail_modal(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             " Event Details ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let type_style = if ev.event_type == "START" {
-        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD)
     } else if ev.event_type.contains("completed") {
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
     } else if ev.event_type.contains("failed") {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     };
 
     let mut text_lines = vec![
@@ -153,7 +179,10 @@ pub fn render_event_detail_modal(f: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("Timestamp:   ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format_local_datetime(&ev.full_timestamp), Style::default().fg(Color::White)),
+            Span::styled(
+                format_local_datetime(&ev.full_timestamp),
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("Activity ID: ", Style::default().fg(Color::DarkGray)),
@@ -173,18 +202,32 @@ pub fn render_event_detail_modal(f: &mut Frame, app: &App, area: Rect) {
     }
 
     text_lines.push(Line::raw(""));
-    text_lines.push(Line::from(vec![
-        Span::styled("Activity Label:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-    ]));
-    text_lines.push(Line::from(vec![
-        Span::styled(format!("\"{}\"", ev.label), Style::default().fg(Color::White)),
-    ]));
+    text_lines.push(Line::from(vec![Span::styled(
+        "Activity Label:",
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )]));
+    text_lines.push(Line::from(vec![Span::styled(
+        format!("\"{}\"", ev.label),
+        Style::default().fg(Color::White),
+    )]));
     text_lines.push(Line::raw(""));
     text_lines.push(Line::from(vec![
         Span::styled("Press ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Esc", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Esc",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" or ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Enter", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Enter",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" to close this view.", Style::default().fg(Color::DarkGray)),
     ]));
 

@@ -13,7 +13,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use crate::app::{App, AppPage};
 use self::activities::render_activities;
 use self::contracts::render_contracts_page;
 use self::events::{render_event_detail_modal, render_recent_events};
@@ -22,6 +21,7 @@ use self::graph::{render_canvas_graph, render_compressed_graph};
 use self::header::render_header;
 use self::help::render_help_overlay;
 use self::tasks::{render_task_detail_modal, render_tasks_page};
+use crate::app::{App, AppPage};
 
 pub fn render(f: &mut Frame, app: &App) {
     let size = f.area();
@@ -83,10 +83,10 @@ pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),               // Header
-            Constraint::Length(graph_height),    // Graph (canvas or compressed)
-            Constraint::Min(4),                  // Lower panels
-            Constraint::Length(1),               // Footer
+            Constraint::Length(3),            // Header
+            Constraint::Length(graph_height), // Graph (canvas or compressed)
+            Constraint::Min(4),               // Lower panels
+            Constraint::Length(1),            // Footer
         ])
         .split(size);
 
@@ -141,22 +141,31 @@ fn render_tasks_ultra_compact(f: &mut Frame, app: &App, area: Rect) {
 
     let wf_name = app.workflow_display_name();
     let header_line = Line::from(vec![
-        Span::styled(format!("{} ", wf_name), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("│ Tasks: {}/{}", app.task_snapshot.done_count, app.task_snapshot.total_count), Style::default().fg(Color::Yellow)),
+        Span::styled(
+            format!("{} ", wf_name),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(
+                "│ Tasks: {}/{}",
+                app.task_snapshot.done_count, app.task_snapshot.total_count
+            ),
+            Style::default().fg(Color::Yellow),
+        ),
     ]);
     f.render_widget(Paragraph::new(header_line), chunks[0]);
 
-    let counts_line = Line::from(vec![
-        Span::styled(
-            format!(
-                "{} done · {} run · {} wait",
-                app.task_snapshot.done_count,
-                app.task_snapshot.running_count,
-                app.task_snapshot.waiting_count
-            ),
-            Style::default().fg(Color::Green),
+    let counts_line = Line::from(vec![Span::styled(
+        format!(
+            "{} done · {} run · {} wait",
+            app.task_snapshot.done_count,
+            app.task_snapshot.running_count,
+            app.task_snapshot.waiting_count
         ),
-    ]);
+        Style::default().fg(Color::Green),
+    )]);
     f.render_widget(Paragraph::new(counts_line), chunks[1]);
 
     let summary = if let Some(first) = app.task_snapshot.running.first() {
@@ -184,8 +193,16 @@ fn render_ultra_compact(f: &mut Frame, app: &App, area: Rect) {
     let wf_name = app.workflow_display_name();
     let curr = app.state.current_node.as_deref().unwrap_or("-");
     let header_line = Line::from(vec![
-        Span::styled(format!("{} ", wf_name), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("│ Node: {}", curr), Style::default().fg(Color::Yellow)),
+        Span::styled(
+            format!("{} ", wf_name),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("│ Node: {}", curr),
+            Style::default().fg(Color::Yellow),
+        ),
     ]);
     f.render_widget(Paragraph::new(header_line), chunks[0]);
 
@@ -205,8 +222,16 @@ fn render_contracts_ultra_compact(f: &mut Frame, app: &App, area: Rect) {
         .split(area);
 
     let summary = Line::from(vec![
-        Span::styled("Contracts: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{} modules", app.contracts.index.modules.len()), Style::default().fg(Color::White)),
+        Span::styled(
+            "Contracts: ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{} modules", app.contracts.index.modules.len()),
+            Style::default().fg(Color::White),
+        ),
     ]);
     f.render_widget(Paragraph::new(summary), chunks[0]);
 

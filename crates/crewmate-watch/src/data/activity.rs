@@ -306,13 +306,25 @@ impl ActivitySnapshot {
                     let (formatted_type, label, node) = match ev_type {
                         "INIT" => (
                             "INIT".to_string(),
-                            format!("Initial node: {}", val.get("initialNode").and_then(|v| v.as_str()).unwrap_or("-")),
-                            val.get("initialNode").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            format!(
+                                "Initial node: {}",
+                                val.get("initialNode")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("-")
+                            ),
+                            val.get("initialNode")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         ),
                         "RUN_START" => (
                             "RUN_START".to_string(),
-                            format!("Workflow: {}", val.get("workflow").and_then(|v| v.as_str()).unwrap_or("-")),
-                            val.get("initialNode").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            format!(
+                                "Workflow: {}",
+                                val.get("workflow").and_then(|v| v.as_str()).unwrap_or("-")
+                            ),
+                            val.get("initialNode")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         ),
                         "NODE_TRANSITION" => {
                             let from = val.get("from").and_then(|v| v.as_str()).unwrap_or("-");
@@ -327,7 +339,10 @@ impl ActivitySnapshot {
                             let gate = val.get("gate").and_then(|v| v.as_str()).unwrap_or("gate");
                             let status = val.get("status").and_then(|v| v.as_str()).unwrap_or("-");
                             let phase = val.get("phase").and_then(|v| v.as_str()).unwrap_or("-");
-                            let node = val.get("node").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            let node = val
+                                .get("node")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
                             (
                                 "GATE".to_string(),
                                 format!("{}: {} ({})", gate, status, phase),
@@ -337,17 +352,22 @@ impl ActivitySnapshot {
                         "RETRY_INCREMENT" => {
                             let r = val.get("retryCount").and_then(|v| v.as_u64()).unwrap_or(0);
                             let max = val.get("maxRetries").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let node = val.get("node").and_then(|v| v.as_str()).map(|s| s.to_string());
-                            (
-                                "RETRY".to_string(),
-                                format!("Retry {}/{}", r, max),
-                                node,
-                            )
+                            let node = val
+                                .get("node")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            ("RETRY".to_string(), format!("Retry {}/{}", r, max), node)
                         }
                         "ESCALATE" => {
-                            let target = val.get("target").and_then(|v| v.as_str()).unwrap_or("human");
+                            let target = val
+                                .get("target")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("human");
                             let reason = val.get("reason").and_then(|v| v.as_str()).unwrap_or("");
-                            let node = val.get("node").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            let node = val
+                                .get("node")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
                             (
                                 "ESCALATE".to_string(),
                                 format!("to {}: {}", target, reason),
@@ -355,11 +375,21 @@ impl ActivitySnapshot {
                             )
                         }
                         "COMPLETE" => {
-                            let node = val.get("node").and_then(|v| v.as_str()).map(|s| s.to_string());
-                            ("COMPLETE".to_string(), "Workflow completed".to_string(), node)
+                            let node = val
+                                .get("node")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            (
+                                "COMPLETE".to_string(),
+                                "Workflow completed".to_string(),
+                                node,
+                            )
                         }
                         "RESET" => {
-                            let node = val.get("node").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            let node = val
+                                .get("node")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
                             ("RESET".to_string(), "Workflow reset".to_string(), node)
                         }
                         other => (other.to_string(), "".to_string(), None),
@@ -405,7 +435,9 @@ pub fn format_short_id(id: &str) -> String {
 
 pub fn format_time(iso: &str) -> String {
     if let Ok(dt) = DateTime::parse_from_rfc3339(iso) {
-        dt.with_timezone(&chrono::Local).format("%H:%M:%S").to_string()
+        dt.with_timezone(&chrono::Local)
+            .format("%H:%M:%S")
+            .to_string()
     } else if iso.len() >= 19 && iso.contains('T') {
         let time_part = iso.split('T').nth(1).unwrap_or("");
         time_part.chars().take(8).collect()

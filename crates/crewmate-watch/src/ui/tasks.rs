@@ -41,16 +41,20 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
 
     let bar_width = inner_width.clamp(10, 50);
 
-    let progress_spans = if total == 0 {
-        vec![
-            Span::raw(" "),
-            Span::styled("─".repeat(bar_width), Style::default().fg(Color::DarkGray)),
-        ]
-    } else {
-        let done_width = (done * bar_width) / total;
-        let running_width = (running * bar_width) / total;
-        let done_w = if done > 0 && done_width == 0 { 1 } else { done_width };
-        let running_w = if running > 0 && running_width == 0 { 1 } else { running_width };
+    let progress_spans = if let (Some(done_width), Some(running_width)) = (
+        (done * bar_width).checked_div(total),
+        (running * bar_width).checked_div(total),
+    ) {
+        let done_w = if done > 0 && done_width == 0 {
+            1
+        } else {
+            done_width
+        };
+        let running_w = if running > 0 && running_width == 0 {
+            1
+        } else {
+            running_width
+        };
         let waiting_w = bar_width.saturating_sub(done_w + running_w);
 
         vec![
@@ -59,17 +63,31 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
             Span::styled("█".repeat(running_w), Style::default().fg(Color::Yellow)),
             Span::styled("█".repeat(waiting_w), Style::default().fg(Color::DarkGray)),
         ]
+    } else {
+        vec![
+            Span::raw(" "),
+            Span::styled("─".repeat(bar_width), Style::default().fg(Color::DarkGray)),
+        ]
     };
     lines.push(Line::from(progress_spans));
 
     // 2. <done>/<total> done · <n> running · <n> waiting
     let counts_line = Line::from(vec![
         Span::raw(" "),
-        Span::styled(format!("{}/{} done", done, total), Style::default().fg(Color::Green)),
+        Span::styled(
+            format!("{}/{} done", done, total),
+            Style::default().fg(Color::Green),
+        ),
         Span::styled(" · ", Style::default().fg(Color::DarkGray)),
-        Span::styled(format!("{} running", running), Style::default().fg(Color::Yellow)),
+        Span::styled(
+            format!("{} running", running),
+            Style::default().fg(Color::Yellow),
+        ),
         Span::styled(" · ", Style::default().fg(Color::DarkGray)),
-        Span::styled(format!("{} waiting", waiting), Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{} waiting", waiting),
+            Style::default().fg(Color::DarkGray),
+        ),
     ]);
     lines.push(counts_line);
     lines.push(Line::raw(""));
@@ -79,11 +97,15 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
         Span::styled(
             "Running · ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!("{}", app.task_snapshot.running.len()),
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
     ]));
 
@@ -105,14 +127,21 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
             };
 
             let prefix = if is_selected {
-                Span::styled("▌ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    "▌ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::raw("  ")
             };
 
             let dot = Span::styled(
                 "● ",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             );
 
             let right_side = format!("{:>12}  {:>7}", task.agent, task.elapsed_str);
@@ -134,9 +163,15 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
                     dot,
                     Span::styled(label, Style::default().fg(Color::White)),
                     Span::raw(pad),
-                    Span::styled(format!("{:>12}", task.agent), Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        format!("{:>12}", task.agent),
+                        Style::default().fg(Color::Cyan),
+                    ),
                     Span::raw("  "),
-                    Span::styled(format!("{:>7}", task.elapsed_str), Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!("{:>7}", task.elapsed_str),
+                        Style::default().fg(Color::Yellow),
+                    ),
                 ])
                 .style(row_style),
             );
@@ -150,11 +185,15 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
         Span::styled(
             "Waiting · ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!("{}", app.task_snapshot.waiting.len()),
-            Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
         ),
     ]));
 
@@ -176,7 +215,12 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
             };
 
             let prefix = if is_selected {
-                Span::styled("▌ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    "▌ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::raw("  ")
             };
@@ -222,11 +266,15 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
         Span::styled(
             "Done · ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!("{}", app.task_snapshot.done.len()),
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
         ),
     ]));
 
@@ -248,7 +296,12 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
             };
 
             let prefix = if is_selected {
-                Span::styled("▌ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    "▌ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::raw("  ")
             };
@@ -289,7 +342,9 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
         let target_row = task_row_indices[sel_idx];
         let max_scroll = lines_count.saturating_sub(available_height);
         if target_row >= available_height {
-            (target_row + 1).saturating_sub(available_height).min(max_scroll)
+            (target_row + 1)
+                .saturating_sub(available_height)
+                .min(max_scroll)
         } else {
             0
         }
@@ -312,7 +367,9 @@ fn render_tasks_content_panel(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             title,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let visible_lines: Vec<Line> = lines
@@ -352,13 +409,21 @@ pub fn render_task_detail_modal(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             " Task Details ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let status_style = match task.status.as_str() {
-        "active" => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-        "done" => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-        "blocked" => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        "active" => Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+        "done" => Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+        "blocked" => Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
         "failed" => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         _ => Style::default().fg(Color::DarkGray),
     };
@@ -366,7 +431,12 @@ pub fn render_task_detail_modal(f: &mut Frame, app: &App, area: Rect) {
     let mut text_lines = vec![
         Line::from(vec![
             Span::styled("Task ID:      ", Style::default().fg(Color::DarkGray)),
-            Span::styled(task.id.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                task.id.clone(),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled("Status:       ", Style::default().fg(Color::DarkGray)),
@@ -379,7 +449,11 @@ pub fn render_task_detail_modal(f: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled("Contract:     ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                if task.contract.is_empty() { "-".to_string() } else { task.contract.clone() },
+                if task.contract.is_empty() {
+                    "-".to_string()
+                } else {
+                    task.contract.clone()
+                },
                 Style::default().fg(Color::White),
             ),
         ]),
@@ -399,7 +473,10 @@ pub fn render_task_detail_modal(f: &mut Frame, app: &App, area: Rect) {
     if !task.depends_on.is_empty() {
         text_lines.push(Line::from(vec![
             Span::styled("Depends On:   ", Style::default().fg(Color::DarkGray)),
-            Span::styled(task.depends_on.join(", "), Style::default().fg(Color::Yellow)),
+            Span::styled(
+                task.depends_on.join(", "),
+                Style::default().fg(Color::Yellow),
+            ),
         ]));
     }
 
@@ -413,21 +490,30 @@ pub fn render_task_detail_modal(f: &mut Frame, app: &App, area: Rect) {
     if let Some(ref c) = task.created_at {
         text_lines.push(Line::from(vec![
             Span::styled("Created At:   ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format_local_datetime(c), Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format_local_datetime(c),
+                Style::default().fg(Color::DarkGray),
+            ),
         ]));
     }
 
     if let Some(ref s) = task.started_at {
         text_lines.push(Line::from(vec![
             Span::styled("Started At:   ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format_local_datetime(s), Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format_local_datetime(s),
+                Style::default().fg(Color::DarkGray),
+            ),
         ]));
     }
 
     if let Some(ref d) = task.completed_at {
         text_lines.push(Line::from(vec![
             Span::styled("Completed At: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format_local_datetime(d), Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format_local_datetime(d),
+                Style::default().fg(Color::DarkGray),
+            ),
         ]));
     }
 
@@ -439,7 +525,12 @@ pub fn render_task_detail_modal(f: &mut Frame, app: &App, area: Rect) {
     text_lines.push(Line::raw(""));
     text_lines.push(Line::from(vec![
         Span::styled("Press ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Esc/Enter/q]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "[Esc/Enter/q]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" to close", Style::default().fg(Color::DarkGray)),
     ]));
 

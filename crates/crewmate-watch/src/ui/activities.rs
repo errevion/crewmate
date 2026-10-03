@@ -22,7 +22,9 @@ pub fn render_activities(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             title,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     if items.is_empty() {
@@ -59,13 +61,19 @@ pub fn render_activities(f: &mut Frame, app: &App, area: Rect) {
             let mut spans = Vec::new();
 
             if !indent_prefix.is_empty() {
-                spans.push(Span::styled(indent_prefix.clone(), Style::default().fg(Color::DarkGray)));
+                spans.push(Span::styled(
+                    indent_prefix.clone(),
+                    Style::default().fg(Color::DarkGray),
+                ));
             }
 
             // Status indicator and elapsed badge based on liveness
             let (elapsed_badge_len, is_dimmed) = match app.heartbeat.status_text.as_str() {
                 "RUNNING" => {
-                    spans.push(Span::styled("● ", Style::default().fg(dot_color).add_modifier(Modifier::BOLD)));
+                    spans.push(Span::styled(
+                        "● ",
+                        Style::default().fg(dot_color).add_modifier(Modifier::BOLD),
+                    ));
                     spans.push(Span::styled(
                         format!("[{}] ", elapsed),
                         Style::default().fg(Color::Cyan),
@@ -73,7 +81,12 @@ pub fn render_activities(f: &mut Frame, app: &App, area: Rect) {
                     (elapsed.len() + 3, false)
                 }
                 "IDLE" => {
-                    spans.push(Span::styled("○ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)));
+                    spans.push(Span::styled(
+                        "○ ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ));
                     spans.push(Span::styled(
                         format!("[{}] [idle] ", elapsed),
                         Style::default().fg(Color::Cyan),
@@ -109,7 +122,9 @@ pub fn render_activities(f: &mut Frame, app: &App, area: Rect) {
             let label_style = if is_dimmed {
                 Style::default().fg(Color::DarkGray)
             } else {
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
             };
 
             // Activity label

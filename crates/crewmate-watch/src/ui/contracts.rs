@@ -49,7 +49,9 @@ fn render_contracts_subview_tabs(f: &mut Frame, app: &App, area: Rect) {
 
     let tab_style = |active: bool| -> Style {
         if active {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         }
@@ -57,7 +59,12 @@ fn render_contracts_subview_tabs(f: &mut Frame, app: &App, area: Rect) {
 
     let indicator = |active: bool| -> Span {
         if active {
-            Span::styled(" ◆ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            Span::styled(
+                " ◆ ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
             Span::styled("   ", Style::default().fg(Color::DarkGray))
         }
@@ -69,13 +76,22 @@ fn render_contracts_subview_tabs(f: &mut Frame, app: &App, area: Rect) {
 
     let mut tab_spans = vec![
         indicator(is_modules),
-        Span::styled(format!("[m] Modules ({})", mod_count), tab_style(is_modules)),
+        Span::styled(
+            format!("[m] Modules ({})", mod_count),
+            tab_style(is_modules),
+        ),
         Span::styled("  │  ", Style::default().fg(Color::DarkGray)),
         indicator(is_arch),
-        Span::styled(format!("[a] Architecture ({})", arch_count), tab_style(is_arch)),
+        Span::styled(
+            format!("[a] Architecture ({})", arch_count),
+            tab_style(is_arch),
+        ),
         Span::styled("  │  ", Style::default().fg(Color::DarkGray)),
         indicator(is_caps),
-        Span::styled(format!("[p] Capabilities ({})", cap_count), tab_style(is_caps)),
+        Span::styled(
+            format!("[p] Capabilities ({})", cap_count),
+            tab_style(is_caps),
+        ),
     ];
 
     if !app.contracts.loaded {
@@ -92,7 +108,9 @@ fn render_contracts_subview_tabs(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             " Contracts Registry ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let paragraph = Paragraph::new(Line::from(tab_spans))
@@ -138,7 +156,9 @@ fn render_module_list(f: &mut Frame, app: &App, area: Rect) {
             let pointer = if is_selected { "▸ " } else { "  " };
 
             let name_style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -146,7 +166,12 @@ fn render_module_list(f: &mut Frame, app: &App, area: Rect) {
             let count_label = format!("({} exports)", m.public_surface.len());
 
             let mut row = vec![
-                Span::styled(pointer, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    pointer,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(&m.name, name_style),
                 Span::raw(" "),
                 Span::styled(count_label, Style::default().fg(Color::DarkGray)),
@@ -156,7 +181,9 @@ fn render_module_list(f: &mut Frame, app: &App, area: Rect) {
                 if mc.status == "draft" {
                     row.push(Span::styled(
                         " [DRAFT]",
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
                     ));
                 }
             }
@@ -171,7 +198,9 @@ fn render_module_list(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             " Modules ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let paragraph = Paragraph::new(lines).block(block);
@@ -186,7 +215,12 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
     let title = match selected_mod {
         Some(m) => {
             let status_tag = contract.map(|c| c.status.as_str()).unwrap_or("final");
-            format!(" Module Contract: {} (v{}, {}) ", m.name, m.version, status_tag.to_uppercase())
+            format!(
+                " Module Contract: {} (v{}, {}) ",
+                m.name,
+                m.version,
+                status_tag.to_uppercase()
+            )
         }
         None => " Module Contract ".to_string(),
     };
@@ -201,7 +235,12 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
 
         lines.push(Line::from(vec![
             Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                status_text,
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
 
         // Path & Responsibility
@@ -218,13 +257,15 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::raw(""));
 
         // Public API
-        let api_count = contract.map(|c| c.public_api.len()).unwrap_or(m.public_surface.len());
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("Public API ({} exports):", api_count),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        let api_count = contract
+            .map(|c| c.public_api.len())
+            .unwrap_or(m.public_surface.len());
+        lines.push(Line::from(vec![Span::styled(
+            format!("Public API ({} exports):", api_count),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         if let Some(c) = contract {
             if c.public_api.is_empty() {
@@ -237,7 +278,12 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
                     let sig_text = exp.signature.as_deref().unwrap_or("()");
                     lines.push(Line::from(vec![
                         Span::styled("  • ", Style::default().fg(Color::Cyan)),
-                        Span::styled(&exp.export, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            &exp.export,
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
                         Span::styled(format!(": {}", sig_text), Style::default().fg(Color::White)),
                     ]));
 
@@ -276,12 +322,12 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
 
         // Invariants
         let invariants = contract.map(|c| c.invariants.as_slice()).unwrap_or(&[]);
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("Invariants ({}):", invariants.len()),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            format!("Invariants ({}):", invariants.len()),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         if invariants.is_empty() {
             lines.push(Line::from(Span::styled(
@@ -301,10 +347,15 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
 
         // Allowed Dependencies & Declared Consumers
         let arch_entry = app.contracts.architecture.modules.get(&m.name);
-        let deps = arch_entry.map(|a| a.allowed_dependencies.as_slice()).unwrap_or(&[]);
+        let deps = arch_entry
+            .map(|a| a.allowed_dependencies.as_slice())
+            .unwrap_or(&[]);
 
         lines.push(Line::from(vec![
-            Span::styled("Allowed Dependencies: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "Allowed Dependencies: ",
+                Style::default().fg(Color::DarkGray),
+            ),
             if deps.is_empty() {
                 Span::styled("(none)", Style::default().fg(Color::DarkGray))
             } else {
@@ -312,7 +363,9 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
             },
         ]));
 
-        let consumers = contract.map(|c| c.declared_consumers.as_slice()).unwrap_or(&[]);
+        let consumers = contract
+            .map(|c| c.declared_consumers.as_slice())
+            .unwrap_or(&[]);
         lines.push(Line::from(vec![
             Span::styled("Declared Consumers: ", Style::default().fg(Color::DarkGray)),
             if consumers.is_empty() {
@@ -334,10 +387,14 @@ fn render_module_detail(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             title,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
 }
 
@@ -356,10 +413,14 @@ fn render_architecture_subview(f: &mut Frame, app: &App, area: Rect) {
         mod_names.sort();
 
         // Build consumer lookup map (who depends on X)
-        let mut consumers_map: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+        let mut consumers_map: std::collections::HashMap<&str, Vec<&str>> =
+            std::collections::HashMap::new();
         for (m, entry) in arch_modules {
             for dep in &entry.allowed_dependencies {
-                consumers_map.entry(dep.as_str()).or_default().push(m.as_str());
+                consumers_map
+                    .entry(dep.as_str())
+                    .or_default()
+                    .push(m.as_str());
             }
         }
 
@@ -369,9 +430,13 @@ fn render_architecture_subview(f: &mut Frame, app: &App, area: Rect) {
 
             let pointer = if is_selected { "▸ " } else { "  " };
             let name_style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             };
 
             lines.push(Line::from(vec![
@@ -392,7 +457,10 @@ fn render_architecture_subview(f: &mut Frame, app: &App, area: Rect) {
                 entry.allowed_dependencies.join(", ")
             };
             lines.push(Line::from(vec![
-                Span::styled("    → allowed dependencies: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    "    → allowed dependencies: ",
+                    Style::default().fg(Color::DarkGray),
+                ),
                 Span::styled(deps_display, Style::default().fg(Color::Green)),
             ]));
 
@@ -413,10 +481,14 @@ fn render_architecture_subview(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             " Architecture & Dependency Graph ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
 }
 
@@ -435,9 +507,13 @@ fn render_capabilities_subview(f: &mut Frame, app: &App, area: Rect) {
             let pointer = if is_selected { "▸ " } else { "  " };
 
             let name_style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             };
 
             lines.push(Line::from(vec![
@@ -472,10 +548,14 @@ fn render_capabilities_subview(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::DarkGray))
         .title(Span::styled(
             " Capabilities Registry ",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
 }
 
@@ -497,7 +577,12 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
     let title = match selected_mod {
         Some(m) => {
             let status_tag = contract.map(|c| c.status.as_str()).unwrap_or("final");
-            format!(" [FULL SCREEN] Module Contract: {} (v{}, {}) ", m.name, m.version, status_tag.to_uppercase())
+            format!(
+                " [FULL SCREEN] Module Contract: {} (v{}, {}) ",
+                m.name,
+                m.version,
+                status_tag.to_uppercase()
+            )
         }
         None => " [FULL SCREEN] Module Contract ".to_string(),
     };
@@ -512,13 +597,26 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
 
         lines.push(Line::from(vec![
             Span::styled("Status:             ", Style::default().fg(Color::DarkGray)),
-            Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                status_text,
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
 
         lines.push(Line::from(vec![
             Span::styled("Module Name:        ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&m.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("  (version {})", m.version), Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                &m.name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  (version {})", m.version),
+                Style::default().fg(Color::DarkGray),
+            ),
         ]));
 
         lines.push(Line::from(vec![
@@ -542,13 +640,18 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::raw(""));
 
         // Public API Section
-        let api_count = contract.map(|c| c.public_api.len()).unwrap_or(m.public_surface.len());
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("── Public API ({} exports) ───────────────────────────────────────────────────", api_count),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        let api_count = contract
+            .map(|c| c.public_api.len())
+            .unwrap_or(m.public_surface.len());
+        lines.push(Line::from(vec![Span::styled(
+            format!(
+                "── Public API ({} exports) ───────────────────────────────────────────────────",
+                api_count
             ),
-        ]));
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         if let Some(c) = contract {
             if c.public_api.is_empty() {
@@ -560,8 +663,16 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
                 for (i, exp) in c.public_api.iter().enumerate() {
                     let sig_text = exp.signature.as_deref().unwrap_or("()");
                     lines.push(Line::from(vec![
-                        Span::styled(format!("  {:>2}. ", i + 1), Style::default().fg(Color::DarkGray)),
-                        Span::styled(&exp.export, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            format!("  {:>2}. ", i + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            &exp.export,
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
                         Span::styled(format!(": {}", sig_text), Style::default().fg(Color::White)),
                     ]));
 
@@ -585,7 +696,10 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         } else if !m.public_surface.is_empty() {
             for (i, exp) in m.public_surface.iter().enumerate() {
                 lines.push(Line::from(vec![
-                    Span::styled(format!("  {:>2}. ", i + 1), Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("  {:>2}. ", i + 1),
+                        Style::default().fg(Color::DarkGray),
+                    ),
                     Span::styled(exp, Style::default().fg(Color::Cyan)),
                 ]));
             }
@@ -600,12 +714,15 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
 
         // Invariants Section
         let invariants = contract.map(|c| c.invariants.as_slice()).unwrap_or(&[]);
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("── Invariants ({} rules) ─────────────────────────────────────────────────────", invariants.len()),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        lines.push(Line::from(vec![Span::styled(
+            format!(
+                "── Invariants ({} rules) ─────────────────────────────────────────────────────",
+                invariants.len()
             ),
-        ]));
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         if invariants.is_empty() {
             lines.push(Line::from(Span::styled(
@@ -615,7 +732,10 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         } else {
             for (i, inv) in invariants.iter().enumerate() {
                 lines.push(Line::from(vec![
-                    Span::styled(format!("  {:>2}. ", i + 1), Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!("  {:>2}. ", i + 1),
+                        Style::default().fg(Color::Yellow),
+                    ),
                     Span::styled(inv, Style::default().fg(Color::White)),
                 ]));
             }
@@ -624,18 +744,23 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::raw(""));
 
         // Allowed Dependencies & Declared Consumers
-        lines.push(Line::from(vec![
-            Span::styled(
-                "── Architecture & Boundaries ─────────────────────────────────────────────────",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "── Architecture & Boundaries ─────────────────────────────────────────────────",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         let arch_entry = app.contracts.architecture.modules.get(&m.name);
-        let deps = arch_entry.map(|a| a.allowed_dependencies.as_slice()).unwrap_or(&[]);
+        let deps = arch_entry
+            .map(|a| a.allowed_dependencies.as_slice())
+            .unwrap_or(&[]);
 
         lines.push(Line::from(vec![
-            Span::styled("  Allowed Dependencies: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "  Allowed Dependencies: ",
+                Style::default().fg(Color::DarkGray),
+            ),
             if deps.is_empty() {
                 Span::styled("(none)", Style::default().fg(Color::DarkGray))
             } else {
@@ -643,9 +768,14 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
             },
         ]));
 
-        let consumers = contract.map(|c| c.declared_consumers.as_slice()).unwrap_or(&[]);
+        let consumers = contract
+            .map(|c| c.declared_consumers.as_slice())
+            .unwrap_or(&[]);
         lines.push(Line::from(vec![
-            Span::styled("  Declared Consumers:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "  Declared Consumers:   ",
+                Style::default().fg(Color::DarkGray),
+            ),
             if consumers.is_empty() {
                 Span::styled("(none)", Style::default().fg(Color::DarkGray))
             } else {
@@ -665,7 +795,9 @@ fn render_module_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::Cyan))
         .title(Span::styled(
             title,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let paragraph = Paragraph::new(lines)
@@ -689,7 +821,12 @@ fn render_architecture_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
     if let Some((name, entry)) = selected {
         lines.push(Line::from(vec![
             Span::styled("Module:           ", Style::default().fg(Color::DarkGray)),
-            Span::styled(name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
 
         if let Some(ref resp) = entry.responsibility {
@@ -701,18 +838,24 @@ fn render_architecture_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
 
         lines.push(Line::from(vec![
             Span::styled("Config File:      ", Style::default().fg(Color::DarkGray)),
-            Span::styled(".crewmate/contracts/architecture.yaml", Style::default().fg(Color::White)),
+            Span::styled(
+                ".crewmate/contracts/architecture.yaml",
+                Style::default().fg(Color::White),
+            ),
         ]));
 
         lines.push(Line::raw(""));
 
         // Allowed Dependencies
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("── Allowed Dependencies ({}) ────────────────────────────────────────────────", entry.allowed_dependencies.len()),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        lines.push(Line::from(vec![Span::styled(
+            format!(
+                "── Allowed Dependencies ({}) ────────────────────────────────────────────────",
+                entry.allowed_dependencies.len()
             ),
-        ]));
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         if entry.allowed_dependencies.is_empty() {
             lines.push(Line::from(Span::styled(
@@ -722,8 +865,16 @@ fn render_architecture_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         } else {
             for (i, dep) in entry.allowed_dependencies.iter().enumerate() {
                 lines.push(Line::from(vec![
-                    Span::styled(format!("  {:>2}. → ", i + 1), Style::default().fg(Color::Green)),
-                    Span::styled(dep, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("  {:>2}. → ", i + 1),
+                        Style::default().fg(Color::Green),
+                    ),
+                    Span::styled(
+                        dep,
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                 ]));
             }
         }
@@ -739,12 +890,15 @@ fn render_architecture_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         }
         consumers.sort();
 
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("── Known Consumers ({}) ────────────────────────────────────────────────────", consumers.len()),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        lines.push(Line::from(vec![Span::styled(
+            format!(
+                "── Known Consumers ({}) ────────────────────────────────────────────────────",
+                consumers.len()
             ),
-        ]));
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         if consumers.is_empty() {
             lines.push(Line::from(Span::styled(
@@ -754,8 +908,16 @@ fn render_architecture_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         } else {
             for (i, cons) in consumers.iter().enumerate() {
                 lines.push(Line::from(vec![
-                    Span::styled(format!("  {:>2}. ← ", i + 1), Style::default().fg(Color::Magenta)),
-                    Span::styled(*cons, Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("  {:>2}. ← ", i + 1),
+                        Style::default().fg(Color::Magenta),
+                    ),
+                    Span::styled(
+                        *cons,
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                 ]));
             }
         }
@@ -772,7 +934,9 @@ fn render_architecture_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::Cyan))
         .title(Span::styled(
             title,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let paragraph = Paragraph::new(lines)
@@ -795,17 +959,30 @@ fn render_capabilities_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
     if let Some(cap) = selected {
         lines.push(Line::from(vec![
             Span::styled("Capability Name:  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&cap.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &cap.name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
 
         lines.push(Line::from(vec![
             Span::styled("Owning Module:    ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&cap.module, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &cap.module,
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
 
         lines.push(Line::from(vec![
             Span::styled("Config File:      ", Style::default().fg(Color::DarkGray)),
-            Span::styled(".crewmate/contracts/capabilities.yaml", Style::default().fg(Color::White)),
+            Span::styled(
+                ".crewmate/contracts/capabilities.yaml",
+                Style::default().fg(Color::White),
+            ),
         ]));
 
         if let Some(ref ep) = cap.entrypoint {
@@ -817,12 +994,12 @@ fn render_capabilities_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
 
         lines.push(Line::raw(""));
 
-        lines.push(Line::from(vec![
-            Span::styled(
-                "── Description ───────────────────────────────────────────────────────────────",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "── Description ───────────────────────────────────────────────────────────────",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         lines.push(Line::from(vec![
             Span::styled("  ", Style::default().fg(Color::DarkGray)),
@@ -833,12 +1010,12 @@ fn render_capabilities_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
 
         // Module details if contract exists
         if let Some(mc) = app.contracts.module_contracts.get(&cap.module) {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    "── Owning Module Contract ────────────────────────────────────────────────────",
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                ),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "── Owning Module Contract ────────────────────────────────────────────────────",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]));
 
             let (status_color, status_text) = if mc.status == "draft" {
                 (Color::Yellow, "DRAFT")
@@ -848,13 +1025,24 @@ fn render_capabilities_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
 
             lines.push(Line::from(vec![
                 Span::styled("  Contract Status: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("  (version {})", mc.version), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    status_text,
+                    Style::default()
+                        .fg(status_color)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("  (version {})", mc.version),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]));
 
             lines.push(Line::from(vec![
                 Span::styled("  Exports Count:   ", Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("{}", mc.public_api.len()), Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    format!("{}", mc.public_api.len()),
+                    Style::default().fg(Color::Cyan),
+                ),
             ]));
         }
     } else {
@@ -870,7 +1058,9 @@ fn render_capabilities_detail_fullscreen(f: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(Color::Cyan))
         .title(Span::styled(
             title,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         ));
 
     let paragraph = Paragraph::new(lines)

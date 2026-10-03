@@ -119,9 +119,7 @@ impl ContractsSnapshot {
             project_root.join("contracts"),
         ];
 
-        let contracts_dir = contracts_dir_candidates
-            .into_iter()
-            .find(|d| d.is_dir());
+        let contracts_dir = contracts_dir_candidates.into_iter().find(|d| d.is_dir());
 
         let contracts_dir = match contracts_dir {
             Some(dir) => dir,
@@ -140,7 +138,9 @@ impl ContractsSnapshot {
         }
 
         // 3. Parse architecture.yaml / architecture.yml
-        if let Some(arch_path) = find_file_in_dir(&contracts_dir, &["architecture.yaml", "architecture.yml"]) {
+        if let Some(arch_path) =
+            find_file_in_dir(&contracts_dir, &["architecture.yaml", "architecture.yml"])
+        {
             if let Ok(content) = fs::read_to_string(&arch_path) {
                 if let Ok(arch) = serde_yaml::from_str::<ArchitectureDef>(&content) {
                     snapshot.architecture = arch;
@@ -149,7 +149,9 @@ impl ContractsSnapshot {
         }
 
         // 4. Parse capabilities.yaml / capabilities.yml
-        if let Some(caps_path) = find_file_in_dir(&contracts_dir, &["capabilities.yaml", "capabilities.yml"]) {
+        if let Some(caps_path) =
+            find_file_in_dir(&contracts_dir, &["capabilities.yaml", "capabilities.yml"])
+        {
             if let Ok(content) = fs::read_to_string(&caps_path) {
                 if let Ok(caps) = serde_yaml::from_str::<CapabilitiesDef>(&content) {
                     snapshot.capabilities = caps;

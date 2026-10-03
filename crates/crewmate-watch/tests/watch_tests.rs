@@ -11,7 +11,11 @@ use crewmate_watch::data::state::EngineStateSnapshot;
 use crewmate_watch::data::workflow::WorkflowModel;
 
 fn create_temp_dir(test_name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("crewmate_watch_{}_{}", test_name, std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "crewmate_watch_{}_{}",
+        test_name,
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -91,7 +95,8 @@ nodes:
     )
     .unwrap();
 
-    let model = WorkflowModel::load_from_root(&dir, None).expect("Should load workflow model from .crewmate/workflow");
+    let model = WorkflowModel::load_from_root(&dir, None)
+        .expect("Should load workflow model from .crewmate/workflow");
     assert_eq!(model.name, "Crewmate Feature Pipeline");
     assert_eq!(model.initial_node, "plan");
     assert_eq!(model.nodes_in_order, vec!["plan", "execute"]);
@@ -129,7 +134,8 @@ nodes:
     .unwrap();
 
     // With active_workflow = Some("bugfix")
-    let model = WorkflowModel::load_from_root(&dir, Some("bugfix")).expect("Should load workflow model from .crewmate/workflows/bugfix");
+    let model = WorkflowModel::load_from_root(&dir, Some("bugfix"))
+        .expect("Should load workflow model from .crewmate/workflows/bugfix");
     assert_eq!(model.name, "Bugfix Pipeline");
     assert_eq!(model.initial_node, "triage");
     assert_eq!(model.nodes_in_order, vec!["triage", "fix"]);
@@ -159,7 +165,10 @@ fn test_state_loading() {
     assert_eq!(snapshot.current_retry_count(), 1);
     assert_eq!(snapshot.current_max_retries(), 3);
     assert_eq!(snapshot.escalation_target.as_deref(), Some("human"));
-    assert_eq!(snapshot.last_timestamp.as_deref(), Some("2026-09-26T12:03:00Z"));
+    assert_eq!(
+        snapshot.last_timestamp.as_deref(),
+        Some("2026-09-26T12:03:00Z")
+    );
 
     let _ = fs::remove_dir_all(&dir);
 }
@@ -275,11 +284,11 @@ fn test_app_polling() {
 
 #[test]
 fn test_graph_panel_block_rendering() {
+    use crewmate_watch::ui::graph::render_canvas_graph;
     use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
     use ratatui::layout::Rect;
     use ratatui::style::Color;
-    use crewmate_watch::ui::graph::render_canvas_graph;
+    use ratatui::Terminal;
 
     let dir = create_temp_dir("graph_render");
     let crewmate_dir = dir.join(".crewmate");
@@ -314,9 +323,11 @@ nodes:
     let backend = TestBackend::new(80, 5);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal.draw(|f| {
-        render_canvas_graph(f, &app, Rect::new(0, 0, 80, 5));
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            render_canvas_graph(f, &app, Rect::new(0, 0, 80, 5));
+        })
+        .unwrap();
 
     let buf = terminal.backend().buffer().clone();
 
@@ -332,26 +343,58 @@ nodes:
     }
 
     // 1. Must contain "plan ✓" (done node)
-    assert!(full_rendered.contains("plan ✓"), "Rendered buffer must contain 'plan ✓':\n{}", full_rendered);
+    assert!(
+        full_rendered.contains("plan ✓"),
+        "Rendered buffer must contain 'plan ✓':\n{}",
+        full_rendered
+    );
 
     // 2. Must contain "execute" (current node)
-    assert!(full_rendered.contains("execute"), "Rendered buffer must contain 'execute':\n{}", full_rendered);
+    assert!(
+        full_rendered.contains("execute"),
+        "Rendered buffer must contain 'execute':\n{}",
+        full_rendered
+    );
 
     // 3. Must contain "verify" (pending node)
-    assert!(full_rendered.contains("verify"), "Rendered buffer must contain 'verify':\n{}", full_rendered);
+    assert!(
+        full_rendered.contains("verify"),
+        "Rendered buffer must contain 'verify':\n{}",
+        full_rendered
+    );
 
     // 4. Must contain connector arrows "▶" and lines "─"
-    assert!(full_rendered.contains('▶'), "Rendered buffer must contain arrow ▶:\n{}", full_rendered);
-    assert!(full_rendered.contains('─'), "Rendered buffer must contain connector line ─:\n{}", full_rendered);
+    assert!(
+        full_rendered.contains('▶'),
+        "Rendered buffer must contain arrow ▶:\n{}",
+        full_rendered
+    );
+    assert!(
+        full_rendered.contains('─'),
+        "Rendered buffer must contain connector line ─:\n{}",
+        full_rendered
+    );
 
     // 5. Must contain animated transition dot ● on the active transition edge
-    assert!(full_rendered.contains('●'), "Rendered buffer must contain animated transition dot ●:\n{}", full_rendered);
+    assert!(
+        full_rendered.contains('●'),
+        "Rendered buffer must contain animated transition dot ●:\n{}",
+        full_rendered
+    );
 
     // 6. Must contain Thick borders (┏, ┓, ┗, ┛) for current node
-    assert!(full_rendered.contains('┏') && full_rendered.contains('┓'), "Current node must have Thick border corners:\n{}", full_rendered);
+    assert!(
+        full_rendered.contains('┏') && full_rendered.contains('┓'),
+        "Current node must have Thick border corners:\n{}",
+        full_rendered
+    );
 
     // 7. Must contain Plain borders (┌, ┐, └, ┘) for pending/done nodes
-    assert!(full_rendered.contains('┌') && full_rendered.contains('┐'), "Pending/done node must have Plain border corners:\n{}", full_rendered);
+    assert!(
+        full_rendered.contains('┌') && full_rendered.contains('┐'),
+        "Pending/done node must have Plain border corners:\n{}",
+        full_rendered
+    );
 
     // 8. Verify colors in buffer:
     // Find where 'plan' is and check it's Cyan (completed)
@@ -377,10 +420,10 @@ nodes:
 
 #[test]
 fn test_focused_view_and_horizontal_scroll() {
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use ratatui::layout::Rect;
     use crewmate_watch::ui::graph::render_canvas_graph;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
 
     let dir = create_temp_dir("focused_scroll");
     let crewmate_dir = dir.join(".crewmate");
@@ -427,9 +470,11 @@ nodes:
     let mut terminal = Terminal::new(backend).unwrap();
 
     // 1. Initial focused view centered on active node (index 4: generate-database-migrations)
-    terminal.draw(|f| {
-        render_canvas_graph(f, &app, Rect::new(0, 0, 80, 5));
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            render_canvas_graph(f, &app, Rect::new(0, 0, 80, 5));
+        })
+        .unwrap();
 
     let buf = terminal.backend().buffer().clone();
     let mut rendered_1 = String::new();
@@ -441,20 +486,34 @@ nodes:
     }
 
     // Must show left indicator since step-0..step-2 are hidden
-    assert!(rendered_1.contains("past"), "Must show past hidden indicator:\n{}", rendered_1);
+    assert!(
+        rendered_1.contains("past"),
+        "Must show past hidden indicator:\n{}",
+        rendered_1
+    );
     // Must show right indicator since later steps are hidden
-    assert!(rendered_1.contains("more"), "Must show more hidden indicator:\n{}", rendered_1);
+    assert!(
+        rendered_1.contains("more"),
+        "Must show more hidden indicator:\n{}",
+        rendered_1
+    );
     // Must show truncated name with ellipsis for long node name
-    assert!(rendered_1.contains("..."), "Must truncate long node name with ellipsis:\n{}", rendered_1);
+    assert!(
+        rendered_1.contains("..."),
+        "Must truncate long node name with ellipsis:\n{}",
+        rendered_1
+    );
 
     // 2. Pan left using scroll_graph_left()
     app.scroll_graph_left();
     assert_eq!(app.current_focus_index(), 3);
     assert!(app.graph_focus_index.is_some());
 
-    terminal.draw(|f| {
-        render_canvas_graph(f, &app, Rect::new(0, 0, 80, 5));
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            render_canvas_graph(f, &app, Rect::new(0, 0, 80, 5));
+        })
+        .unwrap();
 
     let buf2 = terminal.backend().buffer().clone();
     let mut rendered_2 = String::new();
@@ -466,7 +525,11 @@ nodes:
     }
 
     // Header title shows manual viewing state
-    assert!(rendered_2.contains("Viewing step 4/9"), "Header should indicate viewing step 4/9:\n{}", rendered_2);
+    assert!(
+        rendered_2.contains("Viewing step 4/9"),
+        "Header should indicate viewing step 4/9:\n{}",
+        rendered_2
+    );
 
     // 3. Re-center with reset_graph_focus()
     app.reset_graph_focus();
@@ -478,10 +541,10 @@ nodes:
 
 #[test]
 fn test_event_selection_and_detail_modal() {
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use ratatui::layout::Rect;
     use crewmate_watch::ui::events::{render_event_detail_modal, render_recent_events};
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
 
     let dir = create_temp_dir("events_modal");
     let crewmate_dir = dir.join(".crewmate");
@@ -502,9 +565,11 @@ fn test_event_selection_and_detail_modal() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     // 1. Render recent events list
-    terminal.draw(|f| {
-        render_recent_events(f, &app, Rect::new(0, 0, 80, 10));
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            render_recent_events(f, &app, Rect::new(0, 0, 80, 10));
+        })
+        .unwrap();
 
     let buf = terminal.backend().buffer().clone();
     let mut rendered = String::new();
@@ -518,9 +583,17 @@ fn test_event_selection_and_detail_modal() {
     }
 
     // Must show selection pointer ▶ for selected event
-    assert!(rendered.contains('▶'), "Event list must show selection pointer ▶:\n{}", rendered);
+    assert!(
+        rendered.contains('▶'),
+        "Event list must show selection pointer ▶:\n{}",
+        rendered
+    );
     // Must show ellipsis truncation ... for long label
-    assert!(rendered.contains("..."), "Event list must truncate long label with ...:\n{}", rendered);
+    assert!(
+        rendered.contains("..."),
+        "Event list must truncate long label with ...:\n{}",
+        rendered
+    );
 
     // 2. Test event scrolling navigation
     app.scroll_events_down();
@@ -537,9 +610,11 @@ fn test_event_selection_and_detail_modal() {
     let modal_backend = TestBackend::new(80, 20);
     let mut modal_terminal = Terminal::new(modal_backend).unwrap();
 
-    modal_terminal.draw(|f| {
-        render_event_detail_modal(f, &app, Rect::new(0, 0, 80, 20));
-    }).unwrap();
+    modal_terminal
+        .draw(|f| {
+            render_event_detail_modal(f, &app, Rect::new(0, 0, 80, 20));
+        })
+        .unwrap();
 
     let modal_buf = modal_terminal.backend().buffer().clone();
     let mut modal_rendered = String::new();
@@ -553,10 +628,26 @@ fn test_event_selection_and_detail_modal() {
     }
 
     // Modal must contain untruncated activity label and title
-    assert!(modal_rendered.contains("Event Details"), "Modal should contain 'Event Details':\n{}", modal_rendered);
-    assert!(modal_rendered.contains("Very long descriptive activity label"), "Modal should display full unshortened activity label:\n{}", modal_rendered);
-    assert!(modal_rendered.contains("act_test_long_id_12345"), "Modal should display full activity ID:\n{}", modal_rendered);
-    assert!(modal_rendered.contains("senior_architect"), "Modal should display agent name:\n{}", modal_rendered);
+    assert!(
+        modal_rendered.contains("Event Details"),
+        "Modal should contain 'Event Details':\n{}",
+        modal_rendered
+    );
+    assert!(
+        modal_rendered.contains("Very long descriptive activity label"),
+        "Modal should display full unshortened activity label:\n{}",
+        modal_rendered
+    );
+    assert!(
+        modal_rendered.contains("act_test_long_id_12345"),
+        "Modal should display full activity ID:\n{}",
+        modal_rendered
+    );
+    assert!(
+        modal_rendered.contains("senior_architect"),
+        "Modal should display agent name:\n{}",
+        modal_rendered
+    );
 
     // 4. Test close event detail modal
     app.close_event_detail();
@@ -567,11 +658,11 @@ fn test_event_selection_and_detail_modal() {
 
 #[test]
 fn test_heartbeat_liveness_display() {
+    use chrono::Utc;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
     use serde_json::json;
-    use chrono::Utc;
 
     let dir = create_temp_dir("heartbeat_liveness");
     let crewmate_dir = dir.join(".crewmate");
@@ -595,10 +686,12 @@ fn test_heartbeat_liveness_display() {
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal.draw(|f| {
-        crewmate_watch::ui::header::render_header(f, &app, Rect::new(0, 0, 80, 3), None);
-        crewmate_watch::ui::activities::render_activities(f, &app, Rect::new(0, 3, 80, 10));
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::header::render_header(f, &app, Rect::new(0, 0, 80, 3), None);
+            crewmate_watch::ui::activities::render_activities(f, &app, Rect::new(0, 3, 80, 10));
+        })
+        .unwrap();
 
     let buf = terminal.backend().buffer().clone();
     let mut rendered = String::new();
@@ -611,10 +704,22 @@ fn test_heartbeat_liveness_display() {
         rendered.push('\n');
     }
 
-    assert!(rendered.contains("Harness:"), "Header must include Harness indicator");
-    assert!(rendered.contains("OFFLINE"), "Header must show OFFLINE when no heartbeat");
-    assert!(rendered.contains("Activities (1 - OFFLINE)"), "Activities title must show (1 - OFFLINE)");
-    assert!(rendered.contains("[offline]"), "Activity item must show [offline] badge");
+    assert!(
+        rendered.contains("Harness:"),
+        "Header must include Harness indicator"
+    );
+    assert!(
+        rendered.contains("OFFLINE"),
+        "Header must show OFFLINE when no heartbeat"
+    );
+    assert!(
+        rendered.contains("Activities (1 - OFFLINE)"),
+        "Activities title must show (1 - OFFLINE)"
+    );
+    assert!(
+        rendered.contains("[offline]"),
+        "Activity item must show [offline] badge"
+    );
 
     // 2. Now write a live heartbeat file
     let heartbeat_file = crewmate_dir.join("heartbeat.json");
@@ -630,23 +735,32 @@ fn test_heartbeat_liveness_display() {
             "title": "Design API"
         }
     });
-    fs::write(&heartbeat_file, serde_json::to_string_pretty(&hb_json).unwrap()).unwrap();
+    fs::write(
+        &heartbeat_file,
+        serde_json::to_string_pretty(&hb_json).unwrap(),
+    )
+    .unwrap();
 
     // Poll to reload heartbeat
     app.poll_files();
     assert!(app.heartbeat.is_alive, "Heartbeat should be alive");
     assert_eq!(app.heartbeat.status_text, "RUNNING");
     assert_eq!(app.heartbeat.harness_name.as_deref(), Some("OpenCode"));
-    assert_eq!(app.heartbeat.session_id.as_deref(), Some("ses_4a1b2c3d4e5f"));
+    assert_eq!(
+        app.heartbeat.session_id.as_deref(),
+        Some("ses_4a1b2c3d4e5f")
+    );
     assert_eq!(app.heartbeat.session_title.as_deref(), Some("Design API"));
 
     let live_backend = TestBackend::new(100, 24);
     let mut live_terminal = Terminal::new(live_backend).unwrap();
 
-    live_terminal.draw(|f| {
-        crewmate_watch::ui::header::render_header(f, &app, Rect::new(0, 0, 100, 3), None);
-        crewmate_watch::ui::activities::render_activities(f, &app, Rect::new(0, 3, 100, 10));
-    }).unwrap();
+    live_terminal
+        .draw(|f| {
+            crewmate_watch::ui::header::render_header(f, &app, Rect::new(0, 0, 100, 3), None);
+            crewmate_watch::ui::activities::render_activities(f, &app, Rect::new(0, 3, 100, 10));
+        })
+        .unwrap();
 
     let live_buf = live_terminal.backend().buffer().clone();
     let mut live_rendered = String::new();
@@ -659,11 +773,26 @@ fn test_heartbeat_liveness_display() {
         live_rendered.push('\n');
     }
 
-    assert!(live_rendered.contains("RUNNING"), "Header must show RUNNING when heartbeat is fresh");
-    assert!(live_rendered.contains("OpenCode ses_4a1b"), "Header must show harness name and session ID");
-    assert!(!live_rendered.contains("Status:"), "Header must not show Status: ACTIVE");
-    assert!(live_rendered.contains("Activities (1)"), "Activities title must show Activities (1) without OFFLINE");
-    assert!(!live_rendered.contains("[offline]"), "Activity item must not have [offline] badge");
+    assert!(
+        live_rendered.contains("RUNNING"),
+        "Header must show RUNNING when heartbeat is fresh"
+    );
+    assert!(
+        live_rendered.contains("OpenCode ses_4a1b"),
+        "Header must show harness name and session ID"
+    );
+    assert!(
+        !live_rendered.contains("Status:"),
+        "Header must not show Status: ACTIVE"
+    );
+    assert!(
+        live_rendered.contains("Activities (1)"),
+        "Activities title must show Activities (1) without OFFLINE"
+    );
+    assert!(
+        !live_rendered.contains("[offline]"),
+        "Activity item must not have [offline] badge"
+    );
 
     // 3. Now write an idle heartbeat file with MCP protocol fallback
     let idle_json = json!({
@@ -673,7 +802,11 @@ fn test_heartbeat_liveness_display() {
         "lastHeartbeat": Utc::now().to_rfc3339(),
         "status": "idle"
     });
-    fs::write(&heartbeat_file, serde_json::to_string_pretty(&idle_json).unwrap()).unwrap();
+    fs::write(
+        &heartbeat_file,
+        serde_json::to_string_pretty(&idle_json).unwrap(),
+    )
+    .unwrap();
 
     app.poll_files();
     assert!(app.heartbeat.is_alive, "Heartbeat should be alive in idle");
@@ -683,10 +816,12 @@ fn test_heartbeat_liveness_display() {
     let idle_backend = TestBackend::new(80, 24);
     let mut idle_terminal = Terminal::new(idle_backend).unwrap();
 
-    idle_terminal.draw(|f| {
-        crewmate_watch::ui::header::render_header(f, &app, Rect::new(0, 0, 80, 3), None);
-        crewmate_watch::ui::activities::render_activities(f, &app, Rect::new(0, 3, 80, 10));
-    }).unwrap();
+    idle_terminal
+        .draw(|f| {
+            crewmate_watch::ui::header::render_header(f, &app, Rect::new(0, 0, 80, 3), None);
+            crewmate_watch::ui::activities::render_activities(f, &app, Rect::new(0, 3, 80, 10));
+        })
+        .unwrap();
 
     let idle_buf = idle_terminal.backend().buffer().clone();
     let mut idle_rendered = String::new();
@@ -699,10 +834,22 @@ fn test_heartbeat_liveness_display() {
         idle_rendered.push('\n');
     }
 
-    assert!(idle_rendered.contains("IDLE"), "Header must show IDLE when status is idle");
-    assert!(idle_rendered.contains("(MCP)"), "Header must show (MCP) fallback when no session id");
-    assert!(idle_rendered.contains("Activities (1 - IDLE)"), "Activities title must show (1 - IDLE)");
-    assert!(idle_rendered.contains("[idle]"), "Activity item must have [idle] badge");
+    assert!(
+        idle_rendered.contains("IDLE"),
+        "Header must show IDLE when status is idle"
+    );
+    assert!(
+        idle_rendered.contains("(MCP)"),
+        "Header must show (MCP) fallback when no session id"
+    );
+    assert!(
+        idle_rendered.contains("Activities (1 - IDLE)"),
+        "Activities title must show (1 - IDLE)"
+    );
+    assert!(
+        idle_rendered.contains("[idle]"),
+        "Activity item must have [idle] badge"
+    );
 
     let _ = fs::remove_dir_all(&dir);
 }
@@ -820,22 +967,41 @@ completed_at: "2026-09-26T11:55:00Z"
 
     // Verify lock table holds src/auth/token.ts for task_001
     assert_eq!(
-        app.task_snapshot.locked_files.get("src/auth/token.ts").map(|s| s.as_str()),
+        app.task_snapshot
+            .locked_files
+            .get("src/auth/token.ts")
+            .map(|s| s.as_str()),
         Some("task_001")
     );
 
     // Verify Task 2 dependency-blocked reason
-    let t2 = app.task_snapshot.waiting.iter().find(|t| t.id == "task_002").unwrap();
+    let t2 = app
+        .task_snapshot
+        .waiting
+        .iter()
+        .find(|t| t.id == "task_002")
+        .unwrap();
     assert!(
-        t2.blocking_reason.as_ref().unwrap().contains("Update auth token")
+        t2.blocking_reason
+            .as_ref()
+            .unwrap()
+            .contains("Update auth token")
             || t2.blocking_reason.as_ref().unwrap().contains("task_001"),
         "Task 2 should be blocked by task_001"
     );
 
     // Verify Task 3 lock-blocked reason distinguishes lock from dependency
-    let t3 = app.task_snapshot.waiting.iter().find(|t| t.id == "task_003").unwrap();
+    let t3 = app
+        .task_snapshot
+        .waiting
+        .iter()
+        .find(|t| t.id == "task_003")
+        .unwrap();
     assert!(
-        t3.blocking_reason.as_ref().unwrap().contains("waiting on lock: src/auth/token.ts"),
+        t3.blocking_reason
+            .as_ref()
+            .unwrap()
+            .contains("waiting on lock: src/auth/token.ts"),
         "Task 3 must show waiting on lock distinctly"
     );
 
@@ -844,9 +1010,9 @@ completed_at: "2026-09-26T11:55:00Z"
 
 #[test]
 fn test_tasks_page_rendering_and_expand_collapse() {
+    use crewmate_watch::app::AppPage;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use crewmate_watch::app::AppPage;
 
     let dir = create_temp_dir("tasks_render");
     let crewmate_dir = dir.join(".crewmate");
@@ -888,7 +1054,8 @@ status: active
 agent: security_worker
 started_at: "2026-09-26T12:00:00Z"
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Waiting task
     fs::write(
@@ -904,7 +1071,8 @@ depends_on:
 status: pending
 agent: billing_worker
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Done task
     fs::write(
@@ -919,7 +1087,8 @@ status: done
 started_at: "2026-09-26T11:50:00Z"
 completed_at: "2026-09-26T11:55:00Z"
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut app = App::new(dir.clone(), 10);
     app.poll_files();
@@ -929,9 +1098,11 @@ completed_at: "2026-09-26T11:55:00Z"
     let mut terminal = Terminal::new(backend).unwrap();
 
     // 1. Render collapsed tasks page
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf = terminal.backend().buffer().clone();
     let mut rendered = String::new();
@@ -945,45 +1116,127 @@ completed_at: "2026-09-26T11:55:00Z"
     }
 
     // Must match reference header layout:
-    assert!(rendered.contains("Feature Auth"), "Header should contain workflow title:\n{}", rendered);
-    assert!(!rendered.contains("events"), "Header should not display event count:\n{}", rendered);
-    assert!(rendered.contains("│"), "Header should use vertical bar separators:\n{}", rendered);
+    assert!(
+        rendered.contains("Feature Auth"),
+        "Header should contain workflow title:\n{}",
+        rendered
+    );
+    assert!(
+        !rendered.contains("events"),
+        "Header should not display event count:\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains("│"),
+        "Header should use vertical bar separators:\n{}",
+        rendered
+    );
 
     // Must contain progress bar text counts:
-    assert!(rendered.contains("1/3 done"), "Progress counts must display 1/3 done:\n{}", rendered);
-    assert!(rendered.contains("1 running"), "Progress counts must display 1 running:\n{}", rendered);
-    assert!(rendered.contains("1 waiting"), "Progress counts must display 1 waiting:\n{}", rendered);
+    assert!(
+        rendered.contains("1/3 done"),
+        "Progress counts must display 1/3 done:\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains("1 running"),
+        "Progress counts must display 1 running:\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains("1 waiting"),
+        "Progress counts must display 1 waiting:\n{}",
+        rendered
+    );
 
     // Stage indicator row removed:
-    assert!(!rendered.contains("stage 2/3"), "Stage row must not be displayed:\n{}", rendered);
+    assert!(
+        !rendered.contains("stage 2/3"),
+        "Stage row must not be displayed:\n{}",
+        rendered
+    );
 
     // Must contain running task section:
-    assert!(rendered.contains("Running · 1"), "Must have Running section:\n{}", rendered);
-    assert!(!rendered.contains("Tasks · running"), "Must not have 'Tasks · running':\n{}", rendered);
-    assert!(rendered.contains("Update auth token validation"), "Must list running task goal:\n{}", rendered);
-    assert!(rendered.contains("security_wor"), "Must list agent:\n{}", rendered);
+    assert!(
+        rendered.contains("Running · 1"),
+        "Must have Running section:\n{}",
+        rendered
+    );
+    assert!(
+        !rendered.contains("Tasks · running"),
+        "Must not have 'Tasks · running':\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains("Update auth token validation"),
+        "Must list running task goal:\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains("security_wor"),
+        "Must list agent:\n{}",
+        rendered
+    );
 
     // Must contain waiting task section:
-    assert!(rendered.contains("Waiting · 1"), "Must have Waiting section:\n{}", rendered);
-    assert!(rendered.contains("Add discount logic"), "Must list waiting task goal:\n{}", rendered);
-    assert!(rendered.contains('↳'), "Must show dependency arrow ↳:\n{}", rendered);
+    assert!(
+        rendered.contains("Waiting · 1"),
+        "Must have Waiting section:\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains("Add discount logic"),
+        "Must list waiting task goal:\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains('↳'),
+        "Must show dependency arrow ↳:\n{}",
+        rendered
+    );
 
     // Must contain permanently expanded Done section:
-    assert!(rendered.contains("Done · 1"), "Must show Done section:\n{}", rendered);
-    assert!(rendered.contains("Setup config schema"), "Done tasks must always be expanded:\n{}", rendered);
-    assert!(!rendered.contains("enter to expand"), "No enter to expand hint:\n{}", rendered);
+    assert!(
+        rendered.contains("Done · 1"),
+        "Must show Done section:\n{}",
+        rendered
+    );
+    assert!(
+        rendered.contains("Setup config schema"),
+        "Done tasks must always be expanded:\n{}",
+        rendered
+    );
+    assert!(
+        !rendered.contains("enter to expand"),
+        "No enter to expand hint:\n{}",
+        rendered
+    );
 
     // Must contain footer with [Tab] Switch page:
-    assert!(rendered.contains("[Tab] Switch page"), "Footer must include [Tab] Switch page:\n{}", rendered);
-    assert!(!rendered.contains("Polling:"), "Footer must not contain Polling:\n{}", rendered);
-    assert!(!rendered.contains("[READ-ONLY OBSERVER]"), "Footer must not contain observer tag:\n{}", rendered);
+    assert!(
+        rendered.contains("[Tab] Switch page"),
+        "Footer must include [Tab] Switch page:\n{}",
+        rendered
+    );
+    assert!(
+        !rendered.contains("Polling:"),
+        "Footer must not contain Polling:\n{}",
+        rendered
+    );
+    assert!(
+        !rendered.contains("[READ-ONLY OBSERVER]"),
+        "Footer must not contain observer tag:\n{}",
+        rendered
+    );
 
     // 2. Open Task detail modal with show_task_detail = true
     app.show_task_detail = true;
 
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf2 = terminal.backend().buffer().clone();
     let mut rendered2 = String::new();
@@ -996,10 +1249,26 @@ completed_at: "2026-09-26T11:55:00Z"
         rendered2.push('\n');
     }
 
-    assert!(rendered2.contains("Task Details"), "Modal must show 'Task Details' title:\n{}", rendered2);
-    assert!(rendered2.contains("Task ID:"), "Modal must show Task ID field:\n{}", rendered2);
-    assert!(rendered2.contains("Status:"), "Modal must show Status field:\n{}", rendered2);
-    assert!(rendered2.contains("Goal:"), "Modal must show Goal field:\n{}", rendered2);
+    assert!(
+        rendered2.contains("Task Details"),
+        "Modal must show 'Task Details' title:\n{}",
+        rendered2
+    );
+    assert!(
+        rendered2.contains("Task ID:"),
+        "Modal must show Task ID field:\n{}",
+        rendered2
+    );
+    assert!(
+        rendered2.contains("Status:"),
+        "Modal must show Status field:\n{}",
+        rendered2
+    );
+    assert!(
+        rendered2.contains("Goal:"),
+        "Modal must show Goal field:\n{}",
+        rendered2
+    );
 
     app.show_task_detail = false;
 
@@ -1018,9 +1287,9 @@ completed_at: "2026-09-26T11:55:00Z"
 
 #[test]
 fn test_footer_hints_on_both_pages() {
+    use crewmate_watch::app::AppPage;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use crewmate_watch::app::AppPage;
 
     let dir = create_temp_dir("footer_hints");
     let mut app = App::new(dir.clone(), 10);
@@ -1030,9 +1299,11 @@ fn test_footer_hints_on_both_pages() {
 
     // 1. Page 1 (Workflow) footer
     app.current_page = AppPage::Workflow;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf1 = terminal.backend().buffer().clone();
     let mut rendered1 = String::new();
@@ -1040,23 +1311,61 @@ fn test_footer_hints_on_both_pages() {
         rendered1.push_str(buf1[(x, 23)].symbol());
     }
     // Global segment identical on every page
-    assert!(rendered1.contains("[Tab] Switch page"), "Page 1 footer must include '[Tab] Switch page': {}", rendered1);
-    assert!(rendered1.contains("[q] Quit"), "Page 1 footer must include '[q] Quit': {}", rendered1);
-    assert!(rendered1.contains("[h] Help"), "Page 1 footer must include '[h] Help': {}", rendered1);
-    assert!(!rendered1.contains("Polling:"), "Page 1 footer must not include Polling: {}", rendered1);
-    assert!(!rendered1.contains("[READ-ONLY OBSERVER]"), "Page 1 footer must not include '[READ-ONLY OBSERVER]': {}", rendered1);
+    assert!(
+        rendered1.contains("[Tab] Switch page"),
+        "Page 1 footer must include '[Tab] Switch page': {}",
+        rendered1
+    );
+    assert!(
+        rendered1.contains("[q] Quit"),
+        "Page 1 footer must include '[q] Quit': {}",
+        rendered1
+    );
+    assert!(
+        rendered1.contains("[h] Help"),
+        "Page 1 footer must include '[h] Help': {}",
+        rendered1
+    );
+    assert!(
+        !rendered1.contains("Polling:"),
+        "Page 1 footer must not include Polling: {}",
+        rendered1
+    );
+    assert!(
+        !rendered1.contains("[READ-ONLY OBSERVER]"),
+        "Page 1 footer must not include '[READ-ONLY OBSERVER]': {}",
+        rendered1
+    );
     // Page 1 specific hotkeys
-    assert!(rendered1.contains("Pan"), "Page 1 footer must include 'Pan': {}", rendered1);
-    assert!(rendered1.contains("Select"), "Page 1 footer must include 'Select': {}", rendered1);
-    assert!(rendered1.contains("Inspect"), "Page 1 footer must include 'Inspect': {}", rendered1);
+    assert!(
+        rendered1.contains("Pan"),
+        "Page 1 footer must include 'Pan': {}",
+        rendered1
+    );
+    assert!(
+        rendered1.contains("Select"),
+        "Page 1 footer must include 'Select': {}",
+        rendered1
+    );
+    assert!(
+        rendered1.contains("Inspect"),
+        "Page 1 footer must include 'Inspect': {}",
+        rendered1
+    );
     // Page 1 must not show Page 2 hotkeys
-    assert!(!rendered1.contains("Expand/collapse"), "Page 1 footer must not show Page 2 hotkeys: {}", rendered1);
+    assert!(
+        !rendered1.contains("Expand/collapse"),
+        "Page 1 footer must not show Page 2 hotkeys: {}",
+        rendered1
+    );
 
     // 2. Page 2 (Tasks) footer
     app.current_page = AppPage::Tasks;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf2 = terminal.backend().buffer().clone();
     let mut rendered2 = String::new();
@@ -1064,42 +1373,92 @@ fn test_footer_hints_on_both_pages() {
         rendered2.push_str(buf2[(x, 23)].symbol());
     }
     // Global segment identical on every page
-    assert!(rendered2.contains("[Tab] Switch page"), "Page 2 footer must include '[Tab] Switch page': {}", rendered2);
-    assert!(rendered2.contains("[q] Quit"), "Page 2 footer must include '[q] Quit': {}", rendered2);
-    assert!(rendered2.contains("[h] Help"), "Page 2 footer must include '[h] Help': {}", rendered2);
-    assert!(!rendered2.contains("Polling:"), "Page 2 footer must not include Polling: {}", rendered2);
-    assert!(!rendered2.contains("[READ-ONLY OBSERVER]"), "Page 2 footer must not include '[READ-ONLY OBSERVER]': {}", rendered2);
+    assert!(
+        rendered2.contains("[Tab] Switch page"),
+        "Page 2 footer must include '[Tab] Switch page': {}",
+        rendered2
+    );
+    assert!(
+        rendered2.contains("[q] Quit"),
+        "Page 2 footer must include '[q] Quit': {}",
+        rendered2
+    );
+    assert!(
+        rendered2.contains("[h] Help"),
+        "Page 2 footer must include '[h] Help': {}",
+        rendered2
+    );
+    assert!(
+        !rendered2.contains("Polling:"),
+        "Page 2 footer must not include Polling: {}",
+        rendered2
+    );
+    assert!(
+        !rendered2.contains("[READ-ONLY OBSERVER]"),
+        "Page 2 footer must not include '[READ-ONLY OBSERVER]': {}",
+        rendered2
+    );
     // Page 2 specific hotkeys
-    assert!(rendered2.contains("Select"), "Page 2 footer must include 'Select': {}", rendered2);
-    assert!(rendered2.contains("Inspect"), "Page 2 footer must include 'Inspect': {}", rendered2);
-    assert!(!rendered2.contains("Expand/collapse"), "Page 2 footer must not show old hotkey: {}", rendered2);
+    assert!(
+        rendered2.contains("Select"),
+        "Page 2 footer must include 'Select': {}",
+        rendered2
+    );
+    assert!(
+        rendered2.contains("Inspect"),
+        "Page 2 footer must include 'Inspect': {}",
+        rendered2
+    );
+    assert!(
+        !rendered2.contains("Expand/collapse"),
+        "Page 2 footer must not show old hotkey: {}",
+        rendered2
+    );
 
     // 3. Page 3 (Contracts) footer
     app.current_page = AppPage::Contracts;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf3 = terminal.backend().buffer().clone();
     let mut rendered3 = String::new();
     for x in 0..140 {
         rendered3.push_str(buf3[(x, 23)].symbol());
     }
-    assert!(rendered3.contains("[Tab] Switch page"), "Page 3 footer must include '[Tab] Switch page': {}", rendered3);
-    assert!(rendered3.contains("[m/a/p]"), "Page 3 footer must include '[m/a/p]': {}", rendered3);
-    assert!(rendered3.contains("Sub-view"), "Page 3 footer must include 'Sub-view': {}", rendered3);
-    assert!(rendered3.contains("Select"), "Page 3 footer must include 'Select': {}", rendered3);
+    assert!(
+        rendered3.contains("[Tab] Switch page"),
+        "Page 3 footer must include '[Tab] Switch page': {}",
+        rendered3
+    );
+    assert!(
+        rendered3.contains("[m/a/p]"),
+        "Page 3 footer must include '[m/a/p]': {}",
+        rendered3
+    );
+    assert!(
+        rendered3.contains("Sub-view"),
+        "Page 3 footer must include 'Sub-view': {}",
+        rendered3
+    );
+    assert!(
+        rendered3.contains("Select"),
+        "Page 3 footer must include 'Select': {}",
+        rendered3
+    );
 
     let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn test_single_source_of_truth_across_pages() {
+    use chrono::Utc;
+    use crewmate_watch::app::AppPage;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use serde_json::json;
-    use chrono::Utc;
-    use crewmate_watch::app::AppPage;
 
     let dir = create_temp_dir("single_source_truth");
     let crewmate_dir = dir.join(".crewmate");
@@ -1137,9 +1496,11 @@ nodes:
 
     // Render Page 1
     app.current_page = AppPage::Workflow;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
     let buf1 = terminal.backend().buffer().clone();
     let mut p1_initial = String::new();
     for y in 0..24 {
@@ -1151,9 +1512,11 @@ nodes:
 
     // Render Page 2
     app.current_page = AppPage::Tasks;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
     let buf2 = terminal.backend().buffer().clone();
     let mut p2_initial = String::new();
     for y in 0..24 {
@@ -1164,14 +1527,42 @@ nodes:
     }
 
     // Both pages must show identical node position, retries, and offline status
-    assert!(p1_initial.contains("Node: plan (1/3)"), "Page 1 must show Node: plan (1/3): {}", p1_initial);
-    assert!(p2_initial.contains("Node: plan (1/3)"), "Page 2 must show Node: plan (1/3): {}", p2_initial);
-    assert!(p1_initial.contains("Retries: 0/2"), "Page 1 must show Retries: 0/2: {}", p1_initial);
-    assert!(p2_initial.contains("Retries: 0/2"), "Page 2 must show Retries: 0/2: {}", p2_initial);
-    assert!(p1_initial.contains("Harness: OFFLINE"), "Page 1 must show Harness: OFFLINE: {}", p1_initial);
-    assert!(p2_initial.contains("Harness: OFFLINE"), "Page 2 must show Harness: OFFLINE: {}", p2_initial);
+    assert!(
+        p1_initial.contains("Node: plan (1/3)"),
+        "Page 1 must show Node: plan (1/3): {}",
+        p1_initial
+    );
+    assert!(
+        p2_initial.contains("Node: plan (1/3)"),
+        "Page 2 must show Node: plan (1/3): {}",
+        p2_initial
+    );
+    assert!(
+        p1_initial.contains("Retries: 0/2"),
+        "Page 1 must show Retries: 0/2: {}",
+        p1_initial
+    );
+    assert!(
+        p2_initial.contains("Retries: 0/2"),
+        "Page 2 must show Retries: 0/2: {}",
+        p2_initial
+    );
+    assert!(
+        p1_initial.contains("Harness: OFFLINE"),
+        "Page 1 must show Harness: OFFLINE: {}",
+        p1_initial
+    );
+    assert!(
+        p2_initial.contains("Harness: OFFLINE"),
+        "Page 2 must show Harness: OFFLINE: {}",
+        p2_initial
+    );
     // Page 2 stage indicator must not be displayed
-    assert!(!p2_initial.contains("stage 1/3 · plan"), "Page 2 must not show stage indicator line: {}", p2_initial);
+    assert!(
+        !p2_initial.contains("stage 1/3 · plan"),
+        "Page 2 must not show stage indicator line: {}",
+        p2_initial
+    );
 
     // 2. Now transition state: node transitions to execute, retry increments to 2 of 3, heartbeat is live
     let updated_state = r#"{"timestamp":"2026-09-26T12:00:00Z","event":"INIT","initialNode":"plan"}
@@ -1192,16 +1583,22 @@ nodes:
             "title": "Unified Chrome Test"
         }
     });
-    fs::write(crewmate_dir.join("heartbeat.json"), serde_json::to_string_pretty(&hb_json).unwrap()).unwrap();
+    fs::write(
+        crewmate_dir.join("heartbeat.json"),
+        serde_json::to_string_pretty(&hb_json).unwrap(),
+    )
+    .unwrap();
 
     // Poll to refresh
     app.poll_files();
 
     // Render Page 1 after transition
     app.current_page = AppPage::Workflow;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
     let buf1_updated = terminal.backend().buffer().clone();
     let mut p1_updated = String::new();
     for y in 0..24 {
@@ -1213,9 +1610,11 @@ nodes:
 
     // Render Page 2 after transition
     app.current_page = AppPage::Tasks;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
     let buf2_updated = terminal.backend().buffer().clone();
     let mut p2_updated = String::new();
     for y in 0..24 {
@@ -1226,31 +1625,67 @@ nodes:
     }
 
     // Verify Page 1 and Page 2 updated identically and simultaneously:
-    assert!(p1_updated.contains("Node: execute (2/3)"), "Page 1 updated node position: {}", p1_updated);
-    assert!(p2_updated.contains("Node: execute (2/3)"), "Page 2 updated node position: {}", p2_updated);
+    assert!(
+        p1_updated.contains("Node: execute (2/3)"),
+        "Page 1 updated node position: {}",
+        p1_updated
+    );
+    assert!(
+        p2_updated.contains("Node: execute (2/3)"),
+        "Page 2 updated node position: {}",
+        p2_updated
+    );
 
-    assert!(p1_updated.contains("Retries: 2/3"), "Page 1 updated retries: {}", p1_updated);
-    assert!(p2_updated.contains("Retries: 2/3"), "Page 2 updated retries: {}", p2_updated);
+    assert!(
+        p1_updated.contains("Retries: 2/3"),
+        "Page 1 updated retries: {}",
+        p1_updated
+    );
+    assert!(
+        p2_updated.contains("Retries: 2/3"),
+        "Page 2 updated retries: {}",
+        p2_updated
+    );
 
-    assert!(p1_updated.contains("RUNNING (OpenCode ses_sync)"), "Page 1 updated harness state: {}", p1_updated);
-    assert!(p2_updated.contains("RUNNING (OpenCode ses_sync)"), "Page 2 updated harness state: {}", p2_updated);
+    assert!(
+        p1_updated.contains("RUNNING (OpenCode ses_sync)"),
+        "Page 1 updated harness state: {}",
+        p1_updated
+    );
+    assert!(
+        p2_updated.contains("RUNNING (OpenCode ses_sync)"),
+        "Page 2 updated harness state: {}",
+        p2_updated
+    );
 
     // Verify Page 2 does not have stage indicator or mini-graph dot connectors
-    assert!(!p2_updated.contains("stage 2/3 · execute"), "Page 2 must not show stage indicator: {}", p2_updated);
-    assert!(!p2_updated.contains("──●"), "Page 2 must not have mini-graph dot connectors: {}", p2_updated);
+    assert!(
+        !p2_updated.contains("stage 2/3 · execute"),
+        "Page 2 must not show stage indicator: {}",
+        p2_updated
+    );
+    assert!(
+        !p2_updated.contains("──●"),
+        "Page 2 must not have mini-graph dot connectors: {}",
+        p2_updated
+    );
 
     // Verify active node instruction/goal is displayed in Page 1's Workflow Graph
-    assert!(p1_updated.contains("Implement parallel tasks"), "Page 1 workflow graph must show active node instruction/goal: {}", p1_updated);
+    assert!(
+        p1_updated.contains("Implement parallel tasks"),
+        "Page 1 workflow graph must show active node instruction/goal: {}",
+        p1_updated
+    );
 
     let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn test_contracts_loading_and_page_rendering() {
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
     use crewmate_watch::app::AppPage;
     use crewmate_watch::data::contracts::ContractsSubView;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
 
     let dir = create_temp_dir("contracts_test");
     let contracts_dir = dir.join(".crewmate").join("contracts");
@@ -1327,7 +1762,11 @@ invariants:
   - Must not duplicate notifications
 declared_consumers: []
 "#;
-    fs::write(modules_dir.join("notifications.contract.yaml"), notif_contract_yaml).unwrap();
+    fs::write(
+        modules_dir.join("notifications.contract.yaml"),
+        notif_contract_yaml,
+    )
+    .unwrap();
 
     let mut app = App::new(dir.clone(), 10);
     assert!(app.contracts.loaded);
@@ -1340,12 +1779,18 @@ declared_consumers: []
         vec!["db".to_string(), "config".to_string()]
     );
     assert_eq!(app.contracts.capabilities.capabilities.len(), 1);
-    assert_eq!(app.contracts.capabilities.capabilities[0].name, "user-login");
+    assert_eq!(
+        app.contracts.capabilities.capabilities[0].name,
+        "user-login"
+    );
     assert!(app.contracts.module_contracts.contains_key("auth"));
     assert_eq!(app.contracts.module_contracts["auth"].status, "final");
     assert_eq!(app.contracts.module_contracts["auth"].invariants.len(), 1);
     assert!(app.contracts.module_contracts.contains_key("notifications"));
-    assert_eq!(app.contracts.module_contracts["notifications"].status, "draft");
+    assert_eq!(
+        app.contracts.module_contracts["notifications"].status,
+        "draft"
+    );
 
     let backend = TestBackend::new(120, 30);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -1353,9 +1798,11 @@ declared_consumers: []
     // 1. Render Modules subview (selected module is auth)
     app.current_page = AppPage::Contracts;
     app.contracts_subview = ContractsSubView::Modules;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf_mods = terminal.backend().buffer().clone();
     let mut rendered_mods = String::new();
@@ -1366,20 +1813,54 @@ declared_consumers: []
         rendered_mods.push('\n');
     }
 
-    assert!(rendered_mods.contains("Contracts Registry"), "Must have Contracts Registry title: {}", rendered_mods);
-    assert!(rendered_mods.contains("Modules (2)"), "Must show Modules (2): {}", rendered_mods);
-    assert!(rendered_mods.contains("[DRAFT]"), "Must show [DRAFT] badge in module list: {}", rendered_mods);
-    assert!(rendered_mods.contains("Module Contract: auth (v1.0.0, FINAL)"), "Must show Module Contract: auth: {}", rendered_mods);
-    assert!(rendered_mods.contains("Status: FINAL (authoritative)"), "Must show status: {}", rendered_mods);
-    assert!(rendered_mods.contains("Public API (2 exports)"), "Must show Public API: {}", rendered_mods);
-    assert!(rendered_mods.contains("Sessions must expire after 24 hours"), "Must show invariant: {}", rendered_mods);
-    assert!(rendered_mods.contains("db, config"), "Must show allowed dependencies: {}", rendered_mods);
+    assert!(
+        rendered_mods.contains("Contracts Registry"),
+        "Must have Contracts Registry title: {}",
+        rendered_mods
+    );
+    assert!(
+        rendered_mods.contains("Modules (2)"),
+        "Must show Modules (2): {}",
+        rendered_mods
+    );
+    assert!(
+        rendered_mods.contains("[DRAFT]"),
+        "Must show [DRAFT] badge in module list: {}",
+        rendered_mods
+    );
+    assert!(
+        rendered_mods.contains("Module Contract: auth (v1.0.0, FINAL)"),
+        "Must show Module Contract: auth: {}",
+        rendered_mods
+    );
+    assert!(
+        rendered_mods.contains("Status: FINAL (authoritative)"),
+        "Must show status: {}",
+        rendered_mods
+    );
+    assert!(
+        rendered_mods.contains("Public API (2 exports)"),
+        "Must show Public API: {}",
+        rendered_mods
+    );
+    assert!(
+        rendered_mods.contains("Sessions must expire after 24 hours"),
+        "Must show invariant: {}",
+        rendered_mods
+    );
+    assert!(
+        rendered_mods.contains("db, config"),
+        "Must show allowed dependencies: {}",
+        rendered_mods
+    );
 
     // Select notifications (draft module)
     app.selected_module_index = 1;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf_draft = terminal.backend().buffer().clone();
     let mut rendered_draft = String::new();
@@ -1390,16 +1871,34 @@ declared_consumers: []
         rendered_draft.push('\n');
     }
 
-    assert!(rendered_draft.contains("Module Contract: notifications (v0.1.0, DRAFT)"), "Must show draft title: {}", rendered_draft);
-    assert!(rendered_draft.contains("Status: DRAFT (future contract)"), "Must show draft status: {}", rendered_draft);
-    assert!(rendered_draft.contains("sendAlert"), "Must show sendAlert export: {}", rendered_draft);
-    assert!(rendered_draft.contains("Must not duplicate notifications"), "Must show draft invariant: {}", rendered_draft);
+    assert!(
+        rendered_draft.contains("Module Contract: notifications (v0.1.0, DRAFT)"),
+        "Must show draft title: {}",
+        rendered_draft
+    );
+    assert!(
+        rendered_draft.contains("Status: DRAFT (future contract)"),
+        "Must show draft status: {}",
+        rendered_draft
+    );
+    assert!(
+        rendered_draft.contains("sendAlert"),
+        "Must show sendAlert export: {}",
+        rendered_draft
+    );
+    assert!(
+        rendered_draft.contains("Must not duplicate notifications"),
+        "Must show draft invariant: {}",
+        rendered_draft
+    );
 
     // 2. Render Architecture subview
     app.contracts_subview = ContractsSubView::Architecture;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf_arch = terminal.backend().buffer().clone();
     let mut rendered_arch = String::new();
@@ -1410,14 +1909,24 @@ declared_consumers: []
         rendered_arch.push('\n');
     }
 
-    assert!(rendered_arch.contains("Architecture & Dependency Graph"), "Must show Architecture title: {}", rendered_arch);
-    assert!(rendered_arch.contains("allowed dependencies: db, config"), "Must show allowed dependencies in arch view: {}", rendered_arch);
+    assert!(
+        rendered_arch.contains("Architecture & Dependency Graph"),
+        "Must show Architecture title: {}",
+        rendered_arch
+    );
+    assert!(
+        rendered_arch.contains("allowed dependencies: db, config"),
+        "Must show allowed dependencies in arch view: {}",
+        rendered_arch
+    );
 
     // 3. Render Capabilities subview
     app.contracts_subview = ContractsSubView::Capabilities;
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf_caps = terminal.backend().buffer().clone();
     let mut rendered_caps = String::new();
@@ -1428,9 +1937,21 @@ declared_consumers: []
         rendered_caps.push('\n');
     }
 
-    assert!(rendered_caps.contains("Capabilities Registry"), "Must show Capabilities title: {}", rendered_caps);
-    assert!(rendered_caps.contains("user-login"), "Must show capability name: {}", rendered_caps);
-    assert!(rendered_caps.contains("src/auth/index.ts"), "Must show entrypoint: {}", rendered_caps);
+    assert!(
+        rendered_caps.contains("Capabilities Registry"),
+        "Must show Capabilities title: {}",
+        rendered_caps
+    );
+    assert!(
+        rendered_caps.contains("user-login"),
+        "Must show capability name: {}",
+        rendered_caps
+    );
+    assert!(
+        rendered_caps.contains("src/auth/index.ts"),
+        "Must show entrypoint: {}",
+        rendered_caps
+    );
 
     // Test subview cycling
     app.cycle_contracts_subview(); // Capabilities -> Modules
@@ -1494,9 +2015,11 @@ fn test_header_no_elapsed_timer() {
     let backend = TestBackend::new(120, 24);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf = terminal.backend().buffer().clone();
     let mut header_rendered = String::new();
@@ -1505,10 +2028,26 @@ fn test_header_no_elapsed_timer() {
     }
 
     // Header contains workflow title & node & harness, but no trailing elapsed timer
-    assert!(header_rendered.contains("feature-pipeline"), "Header should have workflow name: {}", header_rendered);
-    assert!(header_rendered.contains("execute"), "Header should have current node: {}", header_rendered);
-    assert!(header_rendered.contains("Harness: OFFLINE"), "Header should have harness: {}", header_rendered);
-    assert!(!header_rendered.contains("s │") && !header_rendered.contains("m │"), "Header should not have elapsed timer: {}", header_rendered);
+    assert!(
+        header_rendered.contains("feature-pipeline"),
+        "Header should have workflow name: {}",
+        header_rendered
+    );
+    assert!(
+        header_rendered.contains("execute"),
+        "Header should have current node: {}",
+        header_rendered
+    );
+    assert!(
+        header_rendered.contains("Harness: OFFLINE"),
+        "Header should have harness: {}",
+        header_rendered
+    );
+    assert!(
+        !header_rendered.contains("s │") && !header_rendered.contains("m │"),
+        "Header should not have elapsed timer: {}",
+        header_rendered
+    );
 
     let _ = fs::remove_dir_all(&dir);
 }
@@ -1601,9 +2140,11 @@ declared_consumers:
     let backend = TestBackend::new(120, 30);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal.draw(|f| {
-        crewmate_watch::ui::render(f, &app);
-    }).unwrap();
+    terminal
+        .draw(|f| {
+            crewmate_watch::ui::render(f, &app);
+        })
+        .unwrap();
 
     let buf = terminal.backend().buffer().clone();
     let mut rendered = String::new();
@@ -1614,10 +2155,26 @@ declared_consumers:
         rendered.push('\n');
     }
 
-    assert!(rendered.contains("[FULL SCREEN] Module Contract: auth"), "Must contain fullscreen header: {}", rendered);
-    assert!(rendered.contains("authenticateUser"), "Must contain export: {}", rendered);
-    assert!(rendered.contains("Sessions must expire after 24 hours"), "Must contain invariant: {}", rendered);
-    assert!(rendered.contains("Close Fullscreen"), "Footer must show close hint: {}", rendered);
+    assert!(
+        rendered.contains("[FULL SCREEN] Module Contract: auth"),
+        "Must contain fullscreen header: {}",
+        rendered
+    );
+    assert!(
+        rendered.contains("authenticateUser"),
+        "Must contain export: {}",
+        rendered
+    );
+    assert!(
+        rendered.contains("Sessions must expire after 24 hours"),
+        "Must contain invariant: {}",
+        rendered
+    );
+    assert!(
+        rendered.contains("Close Fullscreen"),
+        "Footer must show close hint: {}",
+        rendered
+    );
 
     // Close detail
     app.close_contract_detail();

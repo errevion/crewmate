@@ -167,7 +167,12 @@ impl EngineStateSnapshot {
 
             if let Ok(event) = serde_json::from_str::<StateEvent>(line) {
                 match event {
-                    StateEvent::Init { timestamp, initial_node, workflow, .. } => {
+                    StateEvent::Init {
+                        timestamp,
+                        initial_node,
+                        workflow,
+                        ..
+                    } => {
                         snapshot.current_node = Some(initial_node);
                         snapshot.status = "active".to_string();
                         if let Some(wf) = workflow {
@@ -185,12 +190,20 @@ impl EngineStateSnapshot {
                     StateEvent::GateCheck { timestamp, .. } => {
                         snapshot.last_timestamp = Some(timestamp);
                     }
-                    StateEvent::RetryIncrement { timestamp, node, retry_count, max_retries, .. } => {
+                    StateEvent::RetryIncrement {
+                        timestamp,
+                        node,
+                        retry_count,
+                        max_retries,
+                        ..
+                    } => {
                         snapshot.retry_counts.insert(node.clone(), retry_count);
                         snapshot.max_retries.insert(node, max_retries);
                         snapshot.last_timestamp = Some(timestamp);
                     }
-                    StateEvent::Escalate { timestamp, target, .. } => {
+                    StateEvent::Escalate {
+                        timestamp, target, ..
+                    } => {
                         snapshot.status = "escalated".to_string();
                         snapshot.escalation_target = Some(target);
                         snapshot.last_timestamp = Some(timestamp);
@@ -200,12 +213,20 @@ impl EngineStateSnapshot {
                         snapshot.status = "active".to_string();
                         snapshot.last_timestamp = Some(timestamp);
                     }
-                    StateEvent::Complete { timestamp, node, .. } => {
+                    StateEvent::Complete {
+                        timestamp, node, ..
+                    } => {
                         snapshot.current_node = Some(node);
                         snapshot.status = "completed".to_string();
                         snapshot.last_timestamp = Some(timestamp);
                     }
-                    StateEvent::RunStart { timestamp, initial_node, workflow, run_id, .. } => {
+                    StateEvent::RunStart {
+                        timestamp,
+                        initial_node,
+                        workflow,
+                        run_id,
+                        ..
+                    } => {
                         snapshot.current_node = Some(initial_node);
                         snapshot.status = "active".to_string();
                         snapshot.active_workflow = Some(workflow);
@@ -214,7 +235,12 @@ impl EngineStateSnapshot {
                         snapshot.escalation_target = None;
                         snapshot.last_timestamp = Some(timestamp);
                     }
-                    StateEvent::Reset { timestamp, node, run_id, .. } => {
+                    StateEvent::Reset {
+                        timestamp,
+                        node,
+                        run_id,
+                        ..
+                    } => {
                         snapshot.current_node = Some(node);
                         snapshot.status = "active".to_string();
                         if let Some(r_id) = run_id {

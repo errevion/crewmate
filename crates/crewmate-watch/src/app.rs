@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::data::activity::ActivitySnapshot;
-use crate::data::contracts::{ContractsSnapshot, ContractsSubView, ModuleContract, ModuleIndexEntry};
+use crate::data::contracts::{
+    ContractsSnapshot, ContractsSubView, ModuleContract, ModuleIndexEntry,
+};
 use crate::data::heartbeat::HeartbeatStatus;
 use crate::data::state::EngineStateSnapshot;
 use crate::data::task::TaskSnapshot;
@@ -83,14 +85,20 @@ pub struct App {
 
 impl App {
     pub fn new(project_root: PathBuf, fps: u64) -> Self {
-        let tick_ms = if fps == 0 { 100 } else { 1000 / fps.clamp(1, 60) };
+        let tick_ms = if fps == 0 {
+            100
+        } else {
+            1000 / fps.clamp(1, 60)
+        };
         let tick_rate = Duration::from_millis(tick_ms);
 
         let state = EngineStateSnapshot::load_from_root(&project_root);
-        let workflow = WorkflowModel::load_from_root(&project_root, state.active_workflow.as_deref()).ok();
+        let workflow =
+            WorkflowModel::load_from_root(&project_root, state.active_workflow.as_deref()).ok();
         let activity = ActivitySnapshot::load_from_root(&project_root);
         let heartbeat = HeartbeatStatus::load_from_root(&project_root);
-        let task_snapshot = TaskSnapshot::load_from_root(&project_root, &activity, workflow.as_ref());
+        let task_snapshot =
+            TaskSnapshot::load_from_root(&project_root, &activity, workflow.as_ref());
         let contracts = ContractsSnapshot::load_from_root(&project_root);
         let current_node = state.current_node.clone();
 
@@ -151,7 +159,11 @@ impl App {
         // Detect if workflow changed or not yet loaded
         let workflow_changed = new_state.active_workflow != self.state.active_workflow;
         if self.workflow.is_none() || workflow_changed {
-            self.workflow = WorkflowModel::load_from_root(&self.project_root, new_state.active_workflow.as_deref()).ok();
+            self.workflow = WorkflowModel::load_from_root(
+                &self.project_root,
+                new_state.active_workflow.as_deref(),
+            )
+            .ok();
         }
 
         // Detect node transition
@@ -312,7 +324,9 @@ impl App {
         }
     }
 
-    pub fn selected_arch_module(&self) -> Option<(&String, &crate::data::contracts::ModuleArchEntry)> {
+    pub fn selected_arch_module(
+        &self,
+    ) -> Option<(&String, &crate::data::contracts::ModuleArchEntry)> {
         let arch = &self.contracts.architecture.modules;
         if arch.is_empty() {
             None
@@ -491,7 +505,10 @@ impl App {
             }
         } else {
             (
-                self.state.current_node.clone().unwrap_or_else(|| "-".to_string()),
+                self.state
+                    .current_node
+                    .clone()
+                    .unwrap_or_else(|| "-".to_string()),
                 0,
                 0,
             )

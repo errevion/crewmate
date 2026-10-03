@@ -1,7 +1,7 @@
-use std::fs;
-use std::path::Path;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RawSessionInfo {
@@ -110,7 +110,9 @@ impl HeartbeatStatus {
 
                 // Heartbeat is fresh: check status
                 let (is_alive, status_text) = match raw.status.as_deref() {
-                    Some("running") | Some("online") | Some("alive") => (true, "RUNNING".to_string()),
+                    Some("running") | Some("online") | Some("alive") => {
+                        (true, "RUNNING".to_string())
+                    }
                     Some("idle") => (true, "IDLE".to_string()),
                     _ => (false, "OFFLINE".to_string()),
                 };

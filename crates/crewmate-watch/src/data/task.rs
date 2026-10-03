@@ -145,10 +145,7 @@ impl TaskSnapshot {
                     }
                     if ev.event == "scope_conflict" {
                         if let Some(ref f) = ev.file {
-                            event_reasons.insert(
-                                ev.id.clone(),
-                                format!("File '{}' is locked", f),
-                            );
+                            event_reasons.insert(ev.id.clone(), format!("File '{}' is locked", f));
                         }
                     }
                 }
@@ -199,9 +196,11 @@ impl TaskSnapshot {
             // Determine agent
             let agent = if let Some(ref a) = task.agent {
                 a.clone()
-            } else if let Some(act) = activity_snapshot.active_tree.iter().find(|a| {
-                a.label.contains(&task.id) || a.id == task.id
-            }) {
+            } else if let Some(act) = activity_snapshot
+                .active_tree
+                .iter()
+                .find(|a| a.label.contains(&task.id) || a.id == task.id)
+            {
                 act.agent.clone()
             } else if let Some(act) = activity_snapshot.active_tree.first() {
                 act.agent.clone()
@@ -237,7 +236,10 @@ impl TaskSnapshot {
             if task.status == "pending" || task.status == "blocked" {
                 // A. Check depends_on tasks: find first dependency not done
                 for dep_id in &task.depends_on {
-                    let dep_status = task_status_map.get(dep_id).map(|s| s.as_str()).unwrap_or("missing");
+                    let dep_status = task_status_map
+                        .get(dep_id)
+                        .map(|s| s.as_str())
+                        .unwrap_or("missing");
                     if dep_status != "done" {
                         let dep_label = raw_tasks
                             .iter()
@@ -290,7 +292,8 @@ impl TaskSnapshot {
                             if let Some(start_idx) = r.find('\'') {
                                 if let Some(end_idx) = r[start_idx + 1..].find('\'') {
                                     let filename = &r[start_idx + 1..start_idx + 1 + end_idx];
-                                    blocking_reason = Some(format!("↳ waiting on lock: {}", filename));
+                                    blocking_reason =
+                                        Some(format!("↳ waiting on lock: {}", filename));
                                 } else {
                                     blocking_reason = Some("↳ waiting on lock".to_string());
                                 }

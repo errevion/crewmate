@@ -58,7 +58,10 @@ pub struct WorkflowModel {
 }
 
 impl WorkflowModel {
-    pub fn load_from_root(project_root: &Path, active_workflow: Option<&str>) -> Result<Self, String> {
+    pub fn load_from_root(
+        project_root: &Path,
+        active_workflow: Option<&str>,
+    ) -> Result<Self, String> {
         let wf_name = active_workflow.unwrap_or("feature-pipeline");
 
         let graph_candidates = [
@@ -77,8 +80,9 @@ impl WorkflowModel {
         ];
         let graph_candidate_refs: Vec<&str> = graph_candidates.iter().map(|s| s.as_str()).collect();
 
-        let graph_path = find_file(project_root, &graph_candidate_refs)
-            .ok_or_else(|| "Could not find graph.yaml in .crewmate/workflows/ or workflow/".to_string())?;
+        let graph_path = find_file(project_root, &graph_candidate_refs).ok_or_else(|| {
+            "Could not find graph.yaml in .crewmate/workflows/ or workflow/".to_string()
+        })?;
 
         let graph_content = fs::read_to_string(&graph_path)
             .map_err(|e| format!("Failed to read {}: {}", graph_path.display(), e))?;
@@ -130,7 +134,10 @@ impl WorkflowModel {
         let mut node_defs = HashMap::new();
         for node_id in &nodes_in_order {
             let def_candidates = [
-                format!(".crewmate/workflows/{}/nodes/{}.node.yaml", wf_name, node_id),
+                format!(
+                    ".crewmate/workflows/{}/nodes/{}.node.yaml",
+                    wf_name, node_id
+                ),
                 format!(".crewmate/workflows/{}/nodes/{}.node.yml", wf_name, node_id),
                 format!(".crewmate/workflows/default/nodes/{}.node.yaml", node_id),
                 format!(".crewmate/workflows/default/nodes/{}.node.yml", node_id),

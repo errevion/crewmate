@@ -10,11 +10,26 @@ pub fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     // Global segment, identical on every page:
     // [q] Quit  [h] Help  [Tab] Switch page
     let mut spans = vec![
-        Span::styled(" [q]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [q]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" Quit  ", Style::default().fg(Color::White)),
-        Span::styled("[h]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "[h]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" Help  ", Style::default().fg(Color::White)),
-        Span::styled("[Tab]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "[Tab]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" Switch page", Style::default().fg(Color::White)),
     ];
 
@@ -27,7 +42,12 @@ pub fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 Span::styled(" Pan  ", Style::default().fg(Color::White)),
                 Span::styled("[↑/↓]", Style::default().fg(Color::Cyan)),
                 Span::styled(" Select  ", Style::default().fg(Color::White)),
-                Span::styled("[Enter]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "[Enter]",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Inspect", Style::default().fg(Color::White)),
             ]);
         }
@@ -36,7 +56,12 @@ pub fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 Span::styled("  │  ", Style::default().fg(Color::DarkGray)),
                 Span::styled("[↑/↓]", Style::default().fg(Color::Cyan)),
                 Span::styled(" Select  ", Style::default().fg(Color::White)),
-                Span::styled("[Enter]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "[Enter]",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Inspect", Style::default().fg(Color::White)),
             ]);
         }
@@ -46,7 +71,12 @@ pub fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                     Span::styled("  │  ", Style::default().fg(Color::DarkGray)),
                     Span::styled("[↑/↓]", Style::default().fg(Color::Cyan)),
                     Span::styled(" Scroll  ", Style::default().fg(Color::White)),
-                    Span::styled("[Esc/Enter]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "[Esc/Enter]",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::styled(" Close Fullscreen", Style::default().fg(Color::White)),
                 ]);
             } else {
@@ -58,7 +88,12 @@ pub fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                     Span::styled(" Cycle  ", Style::default().fg(Color::White)),
                     Span::styled("[↑/↓]", Style::default().fg(Color::Cyan)),
                     Span::styled(" Select  ", Style::default().fg(Color::White)),
-                    Span::styled("[Enter]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "[Enter]",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::styled(" Fullscreen", Style::default().fg(Color::White)),
                 ]);
             }

@@ -66,10 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_app(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    app: &mut App,
-) -> io::Result<()> {
+fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> io::Result<()> {
     let mut last_tick = Instant::now();
 
     loop {
@@ -96,9 +93,7 @@ fn run_app(
                                 app.should_quit = true;
                             }
                         }
-                        KeyCode::Char('c')
-                            if key.modifiers.contains(KeyModifiers::CONTROL) =>
-                        {
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             app.should_quit = true;
                         }
                         KeyCode::Tab => {
@@ -126,130 +121,108 @@ fn run_app(
                                 app.should_quit = true;
                             }
                         }
-                        KeyCode::Enter => {
-                            match app.current_page {
-                                AppPage::Workflow => {
-                                    if app.show_event_detail {
-                                        app.show_event_detail = false;
-                                    } else {
-                                        app.open_event_detail();
-                                    }
-                                }
-                                AppPage::Tasks => {
-                                    if app.show_task_detail {
-                                        app.show_task_detail = false;
-                                    } else {
-                                        app.open_task_detail();
-                                    }
-                                }
-                                AppPage::Contracts => {
-                                    if app.show_contract_detail {
-                                        app.close_contract_detail();
-                                    } else {
-                                        app.open_contract_detail();
-                                    }
+                        KeyCode::Enter => match app.current_page {
+                            AppPage::Workflow => {
+                                if app.show_event_detail {
+                                    app.show_event_detail = false;
+                                } else {
+                                    app.open_event_detail();
                                 }
                             }
-                        }
+                            AppPage::Tasks => {
+                                if app.show_task_detail {
+                                    app.show_task_detail = false;
+                                } else {
+                                    app.open_task_detail();
+                                }
+                            }
+                            AppPage::Contracts => {
+                                if app.show_contract_detail {
+                                    app.close_contract_detail();
+                                } else {
+                                    app.open_contract_detail();
+                                }
+                            }
+                        },
                         KeyCode::Char('h') | KeyCode::Char('?') => {
                             app.toggle_help();
                         }
-                        KeyCode::Up | KeyCode::Char('k') => {
-                            match app.current_page {
-                                AppPage::Workflow => {
-                                    app.scroll_events_up();
-                                }
-                                AppPage::Tasks => {
-                                    app.select_previous_task();
-                                }
-                                AppPage::Contracts => {
-                                    if app.show_contract_detail {
-                                        app.scroll_contract_detail_up();
-                                    } else {
-                                        app.select_previous_contract_item();
-                                    }
+                        KeyCode::Up | KeyCode::Char('k') => match app.current_page {
+                            AppPage::Workflow => {
+                                app.scroll_events_up();
+                            }
+                            AppPage::Tasks => {
+                                app.select_previous_task();
+                            }
+                            AppPage::Contracts => {
+                                if app.show_contract_detail {
+                                    app.scroll_contract_detail_up();
+                                } else {
+                                    app.select_previous_contract_item();
                                 }
                             }
-                        }
-                        KeyCode::Down | KeyCode::Char('j') => {
-                            match app.current_page {
-                                AppPage::Workflow => {
-                                    app.scroll_events_down();
-                                }
-                                AppPage::Tasks => {
-                                    app.select_next_task();
-                                }
-                                AppPage::Contracts => {
-                                    if app.show_contract_detail {
-                                        app.scroll_contract_detail_down();
-                                    } else {
-                                        app.select_next_contract_item();
-                                    }
+                        },
+                        KeyCode::Down | KeyCode::Char('j') => match app.current_page {
+                            AppPage::Workflow => {
+                                app.scroll_events_down();
+                            }
+                            AppPage::Tasks => {
+                                app.select_next_task();
+                            }
+                            AppPage::Contracts => {
+                                if app.show_contract_detail {
+                                    app.scroll_contract_detail_down();
+                                } else {
+                                    app.select_next_contract_item();
                                 }
                             }
-                        }
-                        KeyCode::Left => {
-                            match app.current_page {
-                                AppPage::Workflow => app.scroll_graph_left(),
-                                AppPage::Contracts => {
-                                    if !app.show_contract_detail {
-                                        app.cycle_contracts_subview_back();
-                                    }
-                                }
-                                _ => {}
+                        },
+                        KeyCode::Left => match app.current_page {
+                            AppPage::Workflow => app.scroll_graph_left(),
+                            AppPage::Contracts if !app.show_contract_detail => {
+                                app.cycle_contracts_subview_back();
                             }
-                        }
-                        KeyCode::Right => {
-                            match app.current_page {
-                                AppPage::Workflow => app.scroll_graph_right(),
-                                AppPage::Contracts => {
-                                    if !app.show_contract_detail {
-                                        app.cycle_contracts_subview();
-                                    }
-                                }
-                                _ => {}
+                            _ => {}
+                        },
+                        KeyCode::Right => match app.current_page {
+                            AppPage::Workflow => app.scroll_graph_right(),
+                            AppPage::Contracts if !app.show_contract_detail => {
+                                app.cycle_contracts_subview();
                             }
-                        }
-                        KeyCode::Char('a') => {
-                            match app.current_page {
-                                AppPage::Workflow => app.scroll_graph_left(),
-                                AppPage::Contracts => {
-                                    if !app.show_contract_detail {
-                                        app.set_contracts_subview(ContractsSubView::Architecture);
-                                    }
-                                }
-                                _ => {}
+                            _ => {}
+                        },
+                        KeyCode::Char('a') => match app.current_page {
+                            AppPage::Workflow => app.scroll_graph_left(),
+                            AppPage::Contracts if !app.show_contract_detail => {
+                                app.set_contracts_subview(ContractsSubView::Architecture);
                             }
+                            _ => {}
+                        },
+                        KeyCode::Char('d') if app.current_page == AppPage::Workflow => {
+                            app.scroll_graph_right();
                         }
-                        KeyCode::Char('d') => {
-                            if app.current_page == AppPage::Workflow {
-                                app.scroll_graph_right();
-                            }
+                        KeyCode::Char('m')
+                            if app.current_page == AppPage::Contracts
+                                && !app.show_contract_detail =>
+                        {
+                            app.set_contracts_subview(ContractsSubView::Modules);
                         }
-                        KeyCode::Char('m') => {
-                            if app.current_page == AppPage::Contracts && !app.show_contract_detail {
-                                app.set_contracts_subview(ContractsSubView::Modules);
-                            }
+                        KeyCode::Char('p')
+                            if app.current_page == AppPage::Contracts
+                                && !app.show_contract_detail =>
+                        {
+                            app.set_contracts_subview(ContractsSubView::Capabilities);
                         }
-                        KeyCode::Char('p') => {
-                            if app.current_page == AppPage::Contracts && !app.show_contract_detail {
-                                app.set_contracts_subview(ContractsSubView::Capabilities);
-                            }
+                        KeyCode::Char('c') | KeyCode::Char('f')
+                            if app.current_page == AppPage::Workflow =>
+                        {
+                            app.reset_graph_focus();
                         }
-                        KeyCode::Char('c') | KeyCode::Char('f') => {
-                            if app.current_page == AppPage::Workflow {
-                                app.reset_graph_focus();
-                            }
+                        KeyCode::Home if app.current_page == AppPage::Workflow => {
+                            app.scroll_graph_start();
                         }
-                        KeyCode::Home => {
-                            if app.current_page == AppPage::Workflow {
-                                app.scroll_graph_start();
-                            }
-                        }
-                        KeyCode::End => {
-                            if app.current_page == AppPage::Workflow {
-                                app.scroll_graph_end();
-                            }
+                        KeyCode::End if app.current_page == AppPage::Workflow => {
+                            app.scroll_graph_end();
                         }
                         _ => {}
                     }
