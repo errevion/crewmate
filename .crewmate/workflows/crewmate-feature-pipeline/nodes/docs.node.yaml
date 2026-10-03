@@ -1,0 +1,14 @@
+id: docs
+instructions: >
+  Update documentation, schemas, or READMEs after features and contracts have settled.
+inputs: []
+subagent:
+  role: builder
+  agent: builder
+  scope: implementation
+guardrails:
+  pre: []
+  post: []
+on_fail: route(docs)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

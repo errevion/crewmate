@@ -1,0 +1,27 @@
+id: scout
+instructions: >
+  Exhaustively explore the codebase to map the project's architecture and
+  inventory all modules.
+
+  Identify all source roots, module boundaries, public surface entrypoints,
+  exports, types, and cross-module dependencies.
+
+  Inspect existing contracts in .crewmate/contracts/ (if any) and identify where
+  they are missing, incomplete, or out of sync with code.
+
+  Document naming conventions, testing patterns, and structural layout.
+
+  Synthesize an exhaustive codebase inventory — your report is the Contractor's
+  sole input for contract authoring.
+inputs:
+  - task_description
+subagent:
+  role: scout
+  agent: scout
+  scope: read-only
+guardrails:
+  pre: []
+  post: []
+on_fail: route(scout)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

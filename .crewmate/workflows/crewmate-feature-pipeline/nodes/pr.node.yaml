@@ -1,0 +1,16 @@
+id: pr
+instructions: >
+  Run `git add .`, create a single conventional commit `git commit -m "feat: ..."`,
+  push to remote with `git push -u origin HEAD`, and open a pull request using
+  `gh pr create`.
+inputs: []
+subagent:
+  role: builder
+  agent: builder
+  scope: read-only
+guardrails:
+  pre: []
+  post: []
+on_fail: route(pr)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

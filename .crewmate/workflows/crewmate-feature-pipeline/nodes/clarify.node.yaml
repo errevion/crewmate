@@ -1,0 +1,28 @@
+id: clarify
+instructions: >
+  Review the scout's discovery findings alongside the user's original request.
+
+  Use the question tool to ask the user targeted clarifying questions before
+  planning begins. Always ask at least one question, even if the request seems
+  clear — at minimum, present a summary of your understanding and ask the user
+  to confirm or adjust it.
+
+  Leverage codebase context from the scout phase to ask informed questions
+  (existing frameworks, conventions, integration points, scope boundaries,
+  platform choices, UI/UX preferences).
+
+  Synthesize the user's answers into a structured requirements summary that the
+  planner can use directly.
+inputs:
+  - task_description
+  - discovery_context
+subagent:
+  role: orchestrator
+  agent: matte
+  scope: read-only
+guardrails:
+  pre: []
+  post: []
+on_fail: route(clarify)
+on_fail_max_retries: 1
+escalate_after_max_retries: human
