@@ -193,7 +193,7 @@ jobs:
           body: |
             ## Installation
             ```sh
-            npm install -g crew-mate
+            npm install -g @errevion/crewmate
             ```
           generate_release_notes: true
           draft: false

@@ -1,6 +1,6 @@
 # Crewmate
 
-[![npm version](https://img.shields.io/npm/v/crewmate.svg)](https://www.npmjs.com/package/crewmate)
+[![npm version](https://img.shields.io/npm/v/@errevion/crewmate.svg)](https://www.npmjs.com/package/@errevion/crewmate)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org)
 
@@ -33,7 +33,7 @@ For complete guides, configuration specifications, and architecture deep dives, 
 
 ```bash
 # Install globally or run via npx
-npm install -g crewmate
+npm install -g @errevion/crewmate
 
 # Scaffold contracts, default workflow, and plugin in your project
 crewmate init
