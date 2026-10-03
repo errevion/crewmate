@@ -1,7 +1,15 @@
 module: cli
 status: final
 version: "1.0.0"
-public_api: []
+public_api:
+  - export: InstallWatchOptions
+    signature: "interface InstallWatchOptions"
+    file: src/cli/install-watch.ts
+    description: Options for downloading and installing pre-built crewmate-watch binary.
+  - export: installWatchBinary
+    signature: "(options?: InstallWatchOptions) => Promise<string | null>"
+    file: src/cli/install-watch.ts
+    description: Downloads and installs pre-built crewmate-watch binary from GitHub Releases for host platform and architecture.
 invariants:
   - "Commands exit with code 0 on success and non-zero exit codes on failure."
   - "Supports both human-readable console output and machine-readable JSON output via --json flag."
@@ -10,4 +18,5 @@ invariants:
   - "Continuous integration pipeline validates multi-platform (Ubuntu, macOS, Windows) and multi-node (Node 20, Node 22) matrix tests, Biome linting, Rust clippy/fmt, and Crewmate scanner gates."
   - "Release workflow automates cross-compilation of native binaries across 5 target platforms, generates SHA-256 checksums, publishes GitHub releases, and publishes to npm with provenance."
   - "Automated dependency updates for npm, cargo, and GitHub Actions are maintained on a weekly schedule via Dependabot."
+  - "Downloads and verifies target-appropriate pre-built crewmate-watch native binary from GitHub Releases during postinstall, with lazy on-demand fallback during watch invocation."
 declared_consumers: []

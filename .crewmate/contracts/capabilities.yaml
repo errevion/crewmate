@@ -11,6 +11,10 @@ capabilities:
     module: cli
     description: Multi-platform automated CI matrix testing, scanner gates, Dependabot updates, and cross-compiled release packaging
     entrypoint: src/cli/index.ts
+  - name: watch-binary-management
+    module: cli
+    description: Pre-built native watch binary installation via npm postinstall with lazy on-demand download fallback
+    entrypoint: src/cli/install-watch.ts:installWatchBinary
   - name: opencode-integration
     module: opencode-adapter
     description: OpenCode harness integration providing tool filtering, activity hooks, and guardrail enforcement

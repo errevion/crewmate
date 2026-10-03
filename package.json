@@ -11,6 +11,7 @@
     "./plugin": "./dist/src/adapters/opencode/index.js"
   },
   "scripts": {
+    "postinstall": "node scripts/postinstall.js",
     "prepack": "npm run build",
     "build": "tsc",
     "build:watch": "cargo build --release --manifest-path crates/crewmate-watch/Cargo.toml",
@@ -33,7 +34,8 @@
   ],
   "files": [
     "dist/src",
-    "bin"
+    "bin",
+    "scripts/postinstall.js"
   ],
   "author": "Noiverre",
   "license": "MIT",

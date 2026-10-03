@@ -67,6 +67,7 @@ modules:
     version: "1.0.0"
     public_surface:
       - src/cli/index.ts
+      - src/cli/install-watch.ts
   - name: opencode-adapter
     responsibility: OpenCode plugin integration, tool access mediation, guardrail enforcement, and subagent session tracking
     path: src/adapters/opencode

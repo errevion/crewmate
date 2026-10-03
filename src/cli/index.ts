@@ -7,8 +7,11 @@ import { Command } from "commander";
 import { CrewmateEngine } from "../core/engine/engine.js";
 import { scanArchitecture } from "../core/scanner/arch.js";
 import { scanDeadCode } from "../core/scanner/dead-code.js";
+import { installWatchBinary } from "./install-watch.js";
 
-function findWatchBinary(projectRoot: string): { cmd: string; args: string[] } {
+async function findWatchBinary(
+  projectRoot: string,
+): Promise<{ cmd: string; args: string[] }> {
   const isWin = process.platform === "win32";
   const exeName = isWin ? "crewmate-watch.exe" : "crewmate-watch";
 
@@ -65,24 +68,41 @@ function findWatchBinary(projectRoot: string): { cmd: string; args: string[] } {
     ),
   ];
 
-  // Find all existing candidates and select the most recently modified binary
-  const existingCandidates = candidates
-    .filter((c) => fs.existsSync(c))
-    .map((c) => ({ path: c, mtime: fs.statSync(c).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime);
+  const pathDirs = (process.env.PATH || "").split(path.delimiter);
 
-  if (existingCandidates.length > 0) {
-    return { cmd: existingCandidates[0].path, args: [] };
+  const resolveExistingBinary = (): { cmd: string; args: string[] } | null => {
+    // Find all existing candidates and select the most recently modified binary
+    const existingCandidates = candidates
+      .filter((c) => fs.existsSync(c))
+      .map((c) => ({ path: c, mtime: fs.statSync(c).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (existingCandidates.length > 0) {
+      return { cmd: existingCandidates[0].path, args: [] };
+    }
+
+    // Check system PATH
+    for (const dir of pathDirs) {
+      if (!dir) continue;
+      const candidate = path.join(dir, exeName);
+      if (fs.existsSync(candidate)) {
+        return { cmd: candidate, args: [] };
+      }
+    }
+
+    return null;
+  };
+
+  let binary = resolveExistingBinary();
+
+  // If binary not found initially, attempt lazy download fallback and re-check
+  if (!binary) {
+    await installWatchBinary({ lazy: true });
+    binary = resolveExistingBinary();
   }
 
-  // Check system PATH
-  const pathDirs = (process.env.PATH || "").split(path.delimiter);
-  for (const dir of pathDirs) {
-    if (!dir) continue;
-    const candidate = path.join(dir, exeName);
-    if (fs.existsSync(candidate)) {
-      return { cmd: candidate, args: [] };
-    }
+  if (binary) {
+    return binary;
   }
 
   // Fallback to cargo run if Cargo.toml is available
@@ -216,9 +236,9 @@ program
     "UI polling and refresh rate in frames per second",
     "10",
   )
-  .action((options) => {
+  .action(async (options) => {
     try {
-      const { cmd, args } = findWatchBinary(options.projectRoot);
+      const { cmd, args } = await findWatchBinary(options.projectRoot);
       const fullArgs = [
         ...args,
         "--root",
