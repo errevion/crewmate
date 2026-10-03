@@ -1,0 +1,59 @@
+version: "1.0.0"
+modules:
+  utils:
+    responsibility: Shared filesystem utilities and glob matching for contract resolution and path filtering
+    allowed_dependencies: []
+  schemas:
+    responsibility: Zod schema definitions and TypeScript interfaces for contracts, workflows, state events, tasks, and activities
+    allowed_dependencies: []
+  state:
+    responsibility: Append-only state event reduction and runtime state management for workflow engine execution
+    allowed_dependencies:
+      - schemas
+  activity:
+    responsibility: Activity lifecycle tracking, provenance graph construction, heartbeat monitoring, and stale session reconciliation
+    allowed_dependencies:
+      - schemas
+  scanner:
+    responsibility: Static AST analysis for verifying architecture boundary compliance and detecting dead code
+    allowed_dependencies:
+      - schemas
+      - utils
+      - activity
+  task:
+    responsibility: Contract-scoped task creation, dependency DAG resolution, atomic multi-file locking, and scope completion verification
+    allowed_dependencies:
+      - schemas
+      - scanner
+  report:
+    responsibility: Workflow run summary aggregation, Markdown and JSON report generation, and run history inspection
+    allowed_dependencies:
+      - schemas
+  archive:
+    responsibility: Archival packaging of completed runs, state event isolation, task pruning, and history preservation
+    allowed_dependencies:
+      - schemas
+      - report
+  engine:
+    responsibility: Central orchestration facade coordinating state, activities, tasks, reports, archives, gates, and scaffolding
+    allowed_dependencies:
+      - schemas
+      - state
+      - activity
+      - task
+      - report
+      - archive
+      - utils
+      - scanner
+  cli:
+    responsibility: CLI command runner and interactive terminal interface for Crewmate workflows and operations
+    allowed_dependencies:
+      - engine
+      - scanner
+  opencode-adapter:
+    responsibility: OpenCode plugin integration, tool access mediation, guardrail enforcement, and subagent session tracking
+    allowed_dependencies:
+      - engine
+      - schemas
+      - utils
+      - scanner

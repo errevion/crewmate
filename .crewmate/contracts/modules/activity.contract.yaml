@@ -1,0 +1,15 @@
+module: activity
+status: final
+version: "1.0.0"
+public_api:
+  - export: ActivityManager
+    signature: "class ActivityManager"
+    file: src/core/activity/activity-manager.ts
+    description: "Manages tracking, queries, tree rendering, provenance lookup, and reconciliation for agent activities."
+invariants:
+  - "Activities are logged immutably to .crewmate/activity.jsonl."
+  - "An activity cannot be ended more than once."
+  - "Unclosed activities can be identified and reconciled when the harness goes offline."
+declared_consumers:
+  - scanner
+  - engine

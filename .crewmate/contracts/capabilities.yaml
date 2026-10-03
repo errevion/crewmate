@@ -1,0 +1,41 @@
+capabilities:
+  - name: cli-workflow-management
+    module: cli
+    description: CLI command interface for running workflows, inspecting engine status, managing tasks, and reviewing reports
+    entrypoint: src/cli/index.ts
+  - name: opencode-integration
+    module: opencode-adapter
+    description: OpenCode harness integration providing tool filtering, activity hooks, and guardrail enforcement
+    entrypoint: src/adapters/opencode/index.ts:crewmateOpenCodePlugin
+  - name: workflow-orchestration
+    module: engine
+    description: Core workflow engine coordinating state transitions, gate checks, subagent directives, and scaffolding
+    entrypoint: src/core/engine/engine.ts:CrewmateEngine
+  - name: task-scheduling-concurrency
+    module: task
+    description: Contract-scoped task management with atomic multi-file locking, dependency DAGs, and scope-diff gates
+    entrypoint: src/core/task/task-manager.ts:TaskManager
+  - name: activity-tracking
+    module: activity
+    description: Activity lifecycle logging, nested execution trees, provenance graph construction, and stale session reconciliation
+    entrypoint: src/core/activity/activity-manager.ts:ActivityManager
+  - name: state-reduction
+    module: state
+    description: Append-only state event reduction and runtime engine state queries
+    entrypoint: src/core/state/state-manager.ts:reduceState
+  - name: architecture-boundary-scanning
+    module: scanner
+    description: Static AST import analysis validating codebase dependencies against architecture rules
+    entrypoint: src/core/scanner/arch.ts:scanArchitecture
+  - name: dead-code-detection
+    module: scanner
+    description: Static AST export reference analysis identifying unused code and cross-referencing module contracts
+    entrypoint: src/core/scanner/dead-code.ts:scanDeadCode
+  - name: run-reporting
+    module: report
+    description: Workflow execution report generation in JSON and Markdown with transition, gate, task, and activity summaries
+    entrypoint: src/core/report/report-manager.ts:ReportManager
+  - name: run-archival
+    module: archive
+    description: Workflow run artifact packaging, active state pruning, and historical run inspection
+    entrypoint: src/core/archive/archive-manager.ts:ArchiveManager

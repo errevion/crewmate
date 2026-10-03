@@ -1,0 +1,353 @@
+module: schemas
+status: final
+version: "1.0.0"
+public_api:
+  - export: ModuleIndexEntrySchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for single module entry in index manifest."
+  - export: ModuleIndexEntry
+    signature: "type ModuleIndexEntry"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for single module entry in index manifest."
+  - export: IndexManifestSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for system-wide module index manifest (Tier 0)."
+  - export: IndexManifest
+    signature: "type IndexManifest"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for system-wide module index manifest."
+  - export: ModuleArchEntrySchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for module dependency permissions in architecture rules."
+  - export: ModuleArchEntry
+    signature: "type ModuleArchEntry"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for module dependency permissions."
+  - export: ArchitectureSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for architecture boundary rules (Tier 2)."
+  - export: Architecture
+    signature: "type Architecture"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for architecture boundary rules."
+  - export: StructureNamingSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for repository naming conventions."
+  - export: StructureSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for repository structure and path rules (Tier 2)."
+  - export: Structure
+    signature: "type Structure"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for repository structure rules."
+  - export: CapabilityEntrySchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for individual capability entry."
+  - export: CapabilityEntry
+    signature: "type CapabilityEntry"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for individual capability entry."
+  - export: CapabilitiesSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for capabilities catalog (Tier 0)."
+  - export: Capabilities
+    signature: "type Capabilities"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for capabilities catalog."
+  - export: PublicApiExportSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for exported symbol in module contract."
+  - export: PublicApiExport
+    signature: "type PublicApiExport"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for exported symbol in module contract."
+  - export: ModuleContractSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/contracts.ts
+    description: "Zod schema for per-module contract specification (Tier 1)."
+  - export: ModuleContract
+    signature: "type ModuleContract"
+    file: src/core/schemas/contracts.ts
+    description: "TypeScript type for per-module contract specification."
+  - export: GraphNodeSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/workflow.ts
+    description: "Zod schema for workflow graph transition node."
+  - export: GraphNode
+    signature: "type GraphNode"
+    file: src/core/schemas/workflow.ts
+    description: "TypeScript type for workflow graph transition node."
+  - export: GraphSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/workflow.ts
+    description: "Zod schema for workflow graph definition."
+  - export: Graph
+    signature: "type Graph"
+    file: src/core/schemas/workflow.ts
+    description: "TypeScript type for workflow graph definition."
+  - export: HardGuardrailSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/workflow.ts
+    description: "Zod schema for deterministic command-based hard guardrail."
+  - export: SoftGuardrailSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/workflow.ts
+    description: "Zod schema for advisory check-based soft guardrail."
+  - export: GuardrailSchema
+    signature: "z.ZodUnion<...>"
+    file: src/core/schemas/workflow.ts
+    description: "Zod schema union for hard or soft guardrails."
+  - export: Guardrail
+    signature: "type Guardrail"
+    file: src/core/schemas/workflow.ts
+    description: "TypeScript type union for hard or soft guardrails."
+  - export: HardGuardrail
+    signature: "type HardGuardrail"
+    file: src/core/schemas/workflow.ts
+    description: "TypeScript type for deterministic hard guardrail."
+  - export: SoftGuardrail
+    signature: "type SoftGuardrail"
+    file: src/core/schemas/workflow.ts
+    description: "TypeScript type for advisory soft guardrail."
+  - export: SubagentDefSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/workflow.ts
+    description: "Zod schema for subagent role and tool access configuration."
+  - export: SubagentDef
+    signature: "type SubagentDef"
+    file: src/core/schemas/workflow.ts
+    description: "TypeScript type for subagent definition."
+  - export: NodeDefSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/workflow.ts
+    description: "Zod schema for node definition file in workflow graph."
+  - export: NodeDef
+    signature: "type NodeDef"
+    file: src/core/schemas/workflow.ts
+    description: "TypeScript type for node definition file."
+  - export: generateEventId
+    signature: "() => string"
+    file: src/core/schemas/state.ts
+    description: "Generates a unique random event ID with prefix evt_."
+  - export: GateResultSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for gate check evaluation results."
+  - export: GateResult
+    signature: "type GateResult"
+    file: src/core/schemas/state.ts
+    description: "TypeScript type for gate check evaluation results."
+  - export: InitEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for INIT state event."
+  - export: NodeTransitionEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for NODE_TRANSITION state event."
+  - export: GateCheckEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for GATE_CHECK state event."
+  - export: RetryIncrementEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for RETRY_INCREMENT state event."
+  - export: EscalateEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for ESCALATE state event."
+  - export: OverrideEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for OVERRIDE state event."
+  - export: CompleteEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for COMPLETE state event."
+  - export: RunStartEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for RUN_START state event."
+  - export: ResetEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod schema for RESET state event."
+  - export: StateEventSchema
+    signature: "z.ZodDiscriminatedUnion<...>"
+    file: src/core/schemas/state.ts
+    description: "Zod discriminated union for all state events."
+  - export: StateEvent
+    signature: "type StateEvent"
+    file: src/core/schemas/state.ts
+    description: "TypeScript type for validated state events."
+  - export: StateEventInput
+    signature: "type StateEventInput"
+    file: src/core/schemas/state.ts
+    description: "TypeScript input type for state events prior to validation defaults."
+  - export: EngineState
+    signature: "interface EngineState"
+    file: src/core/schemas/state.ts
+    description: "Reduced state snapshot of the workflow engine."
+  - export: TaskStatusSchema
+    signature: "z.ZodEnum<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task status enum."
+  - export: TaskStatus
+    signature: "type TaskStatus"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task status."
+  - export: DependencyReasonSchema
+    signature: "z.ZodEnum<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task dependency reason enum."
+  - export: DependencyReason
+    signature: "type DependencyReason"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task dependency reason."
+  - export: TaskDependencySchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task dependency relation."
+  - export: TaskDependency
+    signature: "type TaskDependency"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task dependency relation."
+  - export: ScopeAmendmentRecordSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for scope amendment or conflict record."
+  - export: ScopeAmendmentRecord
+    signature: "type ScopeAmendmentRecord"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for scope amendment record."
+  - export: TaskDefinitionSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task specification."
+  - export: TaskDefinition
+    signature: "type TaskDefinition"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task specification."
+  - export: TaskCreateEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task creation log event."
+  - export: TaskCreateEvent
+    signature: "type TaskCreateEvent"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task creation event."
+  - export: TaskStatusChangeEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task status change event."
+  - export: TaskStatusChangeEvent
+    signature: "type TaskStatusChangeEvent"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task status change event."
+  - export: TaskLockGrantEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task lock grant event."
+  - export: TaskLockGrantEvent
+    signature: "type TaskLockGrantEvent"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task lock grant event."
+  - export: TaskLockReleaseEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task lock release event."
+  - export: TaskLockReleaseEvent
+    signature: "type TaskLockReleaseEvent"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task lock release event."
+  - export: TaskScopeAmendmentEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task scope amendment event."
+  - export: TaskScopeAmendmentEvent
+    signature: "type TaskScopeAmendmentEvent"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task scope amendment event."
+  - export: TaskScopeConflictEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod schema for task scope conflict event."
+  - export: TaskScopeConflictEvent
+    signature: "type TaskScopeConflictEvent"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task scope conflict event."
+  - export: TaskEventSchema
+    signature: "z.ZodDiscriminatedUnion<...>"
+    file: src/core/schemas/task.ts
+    description: "Zod discriminated union for task log events."
+  - export: TaskEvent
+    signature: "type TaskEvent"
+    file: src/core/schemas/task.ts
+    description: "TypeScript type for task log events."
+  - export: ActivityStatusSchema
+    signature: "z.ZodEnum<...>"
+    file: src/core/schemas/activity.ts
+    description: "Zod schema for activity status enum."
+  - export: ActivityStatus
+    signature: "type ActivityStatus"
+    file: src/core/schemas/activity.ts
+    description: "TypeScript type for activity status."
+  - export: ActivityStartEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/activity.ts
+    description: "Zod schema for activity start event."
+  - export: ActivityStartEvent
+    signature: "type ActivityStartEvent"
+    file: src/core/schemas/activity.ts
+    description: "TypeScript type for activity start event."
+  - export: ActivityEndEventSchema
+    signature: "z.ZodObject<...>"
+    file: src/core/schemas/activity.ts
+    description: "Zod schema for activity end event."
+  - export: ActivityEndEvent
+    signature: "type ActivityEndEvent"
+    file: src/core/schemas/activity.ts
+    description: "TypeScript type for activity end event."
+  - export: ActivityEventSchema
+    signature: "z.ZodDiscriminatedUnion<...>"
+    file: src/core/schemas/activity.ts
+    description: "Zod discriminated union for activity log events."
+  - export: ActivityEvent
+    signature: "type ActivityEvent"
+    file: src/core/schemas/activity.ts
+    description: "TypeScript type for activity log events."
+  - export: ActivityRecord
+    signature: "interface ActivityRecord"
+    file: src/core/schemas/activity.ts
+    description: "Normalized active or completed activity record."
+  - export: ActivityTreeNode
+    signature: "interface ActivityTreeNode"
+    file: src/core/schemas/activity.ts
+    description: "Hierarchical tree node representing nested activities."
+  - export: ActivityProvenance
+    signature: "interface ActivityProvenance"
+    file: src/core/schemas/activity.ts
+    description: "File modification provenance derived from activity history."
+invariants:
+  - "All architectural schemas validate using Zod and infer standard TypeScript types."
+  - "Event schemas use discriminated unions on the event property for type-safe deserialization."
+  - "Contracts and workflows define strict default values for version and status fields."
+declared_consumers:
+  - state
+  - activity
+  - report
+  - archive
+  - scanner
+  - task
+  - engine
+  - opencode-adapter

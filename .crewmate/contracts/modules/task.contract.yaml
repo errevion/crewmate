@@ -1,0 +1,44 @@
+module: task
+status: final
+version: "1.0.0"
+public_api:
+  - export: TaskCreateOptions
+    signature: "interface TaskCreateOptions"
+    file: src/core/task/task-manager.ts
+    description: "Options for creating a contract-scoped task."
+  - export: TaskStartResult
+    signature: "interface TaskStartResult"
+    file: src/core/task/task-manager.ts
+    description: "Result returned when attempting to start a task and claim atomic file locks."
+  - export: TaskAmendResult
+    signature: "interface TaskAmendResult"
+    file: src/core/task/task-manager.ts
+    description: "Result returned when amending task scope with an additional file."
+  - export: TaskCompleteResult
+    signature: "interface TaskCompleteResult"
+    file: src/core/task/task-manager.ts
+    description: "Result returned when completing a task after scope and architecture gates run."
+  - export: LockEntry
+    signature: "interface LockEntry"
+    file: src/core/task/task-manager.ts
+    description: "File path and holding task ID pair in active lock table."
+  - export: LocksTableResult
+    signature: "interface LocksTableResult"
+    file: src/core/task/task-manager.ts
+    description: "Current snapshot of active file locks and active task IDs."
+  - export: ConflictSummary
+    signature: "interface ConflictSummary"
+    file: src/core/task/task-manager.ts
+    description: "Summary of task scope conflicts grouped by module and task."
+  - export: TaskManager
+    signature: "class TaskManager"
+    file: src/core/task/task-manager.ts
+    description: "Manages contract-scoped task lifecycle, dependency resolution, atomic file locks, and completion validation."
+invariants:
+  - "Tasks must reference a valid module contract."
+  - "Tasks cannot have overlapping files scheduled concurrently as parallel siblings without explicit dependency edges."
+  - "Task locks are acquired atomically via memory chain and cross-process filesystem lock."
+  - "Scope amendments conflicting with active task locks result in hard conflicts without automatic resolution."
+  - "Task completion verifies modified files against declared scope using git status and diff."
+declared_consumers:
+  - engine

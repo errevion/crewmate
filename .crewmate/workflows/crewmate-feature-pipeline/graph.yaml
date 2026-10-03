@@ -1,0 +1,22 @@
+version: 1.0.0
+name: Crewmate Feature Pipeline
+initial: scout
+nodes:
+  - id: scout
+    next: clarify
+  - id: clarify
+    next: branch
+  - id: branch
+    next: plan
+  - id: plan
+    next: execute
+  - id: execute
+    next: contract
+  - id: contract
+    next: verify
+  - id: verify
+    next: docs
+  - id: docs
+    next: pr
+  - id: pr
+    next: done

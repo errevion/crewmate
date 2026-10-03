@@ -1,0 +1,9 @@
+version: "1.0.0"
+roots:
+  - src
+naming:
+  modules: kebab-case
+  files: kebab-case
+forbidden_patterns:
+  - src/**/temp_*
+  - src/**/legacy_*

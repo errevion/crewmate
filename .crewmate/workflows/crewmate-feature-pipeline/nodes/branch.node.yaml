@@ -1,0 +1,15 @@
+id: branch
+instructions: >
+  Generate a conventional branch name (e.g., feat/xyz) based on task details and
+  run `git checkout -b <branch_name>`.
+inputs: []
+subagent:
+  role: builder
+  agent: builder
+  scope: read-only
+guardrails:
+  pre: []
+  post: []
+on_fail: route(branch)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

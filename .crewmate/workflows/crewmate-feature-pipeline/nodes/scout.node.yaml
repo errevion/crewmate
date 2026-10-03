@@ -1,0 +1,19 @@
+id: scout
+instructions: >
+  Explore the codebase and understand the existing architecture, dependencies,
+  and conventions.
+
+  Gather context on relevant contracts in .crewmate/contracts/ without modifying
+  any files.
+inputs:
+  - task_description
+subagent:
+  role: scout
+  agent: scout
+  scope: read-only
+guardrails:
+  pre: []
+  post: []
+on_fail: route(scout)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

@@ -1,0 +1,75 @@
+version: "1.0.0"
+modules:
+  - name: utils
+    responsibility: Shared filesystem utilities and glob matching for contract resolution and path filtering
+    path: src/core/utils
+    version: "1.0.0"
+    public_surface:
+      - src/core/utils/glob.ts
+      - src/core/utils/fs.ts
+  - name: schemas
+    responsibility: Zod schema definitions and TypeScript interfaces for contracts, workflows, state events, tasks, and activities
+    path: src/core/schemas
+    version: "1.0.0"
+    public_surface:
+      - src/core/schemas/contracts.ts
+      - src/core/schemas/workflow.ts
+      - src/core/schemas/state.ts
+      - src/core/schemas/task.ts
+      - src/core/schemas/activity.ts
+  - name: state
+    responsibility: Append-only state event reduction and runtime state management for workflow engine execution
+    path: src/core/state
+    version: "1.0.0"
+    public_surface:
+      - src/core/state/state-manager.ts
+  - name: activity
+    responsibility: Activity lifecycle tracking, provenance graph construction, heartbeat monitoring, and stale session reconciliation
+    path: src/core/activity
+    version: "1.0.0"
+    public_surface:
+      - src/core/activity/activity-manager.ts
+  - name: scanner
+    responsibility: Static AST analysis for verifying architecture boundary compliance and detecting dead code
+    path: src/core/scanner
+    version: "1.0.0"
+    public_surface:
+      - src/core/scanner/arch.ts
+      - src/core/scanner/dead-code.ts
+  - name: task
+    responsibility: Contract-scoped task creation, dependency DAG resolution, atomic multi-file locking, and scope completion verification
+    path: src/core/task
+    version: "1.0.0"
+    public_surface:
+      - src/core/task/task-manager.ts
+  - name: report
+    responsibility: Workflow run summary aggregation, Markdown and JSON report generation, and run history inspection
+    path: src/core/report
+    version: "1.0.0"
+    public_surface:
+      - src/core/report/report-manager.ts
+  - name: archive
+    responsibility: Archival packaging of completed runs, state event isolation, task pruning, and history preservation
+    path: src/core/archive
+    version: "1.0.0"
+    public_surface:
+      - src/core/archive/archive-manager.ts
+  - name: engine
+    responsibility: Central orchestration facade coordinating state, activities, tasks, reports, archives, gates, and scaffolding
+    path: src/core/engine
+    version: "1.0.0"
+    public_surface:
+      - src/core/engine/engine.ts
+      - src/core/engine/scaffold.ts
+  - name: cli
+    responsibility: CLI command runner and interactive terminal interface for Crewmate workflows and operations
+    path: src/cli
+    version: "1.0.0"
+    public_surface:
+      - src/cli/index.ts
+  - name: opencode-adapter
+    responsibility: OpenCode plugin integration, tool access mediation, guardrail enforcement, and subagent session tracking
+    path: src/adapters/opencode
+    version: "1.0.0"
+    public_surface:
+      - src/adapters/opencode/index.ts

@@ -1,0 +1,18 @@
+module: state
+status: final
+version: "1.0.0"
+public_api:
+  - export: reduceState
+    signature: "(events: StateEvent[]) => EngineState"
+    file: src/core/state/state-manager.ts
+    description: "Reduces an array of StateEvents into the current EngineState snapshot."
+  - export: StateManager
+    signature: "class StateManager"
+    file: src/core/state/state-manager.ts
+    description: "Manages reading, appending, and state reduction for .crewmate/state.jsonl."
+invariants:
+  - "State is derived purely by reducing the append-only events log (.crewmate/state.jsonl)."
+  - "Corrupted lines in state.jsonl cause immediate parse errors rather than undefined state."
+  - "Append operations automatically create parent directories if they do not exist."
+declared_consumers:
+  - engine

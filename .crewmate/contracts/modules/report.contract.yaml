@@ -1,0 +1,22 @@
+module: report
+status: final
+version: "1.0.0"
+public_api:
+  - export: WorkflowRunReport
+    signature: "interface WorkflowRunReport"
+    file: src/core/report/report-manager.ts
+    description: "Comprehensive workflow execution report covering transitions, gate checks, activities, and tasks."
+  - export: ReportSummaryItem
+    signature: "interface ReportSummaryItem"
+    file: src/core/report/report-manager.ts
+    description: "Concise summary item for listing workflow run reports."
+  - export: ReportManager
+    signature: "class ReportManager"
+    file: src/core/report/report-manager.ts
+    description: "Generates, formats, persists, and lists workflow run reports."
+invariants:
+  - "Run reports are persisted in both structured JSON and human-readable Markdown format."
+  - "The latest report is always updated at .crewmate/reports/latest.json."
+declared_consumers:
+  - archive
+  - engine

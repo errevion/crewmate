@@ -1,0 +1,33 @@
+id: contract
+instructions: >
+  Author or reinforce all project contracts under .crewmate/contracts/ using the
+  Scout's codebase inventory.
+
+  Ensure .crewmate/contracts/index.yaml, architecture.yaml, capabilities.yaml,
+  and structure.yaml accurately reflect reality.
+
+  Create or update per-module contracts
+  (.crewmate/contracts/modules/<module>.contract.yaml) with complete public_api
+  exports, accurate signatures, invariants, and declared_consumers.
+
+  Set status: final on all validated contracts conforming to
+  .crewmate/contracts/SCHEMA.md.
+
+  Do NOT modify application source code.
+inputs:
+  - discovery_context
+  - contract_refs
+subagent:
+  role: contractor
+  agent: contractor
+  scope: contracts-write
+guardrails:
+  pre: []
+  post:
+    - type: hard
+      run: crewmate scan arch
+    - type: hard
+      run: crewmate scan dead-code
+on_fail: route(scout)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

@@ -1,0 +1,172 @@
+module: engine
+status: final
+version: "1.0.0"
+public_api:
+  - export: InitResult
+    signature: "interface InitResult"
+    file: src/core/engine/engine.ts
+    description: "Result of engine workspace initialization."
+  - export: StatusResult
+    signature: "interface StatusResult"
+    file: src/core/engine/engine.ts
+    description: "Current workflow status, retry counts, gate results, and active instructions."
+  - export: ContextBundle
+    signature: "interface ContextBundle"
+    file: src/core/engine/engine.ts
+    description: "Tiered context bundle containing Tier 0, Tier 1, and Tier 2 contracts for active node."
+  - export: GateCheckOptions
+    signature: "interface GateCheckOptions"
+    file: src/core/engine/engine.ts
+    description: "Options for evaluating pre- or post-gates on a node."
+  - export: GateCheckResult
+    signature: "interface GateCheckResult"
+    file: src/core/engine/engine.ts
+    description: "Outcome of gate checks evaluation."
+  - export: AdvanceResult
+    signature: "interface AdvanceResult"
+    file: src/core/engine/engine.ts
+    description: "Result of advancing the workflow engine to the next node."
+  - export: WorkflowInfo
+    signature: "interface WorkflowInfo"
+    file: src/core/engine/engine.ts
+    description: "Summary information for an available workflow."
+  - export: WorkflowRunResult
+    signature: "interface WorkflowRunResult"
+    file: src/core/engine/engine.ts
+    description: "Result of starting or switching to a workflow run."
+  - export: WorkflowResetResult
+    signature: "interface WorkflowResetResult"
+    file: src/core/engine/engine.ts
+    description: "Result of resetting a workflow run."
+  - export: WorkflowValidationIssue
+    signature: "interface WorkflowValidationIssue"
+    file: src/core/engine/engine.ts
+    description: "Error or warning issue found during workflow validation."
+  - export: WorkflowValidationResult
+    signature: "interface WorkflowValidationResult"
+    file: src/core/engine/engine.ts
+    description: "Complete validation result for a workflow graph and its node files."
+  - export: WorkflowCreateOptions
+    signature: "interface WorkflowCreateOptions"
+    file: src/core/engine/engine.ts
+    description: "Options for creating a new workflow template."
+  - export: WorkflowCreateResult
+    signature: "interface WorkflowCreateResult"
+    file: src/core/engine/engine.ts
+    description: "Result of creating a new workflow directory and node templates."
+  - export: CrewmateEngine
+    signature: "class CrewmateEngine"
+    file: src/core/engine/engine.ts
+    description: "Core workflow orchestrator managing state, gates, transitions, tasks, and context bundles."
+  - export: DEFAULT_INDEX_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default YAML template for index.yaml."
+  - export: DEFAULT_ARCHITECTURE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default YAML template for architecture.yaml."
+  - export: DEFAULT_STRUCTURE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default YAML template for structure.yaml."
+  - export: DEFAULT_CAPABILITIES_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default YAML template for capabilities.yaml."
+  - export: DEFAULT_EXAMPLE_INDEX_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Example index manifest template."
+  - export: DEFAULT_EXAMPLE_ARCHITECTURE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Example architecture rules template."
+  - export: DEFAULT_EXAMPLE_CAPABILITIES_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Example capabilities template."
+  - export: DEFAULT_EXAMPLE_CONTRACT_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Example module contract template."
+  - export: DEFAULT_SCHEMA_MD
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Embedded contract schema reference documentation."
+  - export: DEFAULT_GRAPH_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default workflow graph definition template."
+  - export: DEFAULT_SCOUT_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default scout node definition template."
+  - export: DEFAULT_CLARIFY_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default clarify node definition template."
+  - export: DEFAULT_PLAN_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default plan node definition template."
+  - export: DEFAULT_EXECUTE_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default execute node definition template."
+  - export: DEFAULT_CONTRACT_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default contract node definition template."
+  - export: DEFAULT_VERIFY_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default verify node definition template."
+  - export: SYNC_GRAPH_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Contract synchronization workflow graph template."
+  - export: SYNC_SCOUT_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Scout node template for contract synchronization workflow."
+  - export: SYNC_CONTRACT_NODE_YAML
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Contract node template for contract synchronization workflow."
+  - export: generateOpenCodePluginTs
+    signature: "(fallbackAdapterUrl?: string) => string"
+    file: src/core/engine/scaffold.ts
+    description: "Generates TypeScript source for OpenCode plugin registration."
+  - export: DEFAULT_MATTE_AGENT_MD
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default system prompt markdown for Matte orchestrator agent."
+  - export: DEFAULT_SCOUT_AGENT_MD
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default system prompt markdown for Scout agent."
+  - export: DEFAULT_PLANNER_AGENT_MD
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default system prompt markdown for Planner agent."
+  - export: DEFAULT_BUILDER_AGENT_MD
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default system prompt markdown for Builder agent."
+  - export: DEFAULT_CONTRACTOR_AGENT_MD
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default system prompt markdown for Contractor agent."
+  - export: DEFAULT_VERIFIER_AGENT_MD
+    signature: "string"
+    file: src/core/engine/scaffold.ts
+    description: "Default system prompt markdown for Verifier agent."
+invariants:
+  - "Workflow state transitions follow graph definitions strictly unless overridden."
+  - "Pre- and post-gate checks are evaluated before advancing between workflow nodes."
+  - "Subagent roles and scopes are enforced according to active node definitions."
+  - "Engine initializes default scaffolding for contracts, workflows, and subagent directives."
+declared_consumers:
+  - cli
+  - opencode-adapter
