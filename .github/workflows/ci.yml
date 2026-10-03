@@ -51,7 +51,7 @@ jobs:
 
       - name: Cache Rust binary
         id: rust-binary-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             crates/crewmate-watch/target/release/crewmate-watch
