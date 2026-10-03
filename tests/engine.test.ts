@@ -8,7 +8,9 @@ import { CrewmateEngine } from "../src/core/engine/engine.js";
 
 describe("CrewmateEngine Core", () => {
   it("initializes project workspace and reads status", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-engine-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-engine-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       const initResult = await engine.init();
@@ -16,19 +18,56 @@ describe("CrewmateEngine Core", () => {
       assert.ok(initResult.filesCreated.length > 5);
 
       // Verify contracts and workflow are inside .crewmate/
-      assert.ok(initResult.filesCreated.includes(".crewmate/contracts/index.yaml"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/contracts/SCHEMA.md"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/workflows/feature-pipeline/graph.yaml"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/workflows/feature-pipeline/nodes/scout.node.yaml"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/workflows/feature-pipeline/nodes/clarify.node.yaml"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/workflows/feature-pipeline/nodes/contract.node.yaml"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/workflows/contract-sync/graph.yaml"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/workflows/contract-sync/nodes/scout.node.yaml"));
-      assert.ok(initResult.filesCreated.includes(".crewmate/workflows/contract-sync/nodes/contract.node.yaml"));
-      assert.ok(!initResult.filesCreated.includes(".crewmate/workflow/graph.yaml"));
+      assert.ok(
+        initResult.filesCreated.includes(".crewmate/contracts/index.yaml"),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(".crewmate/contracts/SCHEMA.md"),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(
+          ".crewmate/workflows/feature-pipeline/graph.yaml",
+        ),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(
+          ".crewmate/workflows/feature-pipeline/nodes/scout.node.yaml",
+        ),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(
+          ".crewmate/workflows/feature-pipeline/nodes/clarify.node.yaml",
+        ),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(
+          ".crewmate/workflows/feature-pipeline/nodes/contract.node.yaml",
+        ),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(
+          ".crewmate/workflows/contract-sync/graph.yaml",
+        ),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(
+          ".crewmate/workflows/contract-sync/nodes/scout.node.yaml",
+        ),
+      );
+      assert.ok(
+        initResult.filesCreated.includes(
+          ".crewmate/workflows/contract-sync/nodes/contract.node.yaml",
+        ),
+      );
+      assert.ok(
+        !initResult.filesCreated.includes(".crewmate/workflow/graph.yaml"),
+      );
 
       // Verify SCHEMA.md content
-      const schemaMd = await fs.readFile(path.join(tmpDir, ".crewmate", "contracts", "SCHEMA.md"), "utf-8");
+      const schemaMd = await fs.readFile(
+        path.join(tmpDir, ".crewmate", "contracts", "SCHEMA.md"),
+        "utf-8",
+      );
       assert.ok(schemaMd.includes("Crewmate Contract System Specification"));
       assert.ok(schemaMd.includes("modules/<module>.contract.yaml"));
       assert.ok(schemaMd.includes("public_api"));
@@ -36,23 +75,44 @@ describe("CrewmateEngine Core", () => {
       assert.ok(schemaMd.includes("status: final"));
 
       // Verify OpenCode project-wide plugin .ts was installed
-      assert.ok(initResult.filesCreated.includes(".opencode/plugins/crewmate.ts"));
-      assert.ok(!initResult.filesCreated.includes(".opencode/plugins/crewmate.js"));
+      assert.ok(
+        initResult.filesCreated.includes(".opencode/plugins/crewmate.ts"),
+      );
+      assert.ok(
+        !initResult.filesCreated.includes(".opencode/plugins/crewmate.js"),
+      );
 
-      const pluginTsContent = await fs.readFile(path.join(tmpDir, ".opencode", "plugins", "crewmate.ts"), "utf-8");
+      const pluginTsContent = await fs.readFile(
+        path.join(tmpDir, ".opencode", "plugins", "crewmate.ts"),
+        "utf-8",
+      );
       assert.ok(pluginTsContent.includes("crewmate/plugin"));
       assert.ok(pluginTsContent.includes("adapters/opencode/index.js"));
 
       // Verify OpenCode Matte agent was installed
       assert.ok(initResult.filesCreated.includes(".opencode/agents/matte.md"));
-      const matteContent = await fs.readFile(path.join(tmpDir, ".opencode", "agents", "matte.md"), "utf-8");
+      const matteContent = await fs.readFile(
+        path.join(tmpDir, ".opencode", "agents", "matte.md"),
+        "utf-8",
+      );
       assert.ok(matteContent.includes("Matte"));
       assert.ok(matteContent.includes("edit: deny"));
 
       // Verify OpenCode workflow subagents were installed
-      for (const sub of ["scout", "planner", "builder", "contractor", "verifier"]) {
-        assert.ok(initResult.filesCreated.includes(`.opencode/agents/${sub}.md`));
-        const subContent = await fs.readFile(path.join(tmpDir, ".opencode", "agents", `${sub}.md`), "utf-8");
+      for (const sub of [
+        "scout",
+        "planner",
+        "builder",
+        "contractor",
+        "verifier",
+      ]) {
+        assert.ok(
+          initResult.filesCreated.includes(`.opencode/agents/${sub}.md`),
+        );
+        const subContent = await fs.readFile(
+          path.join(tmpDir, ".opencode", "agents", `${sub}.md`),
+          "utf-8",
+        );
         assert.ok(subContent.includes("mode: subagent"));
         assert.ok(!subContent.includes("hidden: true"));
         if (sub === "planner") {
@@ -62,7 +122,7 @@ describe("CrewmateEngine Core", () => {
         if (["scout", "planner", "builder", "contractor"].includes(sub)) {
           assert.ok(
             subContent.includes("SCHEMA.md"),
-            `Subagent ${sub}.md must reference .crewmate/contracts/SCHEMA.md`
+            `Subagent ${sub}.md must reference .crewmate/contracts/SCHEMA.md`,
           );
         }
       }
@@ -78,10 +138,22 @@ describe("CrewmateEngine Core", () => {
       assert.equal(contractDef.subagent?.scope, "contracts-write");
 
       // Default init should NOT scaffold example contract
-      assert.ok(!initResult.filesCreated.includes(".crewmate/contracts/modules/example.contract.yaml"));
+      assert.ok(
+        !initResult.filesCreated.includes(
+          ".crewmate/contracts/modules/example.contract.yaml",
+        ),
+      );
       let exampleExists = false;
       try {
-        await fs.access(path.join(tmpDir, ".crewmate", "contracts", "modules", "example.contract.yaml"));
+        await fs.access(
+          path.join(
+            tmpDir,
+            ".crewmate",
+            "contracts",
+            "modules",
+            "example.contract.yaml",
+          ),
+        );
         exampleExists = true;
       } catch {
         exampleExists = false;
@@ -101,7 +173,9 @@ describe("CrewmateEngine Core", () => {
   });
 
   it("preserves existing opencode.json settings", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-existing-opencode-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-existing-opencode-"),
+    );
     try {
       // Create existing opencode.json with a custom plugin and setting
       const existingConfig = {
@@ -109,14 +183,20 @@ describe("CrewmateEngine Core", () => {
         customSetting: true,
         plugins: ["existing-plugin"],
       };
-      await fs.writeFile(path.join(tmpDir, "opencode.json"), JSON.stringify(existingConfig, null, 2), "utf-8");
+      await fs.writeFile(
+        path.join(tmpDir, "opencode.json"),
+        JSON.stringify(existingConfig, null, 2),
+        "utf-8",
+      );
 
       const engine = new CrewmateEngine(tmpDir);
       const initResult = await engine.init();
       assert.equal(initResult.initialized, true);
 
       // Verify opencode.json custom settings were preserved
-      const updatedConfig = JSON.parse(await fs.readFile(path.join(tmpDir, "opencode.json"), "utf-8"));
+      const updatedConfig = JSON.parse(
+        await fs.readFile(path.join(tmpDir, "opencode.json"), "utf-8"),
+      );
       assert.equal(updatedConfig.customSetting, true);
       assert.ok(updatedConfig.plugins.includes("existing-plugin"));
     } finally {
@@ -125,15 +205,27 @@ describe("CrewmateEngine Core", () => {
   });
 
   it("scaffolds example contract when { example: true } is passed", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-example-init-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-example-init-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       const res = await engine.init({ example: true });
-      assert.ok(res.filesCreated.includes(".crewmate/contracts/modules/example.contract.yaml"));
+      assert.ok(
+        res.filesCreated.includes(
+          ".crewmate/contracts/modules/example.contract.yaml",
+        ),
+      );
 
       const exampleContract = await fs.readFile(
-        path.join(tmpDir, ".crewmate", "contracts", "modules", "example.contract.yaml"),
-        "utf-8"
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "contracts",
+          "modules",
+          "example.contract.yaml",
+        ),
+        "utf-8",
       );
       assert.ok(exampleContract.includes("status: final"));
     } finally {
@@ -142,7 +234,9 @@ describe("CrewmateEngine Core", () => {
   });
 
   it("assembles tiered context bundle", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-context-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-context-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -150,7 +244,11 @@ describe("CrewmateEngine Core", () => {
       const context = await engine.context("plan");
       assert.equal(context.nodeId, "plan");
       assert.ok(context.tier0.index.modules.some((m) => m.name === "example"));
-      assert.ok(context.tier0.capabilities.capabilities.some((c) => c.name === "example-feature"));
+      assert.ok(
+        context.tier0.capabilities.capabilities.some(
+          (c) => c.name === "example-feature",
+        ),
+      );
       assert.ok(context.tier1.contracts["example"]);
       assert.ok(context.tier2.architecture.modules["example"]);
       assert.ok(context.formatted.includes("CREWMATE CONTEXT [NODE: PLAN]"));
@@ -161,7 +259,9 @@ describe("CrewmateEngine Core", () => {
   });
 
   it("queries single fields from module contracts", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-query-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-query-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -184,10 +284,19 @@ describe("CrewmateEngine Core", () => {
         },
         (err: Error) => {
           return (
-            err.message.includes("Module contract not found for 'non_existent'") &&
-            err.message.includes(path.join(".crewmate", "contracts", "modules", "non_existent.contract.yaml"))
+            err.message.includes(
+              "Module contract not found for 'non_existent'",
+            ) &&
+            err.message.includes(
+              path.join(
+                ".crewmate",
+                "contracts",
+                "modules",
+                "non_existent.contract.yaml",
+              ),
+            )
           );
-        }
+        },
       );
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
@@ -195,21 +304,37 @@ describe("CrewmateEngine Core", () => {
   });
 
   it("resolves contract paths canonically under .crewmate/contracts/", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-contract-path-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-contract-path-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
 
       // Even for a non-existent file, it resolves canonically inside .crewmate/contracts/
-      const resolved = await engine.resolveContractPath("modules", "test.contract.yaml");
-      assert.equal(resolved, path.join(tmpDir, ".crewmate", "contracts", "modules", "test.contract.yaml"));
+      const resolved = await engine.resolveContractPath(
+        "modules",
+        "test.contract.yaml",
+      );
+      assert.equal(
+        resolved,
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "contracts",
+          "modules",
+          "test.contract.yaml",
+        ),
+      );
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("performs manual goto override", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-goto-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-goto-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -226,7 +351,9 @@ describe("CrewmateEngine Core", () => {
   });
 
   it("advances through phases and handles gate checks and fail-routing", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-advance-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-advance-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -236,7 +363,7 @@ describe("CrewmateEngine Core", () => {
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "index.ts"),
         "export function exampleFn(): void { console.log('hello'); }\n",
-        "utf-8"
+        "utf-8",
       );
 
       // Current is scout. Advance -> clarify
@@ -268,7 +395,7 @@ describe("CrewmateEngine Core", () => {
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "dead.ts"),
         "export function unusedDeadFunction(): void {}\n",
-        "utf-8"
+        "utf-8",
       );
 
       // Verify post-gate (crewmate scan dead-code) should fail!

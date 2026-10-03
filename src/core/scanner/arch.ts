@@ -2,8 +2,17 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import ts from "typescript";
 import * as yaml from "yaml";
-import { ArchitectureSchema, IndexManifestSchema } from "../schemas/contracts.js";
-import { getFilesRecursively, isSourceFile, resolveContractPath } from "../utils/fs.js";
+import {
+  type Architecture,
+  ArchitectureSchema,
+  type IndexManifest,
+  IndexManifestSchema,
+} from "../schemas/contracts.js";
+import {
+  getFilesRecursively,
+  isSourceFile,
+  resolveContractPath,
+} from "../utils/fs.js";
 
 export interface ArchViolation {
   file: string;
@@ -25,25 +34,32 @@ export interface ArchScanResult {
 /**
  * Scan codebase imports using TypeScript Compiler API and verify against contracts/architecture.yaml
  */
-export async function scanArchitecture(projectRoot: string = process.cwd()): Promise<ArchScanResult> {
+export async function scanArchitecture(
+  projectRoot: string = process.cwd(),
+): Promise<ArchScanResult> {
   const archFile = await resolveContractPath(projectRoot, "architecture.yaml");
   const indexFile = await resolveContractPath(projectRoot, "index.yaml");
 
-  let arch;
-  let index;
+  let arch: Architecture;
+  let index: IndexManifest;
   try {
     const archContent = await fs.readFile(archFile, "utf-8");
     arch = ArchitectureSchema.parse(yaml.parse(archContent));
     const indexContent = await fs.readFile(indexFile, "utf-8");
     index = IndexManifestSchema.parse(yaml.parse(indexContent));
   } catch (err) {
-    throw new Error(`Failed to load architecture contracts: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `Failed to load architecture contracts: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // Map module paths: e.g. "src/auth" -> "auth"
   const moduleByPath: Record<string, string> = {};
   for (const mod of index.modules) {
-    const norm = path.normalize(mod.path).replace(/^[\\/]+|[\\/]+$/g, "").replace(/\\/g, "/");
+    const norm = path
+      .normalize(mod.path)
+      .replace(/^[\\/]+|[\\/]+$/g, "")
+      .replace(/\\/g, "/");
     moduleByPath[norm] = mod.name;
   }
 
@@ -67,7 +83,12 @@ export async function scanArchitecture(projectRoot: string = process.cwd()): Pro
     }
 
     const content = await fs.readFile(file, "utf-8");
-    const sourceFile = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+    const sourceFile = ts.createSourceFile(
+      file,
+      content,
+      ts.ScriptTarget.Latest,
+      true,
+    );
 
     const checkSpecifier = (specifier: string, node: ts.Node) => {
       let resolvedTargetModule: string | undefined = undefined;
@@ -75,12 +96,18 @@ export async function scanArchitecture(projectRoot: string = process.cwd()): Pro
       // Handle relative imports
       if (specifier.startsWith(".")) {
         const targetAbs = path.resolve(path.dirname(file), specifier);
-        const targetRel = path.relative(projectRoot, targetAbs).replace(/\\/g, "/");
+        const targetRel = path
+          .relative(projectRoot, targetAbs)
+          .replace(/\\/g, "/");
         resolvedTargetModule = determineModule(targetRel, moduleByPath);
       } else {
         // Direct module alias / bare specifier matching module name
         for (const [modPath, modName] of Object.entries(moduleByPath)) {
-          if (specifier === modName || specifier.startsWith(modName + "/") || specifier.startsWith(modPath + "/")) {
+          if (
+            specifier === modName ||
+            specifier.startsWith(modName + "/") ||
+            specifier.startsWith(modPath + "/")
+          ) {
             resolvedTargetModule = modName;
             break;
           }
@@ -90,7 +117,9 @@ export async function scanArchitecture(projectRoot: string = process.cwd()): Pro
       if (resolvedTargetModule && resolvedTargetModule !== sourceModule) {
         const allowed = arch.modules[sourceModule]?.allowed_dependencies || [];
         if (!allowed.includes(resolvedTargetModule)) {
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            node.getStart(),
+          );
           violations.push({
             file: relPath,
             line: line + 1,
@@ -100,7 +129,7 @@ export async function scanArchitecture(projectRoot: string = process.cwd()): Pro
             importSpecifier: specifier,
             allowed,
             message: `Module '${sourceModule}' violates architecture rules by importing from '${resolvedTargetModule}'. Allowed dependencies: [${allowed.join(
-              ", "
+              ", ",
             )}]`,
           });
         }
@@ -127,7 +156,10 @@ export async function scanArchitecture(projectRoot: string = process.cwd()): Pro
           if (firstArg && ts.isStringLiteral(firstArg)) {
             checkSpecifier(firstArg.text, node);
           }
-        } else if (ts.isIdentifier(node.expression) && node.expression.text === "require") {
+        } else if (
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === "require"
+        ) {
           const firstArg = node.arguments[0];
           if (firstArg && ts.isStringLiteral(firstArg)) {
             checkSpecifier(firstArg.text, node);
@@ -148,7 +180,10 @@ export async function scanArchitecture(projectRoot: string = process.cwd()): Pro
   };
 }
 
-function determineModule(relPath: string, moduleByPath: Record<string, string>): string | undefined {
+function determineModule(
+  relPath: string,
+  moduleByPath: Record<string, string>,
+): string | undefined {
   const normalized = path.normalize(relPath).replace(/\\/g, "/");
   for (const [modPath, modName] of Object.entries(moduleByPath)) {
     if (normalized === modPath || normalized.startsWith(modPath + "/")) {

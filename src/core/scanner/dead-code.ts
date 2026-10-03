@@ -2,10 +2,18 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import ts from "typescript";
 import * as yaml from "yaml";
-import { CapabilitiesSchema, IndexManifestSchema, ModuleContractSchema } from "../schemas/contracts.js";
+import {
+  CapabilitiesSchema,
+  IndexManifestSchema,
+  ModuleContractSchema,
+} from "../schemas/contracts.js";
 import { type ActivityProvenance } from "../schemas/activity.js";
 import { ActivityManager } from "../activity/activity-manager.js";
-import { getFilesRecursively, isSourceFile, resolveContractPath } from "../utils/fs.js";
+import {
+  getFilesRecursively,
+  isSourceFile,
+  resolveContractPath,
+} from "../utils/fs.js";
 
 export interface SafeDeleteCandidate {
   file: string;
@@ -50,25 +58,42 @@ interface ExportItem {
 /**
  * Scan codebase for unreferenced code and cross-reference with module contracts.
  */
-export async function scanDeadCode(projectRoot: string = process.cwd()): Promise<DeadCodeScanResult> {
+export async function scanDeadCode(
+  projectRoot: string = process.cwd(),
+): Promise<DeadCodeScanResult> {
   const contractsDir = await resolveContractPath(projectRoot, "modules");
   const indexFile = await resolveContractPath(projectRoot, "index.yaml");
-  const capabilitiesFile = await resolveContractPath(projectRoot, "capabilities.yaml");
+  const capabilitiesFile = await resolveContractPath(
+    projectRoot,
+    "capabilities.yaml",
+  );
 
   // Public surface set: maps "file:symbol" or "symbol" or "file" to source contract/feature
-  const declaredPublicMap = new Map<string, { source: string; type: "contract" | "surface" | "capability" }>();
+  const declaredPublicMap = new Map<
+    string,
+    { source: string; type: "contract" | "surface" | "capability" }
+  >();
 
   // 1. Load module contracts
   try {
     const files = await fs.readdir(contractsDir);
     for (const file of files) {
       if (file.endsWith(".contract.yaml")) {
-        const content = await fs.readFile(path.join(contractsDir, file), "utf-8");
+        const content = await fs.readFile(
+          path.join(contractsDir, file),
+          "utf-8",
+        );
         const contract = ModuleContractSchema.parse(yaml.parse(content));
         for (const api of contract.public_api) {
           const normFile = path.normalize(api.file).replace(/\\/g, "/");
-          declaredPublicMap.set(`${normFile}:${api.export}`, { source: contract.module, type: "contract" });
-          declaredPublicMap.set(api.export, { source: contract.module, type: "contract" });
+          declaredPublicMap.set(`${normFile}:${api.export}`, {
+            source: contract.module,
+            type: "contract",
+          });
+          declaredPublicMap.set(api.export, {
+            source: contract.module,
+            type: "contract",
+          });
         }
       }
     }
@@ -99,10 +124,19 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
         const [epFile, epSymbol] = cap.entrypoint.split(":");
         const normFile = path.normalize(epFile).replace(/\\/g, "/");
         if (epSymbol) {
-          declaredPublicMap.set(`${normFile}:${epSymbol}`, { source: cap.name, type: "capability" });
-          declaredPublicMap.set(epSymbol, { source: cap.name, type: "capability" });
+          declaredPublicMap.set(`${normFile}:${epSymbol}`, {
+            source: cap.name,
+            type: "capability",
+          });
+          declaredPublicMap.set(epSymbol, {
+            source: cap.name,
+            type: "capability",
+          });
         } else {
-          declaredPublicMap.set(normFile, { source: cap.name, type: "capability" });
+          declaredPublicMap.set(normFile, {
+            source: cap.name,
+            type: "capability",
+          });
         }
       }
     }
@@ -115,28 +149,46 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
   const allFiles = await getFilesRecursively(srcDir);
   const codeFiles = allFiles.filter(isSourceFile);
 
-  const parsedSourceFiles = new Map<string, { sourceFile: ts.SourceFile; relPath: string }>();
+  const parsedSourceFiles = new Map<
+    string,
+    { sourceFile: ts.SourceFile; relPath: string }
+  >();
 
   for (const absFile of codeFiles) {
     const content = await fs.readFile(absFile, "utf-8");
     const relPath = path.relative(projectRoot, absFile).replace(/\\/g, "/");
-    const sf = ts.createSourceFile(absFile, content, ts.ScriptTarget.Latest, true);
+    const sf = ts.createSourceFile(
+      absFile,
+      content,
+      ts.ScriptTarget.Latest,
+      true,
+    );
     parsedSourceFiles.set(absFile, { sourceFile: sf, relPath });
   }
 
   // 5. Extract all declared exports using AST
   const exportsFound: ExportItem[] = [];
 
-  for (const [absFile, { sourceFile, relPath }] of parsedSourceFiles.entries()) {
+  for (const [
+    absFile,
+    { sourceFile, relPath },
+  ] of parsedSourceFiles.entries()) {
     const extractExports = (node: ts.Node) => {
-      const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+      const modifiers = ts.canHaveModifiers(node)
+        ? ts.getModifiers(node)
+        : undefined;
       const isExported =
-        modifiers && modifiers.some((m: ts.ModifierLike) => m.kind === ts.SyntaxKind.ExportKeyword);
+        modifiers &&
+        modifiers.some(
+          (m: ts.ModifierLike) => m.kind === ts.SyntaxKind.ExportKeyword,
+        );
 
       if (isExported) {
         // Function declaration
         if (ts.isFunctionDeclaration(node) && node.name) {
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.name.getStart());
+          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            node.name.getStart(),
+          );
           exportsFound.push({
             file: absFile,
             relFile: relPath,
@@ -147,7 +199,9 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
         }
         // Class declaration
         else if (ts.isClassDeclaration(node) && node.name) {
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.name.getStart());
+          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            node.name.getStart(),
+          );
           exportsFound.push({
             file: absFile,
             relFile: relPath,
@@ -160,7 +214,8 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
         else if (ts.isVariableStatement(node)) {
           for (const decl of node.declarationList.declarations) {
             if (ts.isIdentifier(decl.name)) {
-              const { line, character } = sourceFile.getLineAndCharacterOfPosition(decl.name.getStart());
+              const { line, character } =
+                sourceFile.getLineAndCharacterOfPosition(decl.name.getStart());
               exportsFound.push({
                 file: absFile,
                 relFile: relPath,
@@ -172,8 +227,14 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
           }
         }
         // Type alias or Interface
-        else if ((ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) && node.name) {
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.name.getStart());
+        else if (
+          (ts.isTypeAliasDeclaration(node) ||
+            ts.isInterfaceDeclaration(node)) &&
+          node.name
+        ) {
+          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            node.name.getStart(),
+          );
           exportsFound.push({
             file: absFile,
             relFile: relPath,
@@ -184,7 +245,9 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
         }
         // Enum
         else if (ts.isEnumDeclaration(node) && node.name) {
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.name.getStart());
+          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            node.name.getStart(),
+          );
           exportsFound.push({
             file: absFile,
             relFile: relPath,
@@ -196,9 +259,15 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
       }
 
       // export { A, B as C }
-      if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+      if (
+        ts.isExportDeclaration(node) &&
+        node.exportClause &&
+        ts.isNamedExports(node.exportClause)
+      ) {
         for (const element of node.exportClause.elements) {
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(element.name.getStart());
+          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            element.name.getStart(),
+          );
           exportsFound.push({
             file: absFile,
             relFile: relPath,
@@ -230,7 +299,8 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
         if (ts.isIdentifier(node) && node.text === exp.symbol) {
           // If in the declaring file, ignore the declaration node itself
           if (isDeclaringFile) {
-            const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+            const { line, character } =
+              sourceFile.getLineAndCharacterOfPosition(node.getStart());
             if (line + 1 === exp.line && character + 1 === exp.column) {
               // This is the declaration itself
               return;
@@ -271,7 +341,8 @@ export async function scanDeadCode(projectRoot: string = process.cwd()): Promise
           line: exp.line,
           column: exp.column,
           confidence: "high",
-          reason: "Unreferenced across codebase and not declared in any contract or capability.",
+          reason:
+            "Unreferenced across codebase and not declared in any contract or capability.",
         });
       }
     }

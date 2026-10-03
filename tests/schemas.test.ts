@@ -46,7 +46,10 @@ describe("Contract Schemas", () => {
       },
     };
     const parsed = ArchitectureSchema.parse(valid);
-    assert.deepEqual(parsed.modules.auth.allowed_dependencies, ["db", "config"]);
+    assert.deepEqual(parsed.modules.auth.allowed_dependencies, [
+      "db",
+      "config",
+    ]);
   });
 
   it("validates StructureSchema", () => {

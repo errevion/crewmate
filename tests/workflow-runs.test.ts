@@ -51,7 +51,9 @@ gates:
 
 describe("Multi-Workflow Orchestration and Run Reports", () => {
   it("scaffolds multi-workflows and lists them", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -77,7 +79,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("switches workflows, generates superseded run report, and syncs active workflow files", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -85,10 +89,26 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       // Create a secondary workflow under .crewmate/workflows/bugfix/
       const bugfixDir = path.join(tmpDir, ".crewmate", "workflows", "bugfix");
       await fs.mkdir(path.join(bugfixDir, "nodes"), { recursive: true });
-      await fs.writeFile(path.join(bugfixDir, "graph.yaml"), BUGFIX_GRAPH_YAML, "utf-8");
-      await fs.writeFile(path.join(bugfixDir, "nodes", "triage.node.yaml"), BUGFIX_TRIAGE_NODE_YAML, "utf-8");
-      await fs.writeFile(path.join(bugfixDir, "nodes", "patch.node.yaml"), BUGFIX_PATCH_NODE_YAML, "utf-8");
-      await fs.writeFile(path.join(bugfixDir, "nodes", "verify.node.yaml"), BUGFIX_VERIFY_NODE_YAML, "utf-8");
+      await fs.writeFile(
+        path.join(bugfixDir, "graph.yaml"),
+        BUGFIX_GRAPH_YAML,
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(bugfixDir, "nodes", "triage.node.yaml"),
+        BUGFIX_TRIAGE_NODE_YAML,
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(bugfixDir, "nodes", "patch.node.yaml"),
+        BUGFIX_PATCH_NODE_YAML,
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(bugfixDir, "nodes", "verify.node.yaml"),
+        BUGFIX_VERIFY_NODE_YAML,
+        "utf-8",
+      );
 
       // List workflows
       const workflows = await engine.listWorkflows();
@@ -144,7 +164,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("enforces idle safety guard when task locks are active", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -152,15 +174,25 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       // Create a second workflow
       const bugfixDir = path.join(tmpDir, ".crewmate", "workflows", "bugfix");
       await fs.mkdir(path.join(bugfixDir, "nodes"), { recursive: true });
-      await fs.writeFile(path.join(bugfixDir, "graph.yaml"), BUGFIX_GRAPH_YAML, "utf-8");
-      await fs.writeFile(path.join(bugfixDir, "nodes", "triage.node.yaml"), BUGFIX_TRIAGE_NODE_YAML, "utf-8");
+      await fs.writeFile(
+        path.join(bugfixDir, "graph.yaml"),
+        BUGFIX_GRAPH_YAML,
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(bugfixDir, "nodes", "triage.node.yaml"),
+        BUGFIX_TRIAGE_NODE_YAML,
+        "utf-8",
+      );
 
       // Initialize git repo for task start
       await execAsync("git init", { cwd: tmpDir });
-      await execAsync("git config user.name \"Test\"", { cwd: tmpDir });
-      await execAsync("git config user.email \"test@test.local\"", { cwd: tmpDir });
+      await execAsync('git config user.name "Test"', { cwd: tmpDir });
+      await execAsync('git config user.email "test@test.local"', {
+        cwd: tmpDir,
+      });
       await execAsync("git add .", { cwd: tmpDir });
-      await execAsync("git commit -m \"Initial\"", { cwd: tmpDir });
+      await execAsync('git commit -m "Initial"', { cwd: tmpDir });
 
       // Create and start task to lock files
       const task = await engine.createTask({
@@ -171,20 +203,14 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       await engine.startTask(task.id);
 
       // Attempting to switch workflow without force should be blocked
-      await assert.rejects(
-        async () => {
-          await engine.runWorkflow("bugfix");
-        },
-        /Cannot switch or run workflow while tasks are actively locked/
-      );
+      await assert.rejects(async () => {
+        await engine.runWorkflow("bugfix");
+      }, /Cannot switch or run workflow while tasks are actively locked/);
 
       // Attempting to reset workflow without force should also be blocked
-      await assert.rejects(
-        async () => {
-          await engine.resetWorkflow();
-        },
-        /Cannot reset workflow while tasks are actively locked/
-      );
+      await assert.rejects(async () => {
+        await engine.resetWorkflow();
+      }, /Cannot reset workflow while tasks are actively locked/);
 
       // With force: true, workflow switch should proceed
       const runRes = await engine.runWorkflow("bugfix", { force: true });
@@ -196,7 +222,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("handles resetWorkflow and generates reset run report", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -225,10 +253,15 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       assert.ok(resetResult.runId.startsWith("run_"));
       assert.ok(resetResult.previousRunReport);
       assert.equal(resetResult.previousRunReport?.status, "reset");
-      assert.equal(resetResult.previousRunReport?.reason, "Resetting run for fresh validation");
+      assert.equal(
+        resetResult.previousRunReport?.reason,
+        "Resetting run for fresh validation",
+      );
 
       // Verify report was generated in .crewmate/reports/
-      const report = await engine.getReport(resetResult.previousRunReport?.runId);
+      const report = await engine.getReport(
+        resetResult.previousRunReport?.runId,
+      );
       assert.ok(report);
       assert.equal(report.status, "reset");
       assert.equal(report.activities.length, 1);
@@ -245,7 +278,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("automatically generates completion report when workflow reaches done", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -282,7 +317,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("executes CLI commands: workflow list, run, reset, report", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-test-"),
+    );
     const cliPath = path.resolve("dist/src/cli/index.js");
 
     try {
@@ -292,20 +329,31 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       // Add bugfix workflow
       const bugfixDir = path.join(tmpDir, ".crewmate", "workflows", "bugfix");
       await fs.mkdir(path.join(bugfixDir, "nodes"), { recursive: true });
-      await fs.writeFile(path.join(bugfixDir, "graph.yaml"), BUGFIX_GRAPH_YAML, "utf-8");
-      await fs.writeFile(path.join(bugfixDir, "nodes", "triage.node.yaml"), BUGFIX_TRIAGE_NODE_YAML, "utf-8");
+      await fs.writeFile(
+        path.join(bugfixDir, "graph.yaml"),
+        BUGFIX_GRAPH_YAML,
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(bugfixDir, "nodes", "triage.node.yaml"),
+        BUGFIX_TRIAGE_NODE_YAML,
+        "utf-8",
+      );
 
       // 1. crewmate workflow list --json
       const { stdout: listOut } = await execAsync(
-        `node "${cliPath}" workflow list --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow list --json -p "${tmpDir}"`,
       );
       const listData = JSON.parse(listOut);
       assert.equal(listData.length, 3);
-      assert.equal(listData.find((w: any) => w.name === "feature-pipeline")?.active, true);
+      assert.equal(
+        listData.find((w: any) => w.name === "feature-pipeline")?.active,
+        true,
+      );
 
       // 2. crewmate workflow run bugfix --json
       const { stdout: runOut } = await execAsync(
-        `node "${cliPath}" workflow run bugfix --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow run bugfix --json -p "${tmpDir}"`,
       );
       const runData = JSON.parse(runOut);
       assert.equal(runData.workflow, "bugfix");
@@ -313,7 +361,7 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // 3. crewmate workflow reset --json
       const { stdout: resetOut } = await execAsync(
-        `node "${cliPath}" workflow reset --reason "test reset" --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow reset --reason "test reset" --json -p "${tmpDir}"`,
       );
       const resetData = JSON.parse(resetOut);
       assert.equal(resetData.workflow, "bugfix");
@@ -321,7 +369,7 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // 4. crewmate workflow report --json
       const { stdout: repOut } = await execAsync(
-        `node "${cliPath}" workflow report --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow report --json -p "${tmpDir}"`,
       );
       const repData = JSON.parse(repOut);
       assert.ok(repData.runId);
@@ -332,7 +380,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("executes native plugin tools for workflow orchestration", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -340,8 +390,16 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       // Add a bugfix workflow
       const bugfixDir = path.join(tmpDir, ".crewmate", "workflows", "bugfix");
       await fs.mkdir(path.join(bugfixDir, "nodes"), { recursive: true });
-      await fs.writeFile(path.join(bugfixDir, "graph.yaml"), BUGFIX_GRAPH_YAML, "utf-8");
-      await fs.writeFile(path.join(bugfixDir, "nodes", "triage.node.yaml"), BUGFIX_TRIAGE_NODE_YAML, "utf-8");
+      await fs.writeFile(
+        path.join(bugfixDir, "graph.yaml"),
+        BUGFIX_GRAPH_YAML,
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(bugfixDir, "nodes", "triage.node.yaml"),
+        BUGFIX_TRIAGE_NODE_YAML,
+        "utf-8",
+      );
 
       const registeredTools: Record<string, any> = {};
       const mockPluginCtx: any = {
@@ -367,7 +425,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
         await crewmatePlugin.setup(mockPluginCtx);
 
         // 1. Execute crewmate_workflow_list
-        const listRes = await registeredTools["crewmate_workflow_list"].execute({});
+        const listRes = await registeredTools["crewmate_workflow_list"].execute(
+          {},
+        );
         const workflows = JSON.parse(listRes.content);
         assert.equal(workflows.length, 3);
 
@@ -380,7 +440,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
         assert.equal(runData.initialNode, "triage");
 
         // 3. Execute crewmate_workflow_reset
-        const resetRes = await registeredTools["crewmate_workflow_reset"].execute({
+        const resetRes = await registeredTools[
+          "crewmate_workflow_reset"
+        ].execute({
           reason: "Agent requested reset",
         });
         const resetData = JSON.parse(resetRes.content);
@@ -388,7 +450,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
         assert.equal(resetData.node, "triage");
 
         // 4. Execute crewmate_report_get
-        const reportRes = await registeredTools["crewmate_report_get"].execute({});
+        const reportRes = await registeredTools["crewmate_report_get"].execute(
+          {},
+        );
         const reportData = JSON.parse(reportRes.content);
         assert.ok(reportData.runId);
         assert.ok(reportData.workflow);
@@ -401,7 +465,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("switches to contract-sync workflow and advances scout -> contract -> done", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-sync-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-sync-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -433,8 +499,16 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       assert.equal(contractNode.id, "contract");
       assert.equal(contractNode.subagent?.role, "contractor");
       assert.equal(contractNode.subagent?.scope, "contracts-write");
-      assert.ok(contractNode.guardrails?.post?.some((g: any) => g.run?.includes("scan arch")));
-      assert.ok(contractNode.guardrails?.post?.some((g: any) => g.run?.includes("scan dead-code")));
+      assert.ok(
+        contractNode.guardrails?.post?.some((g: any) =>
+          g.run?.includes("scan arch"),
+        ),
+      );
+      assert.ok(
+        contractNode.guardrails?.post?.some((g: any) =>
+          g.run?.includes("scan dead-code"),
+        ),
+      );
 
       // Advance: contract -> done (post-gates run scanners)
       const adv2 = await engine.advance();
@@ -451,7 +525,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("validates workflows and detects structural, schema, and connectivity issues", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-validate-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-validate-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -475,66 +551,91 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       assert.ok(valNone.issues.some((i) => i.code === "WORKFLOW_NOT_FOUND"));
 
       // 4. Create a broken workflow: missing initial node in graph nodes list
-      const brokenDir = path.join(tmpDir, ".crewmate", "workflows", "broken-initial");
+      const brokenDir = path.join(
+        tmpDir,
+        ".crewmate",
+        "workflows",
+        "broken-initial",
+      );
       await fs.mkdir(path.join(brokenDir, "nodes"), { recursive: true });
       await fs.writeFile(
         path.join(brokenDir, "graph.yaml"),
         "version: '1.0.0'\nname: 'Broken'\ninitial: nonexistent\nnodes:\n  - id: step1\n    next: done\n",
-        "utf-8"
+        "utf-8",
       );
       await fs.writeFile(
         path.join(brokenDir, "nodes", "step1.node.yaml"),
         "id: step1\ninstructions: 'Test'\ninputs: []\nguardrails: { pre: [], post: [] }\n",
-        "utf-8"
+        "utf-8",
       );
 
       const valBrokenInit = await engine.validateWorkflow("broken-initial");
       assert.equal(valBrokenInit.valid, false);
-      assert.ok(valBrokenInit.issues.some((i) => i.code === "INVALID_INITIAL_NODE"));
+      assert.ok(
+        valBrokenInit.issues.some((i) => i.code === "INVALID_INITIAL_NODE"),
+      );
 
       // 5. Create a broken workflow: invalid next target
-      const brokenNextDir = path.join(tmpDir, ".crewmate", "workflows", "broken-next");
+      const brokenNextDir = path.join(
+        tmpDir,
+        ".crewmate",
+        "workflows",
+        "broken-next",
+      );
       await fs.mkdir(path.join(brokenNextDir, "nodes"), { recursive: true });
       await fs.writeFile(
         path.join(brokenNextDir, "graph.yaml"),
         "version: '1.0.0'\nname: 'Broken Next'\ninitial: step1\nnodes:\n  - id: step1\n    next: missing_target\n",
-        "utf-8"
+        "utf-8",
       );
       await fs.writeFile(
         path.join(brokenNextDir, "nodes", "step1.node.yaml"),
         "id: step1\ninstructions: 'Test'\ninputs: []\nguardrails: { pre: [], post: [] }\n",
-        "utf-8"
+        "utf-8",
       );
 
       const valBrokenNext = await engine.validateWorkflow("broken-next");
       assert.equal(valBrokenNext.valid, false);
-      assert.ok(valBrokenNext.issues.some((i) => i.code === "INVALID_NEXT_TARGET"));
+      assert.ok(
+        valBrokenNext.issues.some((i) => i.code === "INVALID_NEXT_TARGET"),
+      );
 
       // 6. Create a broken workflow: missing node definition file
-      const missingNodeDir = path.join(tmpDir, ".crewmate", "workflows", "missing-node-file");
+      const missingNodeDir = path.join(
+        tmpDir,
+        ".crewmate",
+        "workflows",
+        "missing-node-file",
+      );
       await fs.mkdir(path.join(missingNodeDir, "nodes"), { recursive: true });
       await fs.writeFile(
         path.join(missingNodeDir, "graph.yaml"),
         "version: '1.0.0'\nname: 'Missing Node File'\ninitial: step1\nnodes:\n  - id: step1\n    next: step2\n  - id: step2\n    next: done\n",
-        "utf-8"
+        "utf-8",
       );
       await fs.writeFile(
         path.join(missingNodeDir, "nodes", "step1.node.yaml"),
         "id: step1\ninstructions: 'Test'\ninputs: []\nguardrails: { pre: [], post: [] }\n",
-        "utf-8"
+        "utf-8",
       );
       // Notice: nodes/step2.node.yaml is NOT created!
 
       const valMissingNode = await engine.validateWorkflow("missing-node-file");
       assert.equal(valMissingNode.valid, false);
-      assert.ok(valMissingNode.issues.some((i) => i.code === "MISSING_NODE_FILE" && i.nodeId === "step2"));
+      assert.ok(
+        valMissingNode.issues.some(
+          (i) => i.code === "MISSING_NODE_FILE" && i.nodeId === "step2",
+        ),
+      );
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("creates new workflows via createWorkflow API and validates them", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-create-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-create-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -552,7 +653,10 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       assert.equal(res.validation.summary.errors, 0);
 
       // Verify files on disk
-      const graph = await fs.readFile(path.join(tmpDir, ".crewmate", "workflows", "hotfix", "graph.yaml"), "utf-8");
+      const graph = await fs.readFile(
+        path.join(tmpDir, ".crewmate", "workflows", "hotfix", "graph.yaml"),
+        "utf-8",
+      );
       assert.ok(graph.includes("name: Hotfix Pipeline"));
       assert.ok(graph.includes("initial: triage"));
       assert.ok(graph.includes("next: patch"));
@@ -561,33 +665,51 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // Verify node roles mapped sensibly
       const triageDef = await fs.readFile(
-        path.join(tmpDir, ".crewmate", "workflows", "hotfix", "nodes", "triage.node.yaml"),
-        "utf-8"
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "workflows",
+          "hotfix",
+          "nodes",
+          "triage.node.yaml",
+        ),
+        "utf-8",
       );
       assert.ok(triageDef.includes("role: scout"));
       assert.ok(triageDef.includes("scope: read-only"));
 
       const patchDef = await fs.readFile(
-        path.join(tmpDir, ".crewmate", "workflows", "hotfix", "nodes", "patch.node.yaml"),
-        "utf-8"
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "workflows",
+          "hotfix",
+          "nodes",
+          "patch.node.yaml",
+        ),
+        "utf-8",
       );
       assert.ok(patchDef.includes("role: builder"));
       assert.ok(patchDef.includes("scope: implementation"));
 
       const verifyDef = await fs.readFile(
-        path.join(tmpDir, ".crewmate", "workflows", "hotfix", "nodes", "verify.node.yaml"),
-        "utf-8"
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "workflows",
+          "hotfix",
+          "nodes",
+          "verify.node.yaml",
+        ),
+        "utf-8",
       );
       assert.ok(verifyDef.includes("role: verifier"));
       assert.ok(verifyDef.includes("scope: read-only"));
 
       // 2. Reject re-creation without force
-      await assert.rejects(
-        async () => {
-          await engine.createWorkflow("hotfix");
-        },
-        /already exists/
-      );
+      await assert.rejects(async () => {
+        await engine.createWorkflow("hotfix");
+      }, /already exists/);
 
       // 3. Overwrite with force
       const forceRes = await engine.createWorkflow("hotfix", {
@@ -599,18 +721,12 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
       assert.equal(forceRes.validation.valid, true);
 
       // 4. Reject invalid workflow names
-      await assert.rejects(
-        async () => {
-          await engine.createWorkflow("");
-        },
-        /cannot be empty/
-      );
-      await assert.rejects(
-        async () => {
-          await engine.createWorkflow("bad/name");
-        },
-        /Invalid workflow name/
-      );
+      await assert.rejects(async () => {
+        await engine.createWorkflow("");
+      }, /cannot be empty/);
+      await assert.rejects(async () => {
+        await engine.createWorkflow("bad/name");
+      }, /Invalid workflow name/);
 
       // 5. Run the created workflow
       const runRes = await engine.runWorkflow("hotfix");
@@ -622,7 +738,9 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
   });
 
   it("executes CLI commands: workflow create and workflow validate", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-wf-cli-create-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-wf-cli-create-"),
+    );
     const cliPath = path.resolve("dist/src/cli/index.js");
 
     try {
@@ -631,7 +749,7 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // 1. crewmate workflow validate --json (validate active workflow)
       const { stdout: valActiveOut } = await execAsync(
-        `node "${cliPath}" workflow validate --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow validate --json -p "${tmpDir}"`,
       );
       const valActiveData = JSON.parse(valActiveOut);
       assert.equal(valActiveData.workflow, "feature-pipeline");
@@ -639,7 +757,7 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // 2. crewmate workflow validate --all --json
       const { stdout: valAllOut } = await execAsync(
-        `node "${cliPath}" workflow validate --all --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow validate --all --json -p "${tmpDir}"`,
       );
       const valAllData = JSON.parse(valAllOut);
       assert.equal(valAllData.length, 2);
@@ -647,7 +765,7 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // 3. crewmate workflow create quickfix --nodes step1,step2 --json
       const { stdout: createOut } = await execAsync(
-        `node "${cliPath}" workflow create quickfix --nodes step1,step2 -d "Quick Fix" --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow create quickfix --nodes step1,step2 -d "Quick Fix" --json -p "${tmpDir}"`,
       );
       const createData = JSON.parse(createOut);
       assert.equal(createData.created, true);
@@ -657,7 +775,7 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // 4. Validate quickfix explicitly
       const { stdout: valQuickOut } = await execAsync(
-        `node "${cliPath}" workflow validate quickfix --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow validate quickfix --json -p "${tmpDir}"`,
       );
       const valQuickData = JSON.parse(valQuickOut);
       assert.equal(valQuickData.workflow, "quickfix");
@@ -665,7 +783,7 @@ describe("Multi-Workflow Orchestration and Run Reports", () => {
 
       // 5. Now list shows 3 workflows
       const { stdout: listOut } = await execAsync(
-        `node "${cliPath}" workflow list --json -p "${tmpDir}"`
+        `node "${cliPath}" workflow list --json -p "${tmpDir}"`,
       );
       const listData = JSON.parse(listOut);
       assert.equal(listData.length, 3);

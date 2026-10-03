@@ -4,7 +4,9 @@ import { spawnSync } from "node:child_process";
 
 const testsDir = path.resolve("dist/tests");
 if (!fs.existsSync(testsDir)) {
-  console.error("dist/tests directory not found. Did you forget to run 'npm run build'?");
+  console.error(
+    "dist/tests directory not found. Did you forget to run 'npm run build'?",
+  );
   process.exit(1);
 }
 

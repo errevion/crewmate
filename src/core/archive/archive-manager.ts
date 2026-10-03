@@ -96,14 +96,20 @@ export class ArchiveManager {
     }
 
     if (runEvents.length > 0) {
-      const archiveStateLines = runEvents.map((e) => JSON.stringify(e)).join("\n") + "\n";
-      await fs.writeFile(path.join(runArchiveDir, "state.jsonl"), archiveStateLines, "utf-8");
+      const archiveStateLines =
+        runEvents.map((e) => JSON.stringify(e)).join("\n") + "\n";
+      await fs.writeFile(
+        path.join(runArchiveDir, "state.jsonl"),
+        archiveStateLines,
+        "utf-8",
+      );
       filesArchived.push("state.jsonl");
 
       // Prune active state.jsonl if requested
       if (options.pruneActiveState) {
         if (remainingEvents.length > 0) {
-          const remainingLines = remainingEvents.map((e) => JSON.stringify(e)).join("\n") + "\n";
+          const remainingLines =
+            remainingEvents.map((e) => JSON.stringify(e)).join("\n") + "\n";
           await fs.writeFile(stateFile, remainingLines, "utf-8");
         } else {
           // When all events belonged to this run, leave empty state file
@@ -144,11 +150,19 @@ export class ArchiveManager {
     }
 
     // Also archive relevant tasks.jsonl lines
-    const tasksLogFile = path.join(this.projectRoot, ".crewmate", "tasks.jsonl");
+    const tasksLogFile = path.join(
+      this.projectRoot,
+      ".crewmate",
+      "tasks.jsonl",
+    );
     try {
       const taskLogContent = await fs.readFile(tasksLogFile, "utf-8");
       if (taskLogContent.trim().length > 0) {
-        await fs.writeFile(path.join(runArchiveDir, "tasks.jsonl"), taskLogContent, "utf-8");
+        await fs.writeFile(
+          path.join(runArchiveDir, "tasks.jsonl"),
+          taskLogContent,
+          "utf-8",
+        );
         filesArchived.push("tasks.jsonl");
       }
     } catch {
@@ -156,13 +170,23 @@ export class ArchiveManager {
     }
 
     // 3. Archive Activities
-    const activityLogFile = path.join(this.projectRoot, ".crewmate", "activity.jsonl");
+    const activityLogFile = path.join(
+      this.projectRoot,
+      ".crewmate",
+      "activity.jsonl",
+    );
     let activityCount = 0;
     try {
       const actContent = await fs.readFile(activityLogFile, "utf-8");
-      const actLines = actContent.split("\n").filter((l) => l.trim().length > 0);
+      const actLines = actContent
+        .split("\n")
+        .filter((l) => l.trim().length > 0);
       if (actLines.length > 0) {
-        await fs.writeFile(path.join(runArchiveDir, "activity.jsonl"), actContent, "utf-8");
+        await fs.writeFile(
+          path.join(runArchiveDir, "activity.jsonl"),
+          actContent,
+          "utf-8",
+        );
         filesArchived.push("activity.jsonl");
         activityCount = actLines.length;
       }
@@ -180,18 +204,27 @@ export class ArchiveManager {
       await fs.writeFile(
         path.join(runArchiveDir, "report.json"),
         JSON.stringify(options.report, null, 2),
-        "utf-8"
+        "utf-8",
       );
       filesArchived.push("report.json");
     } else {
       // Try to read existing report from .crewmate/reports/<runId>.json
-      const reportFile = path.join(this.projectRoot, ".crewmate", "reports", `${runId}.json`);
+      const reportFile = path.join(
+        this.projectRoot,
+        ".crewmate",
+        "reports",
+        `${runId}.json`,
+      );
       try {
         const repContent = await fs.readFile(reportFile, "utf-8");
         const parsedReport = JSON.parse(repContent);
         finalWorkflow = parsedReport.workflow || finalWorkflow;
         finalStatus = parsedReport.status || finalStatus;
-        await fs.writeFile(path.join(runArchiveDir, "report.json"), repContent, "utf-8");
+        await fs.writeFile(
+          path.join(runArchiveDir, "report.json"),
+          repContent,
+          "utf-8",
+        );
         filesArchived.push("report.json");
       } catch {
         // no report file found
@@ -213,7 +246,7 @@ export class ArchiveManager {
     await fs.writeFile(
       path.join(runArchiveDir, "manifest.json"),
       JSON.stringify(manifest, null, 2),
-      "utf-8"
+      "utf-8",
     );
 
     return manifest;
@@ -238,7 +271,10 @@ export class ArchiveManager {
         }
       }
 
-      manifests.sort((a, b) => new Date(b.archivedAt).getTime() - new Date(a.archivedAt).getTime());
+      manifests.sort(
+        (a, b) =>
+          new Date(b.archivedAt).getTime() - new Date(a.archivedAt).getTime(),
+      );
       return manifests;
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
@@ -265,7 +301,10 @@ export class ArchiveManager {
 
       let stateEvents: StateEvent[] = [];
       try {
-        const stateContent = await fs.readFile(path.join(runArchiveDir, "state.jsonl"), "utf-8");
+        const stateContent = await fs.readFile(
+          path.join(runArchiveDir, "state.jsonl"),
+          "utf-8",
+        );
         stateEvents = stateContent
           .split("\n")
           .filter((l) => l.trim().length > 0)
@@ -276,7 +315,10 @@ export class ArchiveManager {
 
       let report: WorkflowRunReport | undefined;
       try {
-        const reportContent = await fs.readFile(path.join(runArchiveDir, "report.json"), "utf-8");
+        const reportContent = await fs.readFile(
+          path.join(runArchiveDir, "report.json"),
+          "utf-8",
+        );
         report = JSON.parse(reportContent) as WorkflowRunReport;
       } catch {
         // optional

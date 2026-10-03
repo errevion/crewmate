@@ -4,7 +4,10 @@
  */
 export function matchGlob(pattern: string, filePath: string): boolean {
   const normalizedPattern = pattern.replace(/\\/g, "/").trim();
-  const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\.\//, "").trim();
+  const normalizedPath = filePath
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .trim();
 
   // Escape regex special chars except *
   let regexStr = "";

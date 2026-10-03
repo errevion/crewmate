@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-export const ActivityStatusSchema = z.enum(["completed", "failed", "interrupted"]);
+export const ActivityStatusSchema = z.enum([
+  "completed",
+  "failed",
+  "interrupted",
+]);
 export type ActivityStatus = z.infer<typeof ActivityStatusSchema>;
 
 export const ActivityStartEventSchema = z.object({

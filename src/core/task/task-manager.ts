@@ -17,7 +17,10 @@ import {
   TaskScopeAmendmentEventSchema,
   TaskScopeConflictEventSchema,
 } from "../schemas/task.js";
-import { ModuleContractSchema, type ModuleContract } from "../schemas/contracts.js";
+import {
+  ModuleContractSchema,
+  type ModuleContract,
+} from "../schemas/contracts.js";
 import { scanArchitecture } from "../scanner/arch.js";
 
 const execAsync = promisify(exec);
@@ -91,7 +94,11 @@ export class TaskManager {
   }
 
   public normalizePath(filePath: string): string {
-    return path.normalize(filePath).replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
+    return path
+      .normalize(filePath)
+      .replace(/\\/g, "/")
+      .replace(/^\.\//, "")
+      .replace(/^\/+/, "");
   }
 
   public pathsEqual(a: string, b: string): boolean {
@@ -206,14 +213,33 @@ export class TaskManager {
   /**
    * Resolve and load contract definition
    */
-  public async resolveContract(contractRef: string): Promise<{ resolvedPath: string; contract: ModuleContract }> {
+  public async resolveContract(
+    contractRef: string,
+  ): Promise<{ resolvedPath: string; contract: ModuleContract }> {
     const candidates = [
       path.join(this.projectRoot, ".crewmate", "contracts", contractRef),
-      path.join(this.projectRoot, ".crewmate", "contracts", "modules", contractRef),
-      path.join(this.projectRoot, ".crewmate", "contracts", "modules", `${contractRef}.contract.yaml`),
+      path.join(
+        this.projectRoot,
+        ".crewmate",
+        "contracts",
+        "modules",
+        contractRef,
+      ),
+      path.join(
+        this.projectRoot,
+        ".crewmate",
+        "contracts",
+        "modules",
+        `${contractRef}.contract.yaml`,
+      ),
       path.join(this.projectRoot, "contracts", contractRef),
       path.join(this.projectRoot, "contracts", "modules", contractRef),
-      path.join(this.projectRoot, "contracts", "modules", `${contractRef}.contract.yaml`),
+      path.join(
+        this.projectRoot,
+        "contracts",
+        "modules",
+        `${contractRef}.contract.yaml`,
+      ),
       path.join(this.projectRoot, contractRef),
     ];
 
@@ -228,7 +254,9 @@ export class TaskManager {
       }
     }
 
-    throw new Error(`Contract '${contractRef}' not found. Each task must reference a valid module contract.`);
+    throw new Error(
+      `Contract '${contractRef}' not found. Each task must reference a valid module contract.`,
+    );
   }
 
   /**
@@ -261,13 +289,18 @@ export class TaskManager {
   /**
    * List all tasks on disk
    */
-  public async listTasks(filter?: { status?: TaskStatus }): Promise<TaskDefinition[]> {
+  public async listTasks(filter?: {
+    status?: TaskStatus;
+  }): Promise<TaskDefinition[]> {
     try {
       const entries = await fs.readdir(this.tasksDir);
       const tasks: TaskDefinition[] = [];
       for (const entry of entries) {
         if (entry.endsWith(".task.yaml")) {
-          const content = await fs.readFile(path.join(this.tasksDir, entry), "utf-8");
+          const content = await fs.readFile(
+            path.join(this.tasksDir, entry),
+            "utf-8",
+          );
           const task = TaskDefinitionSchema.parse(yaml.parse(content));
           if (!filter?.status || task.status === filter.status) {
             tasks.push(task);
@@ -315,7 +348,9 @@ export class TaskManager {
       const finalDependsOn = new Set(explicitDependsOn);
 
       // Check against existing non-done, non-failed tasks
-      const activeOrPendingTasks = allTasks.filter((t) => t.status !== "done" && t.status !== "failed");
+      const activeOrPendingTasks = allTasks.filter(
+        (t) => t.status !== "done" && t.status !== "failed",
+      );
 
       // 4. Source 1: Declared file overlap rule
       // If task B's files intersects task A's, they cannot be scheduled in parallel.
@@ -333,11 +368,14 @@ export class TaskManager {
           if (!hasEdge) {
             throw new Error(
               `Cannot register task '${taskId}': Overlapping file(s) [${overlappingFiles.join(
-                ", "
-              )}] with existing task '${existingTask.id}'. Overlapping tasks cannot be parallel siblings; specify --depends-on ${existingTask.id} or merge tasks.`
+                ", ",
+              )}] with existing task '${existingTask.id}'. Overlapping tasks cannot be parallel siblings; specify --depends-on ${existingTask.id} or merge tasks.`,
             );
           } else {
-            dependencies.push({ taskId: existingTask.id, reason: "file-overlap" });
+            dependencies.push({
+              taskId: existingTask.id,
+              reason: "file-overlap",
+            });
           }
         }
       }
@@ -347,22 +385,31 @@ export class TaskManager {
       // B depends on A ONLY if A's change touches the declared public surface of its contract.
       for (const existingTask of activeOrPendingTasks) {
         try {
-          const { contract: existingContract } = await this.resolveContract(existingTask.contract);
+          const { contract: existingContract } = await this.resolveContract(
+            existingTask.contract,
+          );
           const isConsumer =
             existingContract.declared_consumers &&
             existingContract.declared_consumers.includes(contract.module);
 
           if (isConsumer) {
             // Check if existingTask declared files touch existingContract.public_api
-            const touchesPublicSurface = existingContract.public_api.some((api) => {
-              const apiFile = this.normalizePath(api.file);
-              return existingTask.files.some((f) => this.pathsEqual(f, apiFile));
-            });
+            const touchesPublicSurface = existingContract.public_api.some(
+              (api) => {
+                const apiFile = this.normalizePath(api.file);
+                return existingTask.files.some((f) =>
+                  this.pathsEqual(f, apiFile),
+                );
+              },
+            );
 
             if (touchesPublicSurface) {
               finalDependsOn.add(existingTask.id);
               if (!dependencies.some((d) => d.taskId === existingTask.id)) {
-                dependencies.push({ taskId: existingTask.id, reason: "contract-consumer" });
+                dependencies.push({
+                  taskId: existingTask.id,
+                  reason: "contract-consumer",
+                });
               }
             }
           }
@@ -403,7 +450,7 @@ export class TaskManager {
           depends_on: taskDef.depends_on,
           dependencies: taskDef.dependencies,
           at: now,
-        })
+        }),
       );
 
       return taskDef;
@@ -425,7 +472,9 @@ export class TaskManager {
       }
 
       if (task.status === "done" || task.status === "failed") {
-        throw new Error(`Cannot start task '${taskId}': Task has already finished with status '${task.status}'.`);
+        throw new Error(
+          `Cannot start task '${taskId}': Task has already finished with status '${task.status}'.`,
+        );
       }
 
       const now = new Date().toISOString();
@@ -447,7 +496,7 @@ export class TaskManager {
                 to: "blocked",
                 reason: `Dependency '${depId}' is not done (status: ${currentDepStatus})`,
                 at: now,
-              })
+              }),
             );
           }
           return {
@@ -460,7 +509,9 @@ export class TaskManager {
 
       // 2. Check current locked files across all currently ACTIVE tasks
       const allTasks = await this.listTasks();
-      const otherActiveTasks = allTasks.filter((t) => t.id !== taskId && t.status === "active");
+      const otherActiveTasks = allTasks.filter(
+        (t) => t.id !== taskId && t.status === "active",
+      );
 
       for (const file of task.files) {
         for (const activeTask of otherActiveTasks) {
@@ -478,7 +529,7 @@ export class TaskManager {
                   to: "blocked",
                   reason: `File '${file}' is locked by active task '${activeTask.id}'`,
                   at: now,
-                })
+                }),
               );
             }
             return {
@@ -494,7 +545,9 @@ export class TaskManager {
       // Capture base git commit for completion gate check
       let baseCommit: string | undefined = undefined;
       try {
-        const { stdout } = await execAsync("git rev-parse HEAD", { cwd: this.projectRoot });
+        const { stdout } = await execAsync("git rev-parse HEAD", {
+          cwd: this.projectRoot,
+        });
         baseCommit = stdout.trim();
       } catch {
         // Not a git repo or no commits
@@ -512,7 +565,7 @@ export class TaskManager {
           id: taskId,
           files: task.files,
           at: now,
-        })
+        }),
       );
 
       await this.appendEvent(
@@ -522,7 +575,7 @@ export class TaskManager {
           from: prevStatus,
           to: "active",
           at: now,
-        })
+        }),
       );
 
       return {
@@ -536,7 +589,11 @@ export class TaskManager {
   /**
    * Amend scope for an active task
    */
-  public async amendScope(taskId: string, filePath: string, reason?: string): Promise<TaskAmendResult> {
+  public async amendScope(
+    taskId: string,
+    filePath: string,
+    reason?: string,
+  ): Promise<TaskAmendResult> {
     return this.withAtomicLock(async () => {
       const task = await this.getTask(taskId);
       if (!task) {
@@ -545,7 +602,7 @@ export class TaskManager {
 
       if (task.status !== "active") {
         throw new Error(
-          `Cannot amend scope for task '${taskId}': Task is not active (current status: ${task.status}).`
+          `Cannot amend scope for task '${taskId}': Task is not active (current status: ${task.status}).`,
         );
       }
 
@@ -562,9 +619,13 @@ export class TaskManager {
 
       // Check if file is currently locked by another active task
       const allTasks = await this.listTasks();
-      const otherActiveTasks = allTasks.filter((t) => t.id !== taskId && t.status === "active");
+      const otherActiveTasks = allTasks.filter(
+        (t) => t.id !== taskId && t.status === "active",
+      );
 
-      const conflictingTask = otherActiveTasks.find((t) => this.isPathInList(normalized, t.files));
+      const conflictingTask = otherActiveTasks.find((t) =>
+        this.isPathInList(normalized, t.files),
+      );
 
       if (conflictingTask) {
         // HARD BLOCK, NO AUTO-RESOLUTION
@@ -585,7 +646,7 @@ export class TaskManager {
             conflictingTaskId: conflictingTask.id,
             reason,
             at: now,
-          })
+          }),
         );
 
         return {
@@ -614,7 +675,7 @@ export class TaskManager {
           file: normalized,
           reason,
           at: now,
-        })
+        }),
       );
 
       await this.appendEvent(
@@ -623,7 +684,7 @@ export class TaskManager {
           id: taskId,
           files: [normalized],
           at: now,
-        })
+        }),
       );
 
       return {
@@ -646,7 +707,7 @@ export class TaskManager {
 
       if (task.status !== "active") {
         throw new Error(
-          `Cannot complete task '${taskId}': Task is not active (current status: ${task.status}).`
+          `Cannot complete task '${taskId}': Task is not active (current status: ${task.status}).`,
         );
       }
 
@@ -667,7 +728,22 @@ export class TaskManager {
         );
       });
 
-      const outOfScopeFiles = relevantTouched.filter((f) => !this.isPathInList(f, task.files));
+      // When checking for out-of-scope files, exclude files that are owned by other tasks
+      const allTasks = await this.listTasks();
+      const otherTaskFiles: string[] = [];
+      for (const t of allTasks) {
+        if (t.id !== taskId) {
+          for (const f of t.files) {
+            otherTaskFiles.push(f);
+          }
+        }
+      }
+
+      const outOfScopeFiles = relevantTouched.filter(
+        (f) =>
+          !this.isPathInList(f, task.files) &&
+          !this.isPathInList(f, otherTaskFiles),
+      );
 
       if (outOfScopeFiles.length > 0) {
         // Hard failure: touched files outside scope
@@ -681,7 +757,7 @@ export class TaskManager {
             id: taskId,
             files: task.files,
             at: now,
-          })
+          }),
         );
 
         await this.appendEvent(
@@ -692,7 +768,7 @@ export class TaskManager {
             to: "failed",
             reason: `Scope violation: modified files [${outOfScopeFiles.join(", ")}] outside declared scope`,
             at: now,
-          })
+          }),
         );
 
         return {
@@ -701,7 +777,7 @@ export class TaskManager {
           touchedFiles: relevantTouched,
           outOfScopeFiles,
           error: `Task '${taskId}' failed scope completion gate: touched file(s) [${outOfScopeFiles.join(
-            ", "
+            ", ",
           )}] outside declared+amended scope.`,
         };
       }
@@ -720,7 +796,7 @@ export class TaskManager {
               id: taskId,
               files: task.files,
               at: now,
-            })
+            }),
           );
 
           await this.appendEvent(
@@ -731,7 +807,7 @@ export class TaskManager {
               to: "failed",
               reason: `Architecture violation: ${archResult.violations[0]?.message}`,
               at: now,
-            })
+            }),
           );
 
           return {
@@ -745,7 +821,10 @@ export class TaskManager {
         }
       } catch (err) {
         // If architecture files don't exist or scanner errors on non-code projects, ignore
-        if (err instanceof Error && err.message.includes("violates architecture rules")) {
+        if (
+          err instanceof Error &&
+          err.message.includes("violates architecture rules")
+        ) {
           task.status = "failed";
           task.completed_at = now;
           await this.saveTask(task);
@@ -756,7 +835,7 @@ export class TaskManager {
               id: taskId,
               files: task.files,
               at: now,
-            })
+            }),
           );
 
           await this.appendEvent(
@@ -767,7 +846,7 @@ export class TaskManager {
               to: "failed",
               reason: err.message,
               at: now,
-            })
+            }),
           );
 
           return {
@@ -790,7 +869,7 @@ export class TaskManager {
           id: taskId,
           files: task.files,
           at: now,
-        })
+        }),
       );
 
       await this.appendEvent(
@@ -800,7 +879,7 @@ export class TaskManager {
           from: "active",
           to: "done",
           at: now,
-        })
+        }),
       );
 
       return {
@@ -837,8 +916,13 @@ export class TaskManager {
   public async getConflictSummary(): Promise<ConflictSummary> {
     const events = await this.readEvents();
     const conflictEvents = events.filter(
-      (e): e is TaskEvent & { event: "scope_conflict"; file: string; conflictingTaskId: string } =>
-        e.event === "scope_conflict"
+      (
+        e,
+      ): e is TaskEvent & {
+        event: "scope_conflict";
+        file: string;
+        conflictingTaskId: string;
+      } => e.event === "scope_conflict",
     );
 
     const byModule: Record<string, number> = {};
@@ -879,7 +963,9 @@ export class TaskManager {
 
     // 1. Files in working tree (staged, modified, untracked)
     try {
-      const { stdout } = await execAsync("git status --porcelain -uall", { cwd: this.projectRoot });
+      const { stdout } = await execAsync("git status --porcelain -uall", {
+        cwd: this.projectRoot,
+      });
       const lines = stdout.split("\n").filter((l) => l.trim().length > 0);
       for (const line of lines) {
         // format is "XY filename" or "XY orig -> dest"
@@ -898,7 +984,10 @@ export class TaskManager {
     // 2. Committed changes since base commit if provided
     if (baseCommit) {
       try {
-        const { stdout } = await execAsync(`git diff --name-only ${baseCommit}`, { cwd: this.projectRoot });
+        const { stdout } = await execAsync(
+          `git diff --name-only ${baseCommit}`,
+          { cwd: this.projectRoot },
+        );
         const lines = stdout.split("\n").filter((l) => l.trim().length > 0);
         for (const line of lines) {
           const trimmed = line.trim().replace(/^"|"$/g, "");

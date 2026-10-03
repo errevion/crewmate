@@ -10,11 +10,21 @@ const execFileAsync = promisify(execFile);
 describe("Crewmate Watch CLI & Binary", () => {
   const isWin = process.platform === "win32";
   const exeName = isWin ? "crewmate-watch.exe" : "crewmate-watch";
-  const binaryPath = path.resolve("crates", "crewmate-watch", "target", "release", exeName);
+  const binaryPath = path.resolve(
+    "crates",
+    "crewmate-watch",
+    "target",
+    "release",
+    exeName,
+  );
 
   it("exposes crewmate watch in the Node CLI help", async () => {
     const cliPath = path.resolve("dist", "src", "cli", "index.js");
-    const { stdout, stderr } = await execFileAsync(process.execPath, [cliPath, "watch", "--help"]);
+    const { stdout, stderr } = await execFileAsync(process.execPath, [
+      cliPath,
+      "watch",
+      "--help",
+    ]);
     assert.strictEqual(stderr, "");
     assert.match(stdout, /Launch read-only live TUI observer/i);
     assert.match(stdout, /--fps <number>/i);
@@ -25,7 +35,10 @@ describe("Crewmate Watch CLI & Binary", () => {
     assert.ok(fs.existsSync(binaryPath), `Binary not found at ${binaryPath}`);
 
     const helpRes = await execFileAsync(binaryPath, ["--help"]);
-    assert.match(helpRes.stdout, /Read-only live TUI observer for Crewmate workflow engine/i);
+    assert.match(
+      helpRes.stdout,
+      /Read-only live TUI observer for Crewmate workflow engine/i,
+    );
     assert.match(helpRes.stdout, /--fps <FPS>/i);
     assert.match(helpRes.stdout, /--root <ROOT>/i);
 
@@ -40,7 +53,9 @@ describe("Crewmate Watch CLI & Binary", () => {
 
     try {
       // Initialize in the external folder
-      await execFileAsync(process.execPath, [cliPath, "init"], { cwd: tempDir });
+      await execFileAsync(process.execPath, [cliPath, "init"], {
+        cwd: tempDir,
+      });
 
       // Run watch for 300ms in the external folder and ensure no "Could not find 'crewmate-watch.exe'" error
       const { spawn } = await import("node:child_process");
@@ -63,7 +78,12 @@ describe("Crewmate Watch CLI & Binary", () => {
       assert.doesNotMatch(stderrOutput, /Watch Error:/i);
     } finally {
       try {
-        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+        fs.rmSync(tempDir, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 100,
+        });
       } catch {
         // ignore cleanup error on Windows
       }

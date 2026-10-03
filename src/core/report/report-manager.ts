@@ -96,9 +96,13 @@ export class ReportManager {
     await fs.mkdir(this.reportsDir, { recursive: true });
 
     const runEvents = options.events;
-    const startedAt = runEvents.length > 0 ? runEvents[0].timestamp : new Date().toISOString();
+    const startedAt =
+      runEvents.length > 0 ? runEvents[0].timestamp : new Date().toISOString();
     const endedAt = new Date().toISOString();
-    const durationMs = Math.max(0, new Date(endedAt).getTime() - new Date(startedAt).getTime());
+    const durationMs = Math.max(
+      0,
+      new Date(endedAt).getTime() - new Date(startedAt).getTime(),
+    );
 
     // Compute initial and final nodes
     let initialNode = "unknown";
@@ -161,7 +165,8 @@ export class ReportManager {
     const tasksFailed = allTasks.filter((t) => t.status === "failed").length;
     let conflictCount = 0;
     for (const t of allTasks) {
-      conflictCount += t.amendments?.filter((a) => a.type === "scope_conflict").length || 0;
+      conflictCount +=
+        t.amendments?.filter((a) => a.type === "scope_conflict").length || 0;
     }
 
     const report: WorkflowRunReport = {
@@ -238,20 +243,24 @@ export class ReportManager {
       lines.push(`- **Reason:** ${report.reason}`);
     }
     lines.push(`- **Started At:** ${report.startedAt}`);
-    lines.push(`- **Ended At:** ${report.endedAt} (${(report.durationMs / 1000).toFixed(2)}s)`);
-    lines.push(`- **Initial Node:** \`${report.initialNode}\` → **Final Node:** \`${report.finalNode}\``);
+    lines.push(
+      `- **Ended At:** ${report.endedAt} (${(report.durationMs / 1000).toFixed(2)}s)`,
+    );
+    lines.push(
+      `- **Initial Node:** \`${report.initialNode}\` → **Final Node:** \`${report.finalNode}\``,
+    );
     lines.push("");
 
     lines.push("## Summary");
     lines.push(`- **Transitions:** ${report.summary.transitionsCount}`);
     lines.push(
-      `- **Gate Checks:** ${report.summary.gateChecks.passed}/${report.summary.gateChecks.total} passed (${report.summary.gateChecks.failed} failed)`
+      `- **Gate Checks:** ${report.summary.gateChecks.passed}/${report.summary.gateChecks.total} passed (${report.summary.gateChecks.failed} failed)`,
     );
     lines.push(
-      `- **Activities Tracked:** ${report.summary.activities.total} (${report.summary.activities.unclosed} unclosed)`
+      `- **Activities Tracked:** ${report.summary.activities.total} (${report.summary.activities.unclosed} unclosed)`,
     );
     lines.push(
-      `- **Tasks Executed:** ${report.summary.tasks.total} (${report.summary.tasks.done} done, ${report.summary.tasks.failed} failed, ${report.summary.tasks.conflicts} conflicts)`
+      `- **Tasks Executed:** ${report.summary.tasks.total} (${report.summary.tasks.done} done, ${report.summary.tasks.failed} failed, ${report.summary.tasks.conflicts} conflicts)`,
     );
 
     if (Object.keys(report.summary.retryCounts).length > 0) {
@@ -266,7 +275,9 @@ export class ReportManager {
       lines.push("");
       lines.push("## Node Transitions Timeline");
       for (const t of report.transitions) {
-        lines.push(`- **${t.from}** → **${t.to}** (${t.reason}) at \`${t.timestamp}\``);
+        lines.push(
+          `- **${t.from}** → **${t.to}** (${t.reason}) at \`${t.timestamp}\``,
+        );
       }
     }
 
@@ -275,7 +286,9 @@ export class ReportManager {
       lines.push("## Gate Checks");
       for (const g of report.gateResults) {
         const badge = g.status === "passed" ? "PASSED" : "FAILED";
-        lines.push(`- \`[${badge}]\` **${g.phase.toUpperCase()}**: \`${g.gate}\``);
+        lines.push(
+          `- \`[${badge}]\` **${g.phase.toUpperCase()}**: \`${g.gate}\``,
+        );
         if (g.error) {
           lines.push(`  - Error: ${g.error}`);
         }
@@ -289,7 +302,9 @@ export class ReportManager {
       lines.push("");
       lines.push("## Tasks");
       for (const t of report.tasks) {
-        lines.push(`- **${t.id}** [\`${t.status}\`]: "${t.goal}" (${t.contract})`);
+        lines.push(
+          `- **${t.id}** [\`${t.status}\`]: "${t.goal}" (${t.contract})`,
+        );
         lines.push(`  - Files: ${t.files.join(", ")}`);
       }
     }
@@ -298,7 +313,9 @@ export class ReportManager {
       lines.push("");
       lines.push("## Activities");
       for (const a of report.activities) {
-        lines.push(`- **${a.id}** [\`${a.status}\`]: [${a.agent}] "${a.label}"`);
+        lines.push(
+          `- **${a.id}** [\`${a.status}\`]: [${a.agent}] "${a.label}"`,
+        );
       }
     }
 
@@ -333,7 +350,10 @@ export class ReportManager {
       for (const entry of entries) {
         if (entry.endsWith(".json") && entry !== "latest.json") {
           try {
-            const content = await fs.readFile(path.join(this.reportsDir, entry), "utf-8");
+            const content = await fs.readFile(
+              path.join(this.reportsDir, entry),
+              "utf-8",
+            );
             const data = JSON.parse(content) as WorkflowRunReport;
             reports.push({
               runId: data.runId,

@@ -18,7 +18,11 @@ export class ActivityManager {
 
   constructor(projectRoot: string = process.cwd()) {
     this.projectRoot = projectRoot;
-    this.activityFilePath = path.join(projectRoot, ".crewmate", "activity.jsonl");
+    this.activityFilePath = path.join(
+      projectRoot,
+      ".crewmate",
+      "activity.jsonl",
+    );
   }
 
   public getFilePath(): string {
@@ -37,7 +41,9 @@ export class ActivityManager {
   public async readEvents(): Promise<ActivityEvent[]> {
     try {
       const content = await fs.readFile(this.activityFilePath, "utf-8");
-      const lines = content.split("\n").filter((line: string) => line.trim().length > 0);
+      const lines = content
+        .split("\n")
+        .filter((line: string) => line.trim().length > 0);
       const events: ActivityEvent[] = [];
 
       for (let i = 0; i < lines.length; i++) {
@@ -50,7 +56,7 @@ export class ActivityManager {
           throw new Error(
             `Malformed activity event at line ${i + 1} in ${this.activityFilePath}: ${
               err instanceof Error ? err.message : String(err)
-            }`
+            }`,
           );
         }
       }
@@ -110,11 +116,15 @@ export class ActivityManager {
     const existing = activities.find((a) => a.id === options.id);
 
     if (!existing) {
-      throw new Error(`Cannot end activity '${options.id}': Activity not found in ${this.activityFilePath}`);
+      throw new Error(
+        `Cannot end activity '${options.id}': Activity not found in ${this.activityFilePath}`,
+      );
     }
 
     if (!existing.isUnclosed) {
-      throw new Error(`Activity '${options.id}' has already been ended with status '${existing.status}'`);
+      throw new Error(
+        `Activity '${options.id}' has already been ended with status '${existing.status}'`,
+      );
     }
 
     const at = options.at || new Date().toISOString();
@@ -249,10 +259,11 @@ export class ActivityManager {
 
       const nodeTag = act.node ? ` [node: ${act.node}]` : "";
       const metaFiles = this.extractFiles(act);
-      const filesTag = metaFiles.length > 0 ? ` [files: ${metaFiles.join(", ")}]` : "";
+      const filesTag =
+        metaFiles.length > 0 ? ` [files: ${metaFiles.join(", ")}]` : "";
 
       lines.push(
-        `${prefix}${connector}${act.id}: [${act.agent}] "${act.label}" ${statusTag}${nodeTag}${filesTag}`
+        `${prefix}${connector}${act.id}: [${act.agent}] "${act.label}" ${statusTag}${nodeTag}${filesTag}`,
       );
 
       if (node.children.length > 0) {
@@ -294,7 +305,9 @@ export class ActivityManager {
     return p.replace(/\\/g, "/").replace(/^\.\//, "").trim();
   }
 
-  public async findProvenance(targetFile: string): Promise<ActivityProvenance | undefined> {
+  public async findProvenance(
+    targetFile: string,
+  ): Promise<ActivityProvenance | undefined> {
     const normalizedTarget = this.normalizePath(targetFile);
     const activities = await this.getActivities();
 
@@ -304,7 +317,10 @@ export class ActivityManager {
     for (const act of activities) {
       const actFiles = this.extractFiles(act);
       const touches = actFiles.some(
-        (f) => f === normalizedTarget || normalizedTarget.endsWith("/" + f) || f.endsWith("/" + normalizedTarget)
+        (f) =>
+          f === normalizedTarget ||
+          normalizedTarget.endsWith("/" + f) ||
+          f.endsWith("/" + normalizedTarget),
       );
 
       if (touches) {
@@ -344,7 +360,11 @@ export class ActivityManager {
     lastActivity?: string;
     reason?: string;
   }> {
-    const heartbeatPath = path.join(this.projectRoot, ".crewmate", "heartbeat.json");
+    const heartbeatPath = path.join(
+      this.projectRoot,
+      ".crewmate",
+      "heartbeat.json",
+    );
     try {
       const content = await fs.readFile(heartbeatPath, "utf-8");
       const data = JSON.parse(content);
@@ -399,7 +419,11 @@ export class ActivityManager {
         }
       }
       // Process is running and heartbeat is fresh: determine running vs idle
-      if (data.status === "running" || data.status === "online" || data.status === "alive") {
+      if (
+        data.status === "running" ||
+        data.status === "online" ||
+        data.status === "alive"
+      ) {
         return {
           alive: true,
           status: "running",
@@ -443,7 +467,9 @@ export class ActivityManager {
     }
   }
 
-  public async reconcileStaleActivities(reason: string = "harness offline"): Promise<string[]> {
+  public async reconcileStaleActivities(
+    reason: string = "harness offline",
+  ): Promise<string[]> {
     const unclosed = await this.getUnclosedActivities();
     const closedIds: string[] = [];
     const at = new Date().toISOString();

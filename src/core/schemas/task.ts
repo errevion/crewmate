@@ -1,9 +1,19 @@
 import { z } from "zod";
 
-export const TaskStatusSchema = z.enum(["pending", "active", "blocked", "done", "failed"]);
+export const TaskStatusSchema = z.enum([
+  "pending",
+  "active",
+  "blocked",
+  "done",
+  "failed",
+]);
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 
-export const DependencyReasonSchema = z.enum(["file-overlap", "contract-consumer", "manual"]);
+export const DependencyReasonSchema = z.enum([
+  "file-overlap",
+  "contract-consumer",
+  "manual",
+]);
 export type DependencyReason = z.infer<typeof DependencyReasonSchema>;
 
 export const TaskDependencySchema = z.object({
@@ -83,7 +93,9 @@ export const TaskScopeAmendmentEventSchema = z.object({
   reason: z.string().optional(),
   at: z.string(),
 });
-export type TaskScopeAmendmentEvent = z.infer<typeof TaskScopeAmendmentEventSchema>;
+export type TaskScopeAmendmentEvent = z.infer<
+  typeof TaskScopeAmendmentEventSchema
+>;
 
 export const TaskScopeConflictEventSchema = z.object({
   event: z.literal("scope_conflict"),
@@ -93,7 +105,9 @@ export const TaskScopeConflictEventSchema = z.object({
   reason: z.string().optional(),
   at: z.string(),
 });
-export type TaskScopeConflictEvent = z.infer<typeof TaskScopeConflictEventSchema>;
+export type TaskScopeConflictEvent = z.infer<
+  typeof TaskScopeConflictEventSchema
+>;
 
 export const TaskEventSchema = z.discriminatedUnion("event", [
   TaskCreateEventSchema,

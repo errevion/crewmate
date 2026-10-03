@@ -31,7 +31,8 @@ export function reduceState(events: StateEvent[]): EngineState {
         if (!state.currentRunId) {
           state.currentRunId = `run_${event.timestamp.replace(/[-:T.Z]/g, "").slice(0, 14)}_init`;
         }
-        state.activeWorkflow = event.workflow || state.activeWorkflow || "default";
+        state.activeWorkflow =
+          event.workflow || state.activeWorkflow || "default";
         break;
       }
       case "RUN_START": {
@@ -75,7 +76,7 @@ export function reduceState(events: StateEvent[]): EngineState {
         };
         // Update or append
         const existingIdx = state.lastGateResults[event.node].findIndex(
-          (g) => g.gate === event.gate && g.phase === event.phase
+          (g) => g.gate === event.gate && g.phase === event.phase,
         );
         if (existingIdx >= 0) {
           state.lastGateResults[event.node][existingIdx] = result;
@@ -131,7 +132,9 @@ export class StateManager {
   public async readEvents(): Promise<StateEvent[]> {
     try {
       const content = await fs.readFile(this.stateFilePath, "utf-8");
-      const lines = content.split("\n").filter((line: string) => line.trim().length > 0);
+      const lines = content
+        .split("\n")
+        .filter((line: string) => line.trim().length > 0);
       const events: StateEvent[] = [];
 
       for (let i = 0; i < lines.length; i++) {
@@ -144,7 +147,7 @@ export class StateManager {
           throw new Error(
             `Malformed state event at line ${i + 1} in ${this.stateFilePath}: ${
               err instanceof Error ? err.message : String(err)
-            }`
+            }`,
           );
         }
       }

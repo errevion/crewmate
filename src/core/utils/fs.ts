@@ -3,7 +3,10 @@ import path from "node:path";
 
 export function isSourceFile(file: string): boolean {
   return (
-    (file.endsWith(".ts") || file.endsWith(".js") || file.endsWith(".tsx") || file.endsWith(".jsx")) &&
+    (file.endsWith(".ts") ||
+      file.endsWith(".js") ||
+      file.endsWith(".tsx") ||
+      file.endsWith(".jsx")) &&
     !file.endsWith(".d.ts")
   );
 }
@@ -27,7 +30,10 @@ export async function getFilesRecursively(dir: string): Promise<string[]> {
   }
 }
 
-export async function resolveContractPath(projectRoot: string, ...segments: string[]): Promise<string> {
+export async function resolveContractPath(
+  projectRoot: string,
+  ...segments: string[]
+): Promise<string> {
   const crewmateDir = path.join(projectRoot, ".crewmate", "contracts");
   try {
     await fs.access(crewmateDir);

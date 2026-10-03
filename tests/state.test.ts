@@ -82,7 +82,12 @@ describe("State Reducer", () => {
 
   it("handles escalation and completion", () => {
     const events: StateEvent[] = [
-      { id: "evt_e1", timestamp: "2026-09-26T10:00:00Z", event: "INIT", initialNode: "verify" },
+      {
+        id: "evt_e1",
+        timestamp: "2026-09-26T10:00:00Z",
+        event: "INIT",
+        initialNode: "verify",
+      },
       {
         id: "evt_e2",
         timestamp: "2026-09-26T10:01:00Z",
@@ -97,8 +102,18 @@ describe("State Reducer", () => {
     assert.equal(escalatedState.escalationTarget, "human");
 
     const completeEvents: StateEvent[] = [
-      { id: "evt_c1", timestamp: "2026-09-26T10:00:00Z", event: "INIT", initialNode: "verify" },
-      { id: "evt_c2", timestamp: "2026-09-26T10:01:00Z", event: "COMPLETE", node: "done" },
+      {
+        id: "evt_c1",
+        timestamp: "2026-09-26T10:00:00Z",
+        event: "INIT",
+        initialNode: "verify",
+      },
+      {
+        id: "evt_c2",
+        timestamp: "2026-09-26T10:01:00Z",
+        event: "COMPLETE",
+        node: "done",
+      },
     ];
     const completedState = reduceState(completeEvents);
     assert.equal(completedState.status, "completed");
@@ -108,7 +123,9 @@ describe("State Reducer", () => {
 
 describe("StateManager", () => {
   it("appends and reads back events from disk", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-state-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-state-test-"),
+    );
     try {
       const manager = new StateManager(tmpDir);
       assert.equal(await manager.exists(), false);
@@ -123,7 +140,10 @@ describe("StateManager", () => {
       const events = await manager.readEvents();
       assert.equal(events.length, 1);
       assert.equal(events[0].event, "INIT");
-      assert.ok(events[0].id.startsWith("evt_"), `Expected evt_ prefix on ${events[0].id}`);
+      assert.ok(
+        events[0].id.startsWith("evt_"),
+        `Expected evt_ prefix on ${events[0].id}`,
+      );
 
       const state = await manager.getState();
       assert.equal(state.currentNode, "plan");

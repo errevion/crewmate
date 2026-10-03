@@ -16,7 +16,9 @@ import { CrewmateEngine } from "../src/core/engine/engine.js";
 
 describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
   it("injects tiered context and subagent directives into session context", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-plugin-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-plugin-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -53,8 +55,16 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       await hooks["context"][0](sessionCtx);
 
       assert.equal(sessionCtx.system.length, 2);
-      assert.ok(sessionCtx.system[0].text.includes("=== CREWMATE CONTEXT [NODE: SCOUT] ==="));
-      assert.ok(sessionCtx.system[1].text.includes("[CREWMATE SUBAGENT ROLE DIRECTIVE]"));
+      assert.ok(
+        sessionCtx.system[0].text.includes(
+          "=== CREWMATE CONTEXT [NODE: SCOUT] ===",
+        ),
+      );
+      assert.ok(
+        sessionCtx.system[1].text.includes(
+          "[CREWMATE SUBAGENT ROLE DIRECTIVE]",
+        ),
+      );
       assert.ok(sessionCtx.system[1].text.includes("Active Role: scout"));
       assert.ok(sessionCtx.system[1].text.includes("Scope: read-only"));
 
@@ -67,7 +77,9 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
   });
 
   it("enforces tool guardrails: blocks read-only violations and forbidden paths", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-guardrail-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-guardrail-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -96,7 +108,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         async () => {
           await executeBefore({
             tool: "write",
-            input: { path: "src/new-feature.ts", content: "export const x = 1;" },
+            input: {
+              path: "src/new-feature.ts",
+              content: "export const x = 1;",
+            },
           });
         },
         (err: Error) => {
@@ -104,7 +119,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
             err.message.includes("[Crewmate Guardrail Blocked]") &&
             err.message.includes("has scope 'read-only'")
           );
-        }
+        },
       );
 
       // 2. Read tool should be ALLOWED!
@@ -123,7 +138,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         async () => {
           await executeBefore({
             tool: "write",
-            input: { path: "src/new-feature.ts", content: "export const x = 1;" },
+            input: {
+              path: "src/new-feature.ts",
+              content: "export const x = 1;",
+            },
           });
         },
         (err: Error) => {
@@ -131,7 +149,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
             err.message.includes("[Crewmate Guardrail Blocked]") &&
             err.message.includes("has scope 'contracts-write'")
           );
-        }
+        },
       );
 
       // But writing a contract under .crewmate/contracts/ MUST be ALLOWED!
@@ -152,7 +170,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       await assert.doesNotReject(async () => {
         await executeBefore({
           tool: "write",
-          input: { path: "src/example/index.ts", content: "console.log('hi');" },
+          input: {
+            path: "src/example/index.ts",
+            content: "console.log('hi');",
+          },
         });
       });
 
@@ -161,15 +182,20 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         async () => {
           await executeBefore({
             tool: "write",
-            input: { path: "src/example/temp_test.ts", content: "export const t = 1;" },
+            input: {
+              path: "src/example/temp_test.ts",
+              content: "export const t = 1;",
+            },
           });
         },
         (err: Error) => {
           return (
             err.message.includes("[Crewmate Guardrail Blocked]") &&
-            err.message.includes("violates structure contract forbidden pattern")
+            err.message.includes(
+              "violates structure contract forbidden pattern",
+            )
           );
-        }
+        },
       );
 
       // 4. Jump to contract node (scope: contracts-write)
@@ -180,7 +206,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         async () => {
           await executeBefore({
             tool: "write",
-            input: { path: "src/example/index.ts", content: "console.log('contractor edit');" },
+            input: {
+              path: "src/example/index.ts",
+              content: "console.log('contractor edit');",
+            },
           });
         },
         (err: Error) => {
@@ -188,7 +217,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
             err.message.includes("[Crewmate Guardrail Blocked]") &&
             err.message.includes("has scope 'contracts-write'")
           );
-        }
+        },
       );
 
       // Contractor updating a contract under .crewmate/contracts/ MUST be ALLOWED!
@@ -211,7 +240,9 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
   });
 
   it("registers native crewmate tools and allows agents to execute them", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-tools-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-tools-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -262,7 +293,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       assert.ok(registeredTools["crewmate_report_get"]);
 
       // 1. Execute crewmate_status
-      const statusRes = await registeredTools["crewmate_status"].execute({}, { agent: "lead" });
+      const statusRes = await registeredTools["crewmate_status"].execute(
+        {},
+        { agent: "lead" },
+      );
       const statusJson = JSON.parse(statusRes.content);
       assert.equal(statusJson.currentNode, "scout");
       assert.equal(statusJson.status, "active");
@@ -272,7 +306,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       // 2. Execute crewmate_activity_start
       const startRes = await registeredTools["crewmate_activity_start"].execute(
         { label: "Design API contract", agent: "architect" },
-        { agent: "architect" }
+        { agent: "architect" },
       );
       const startJson = JSON.parse(startRes.content);
       assert.ok(startJson.id.startsWith("act_"));
@@ -280,7 +314,9 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       assert.equal(startJson.status, "active");
 
       // Verify activity shows in unclosed list
-      const listRes = await registeredTools["crewmate_activity_list"].execute({ unclosedOnly: true });
+      const listRes = await registeredTools["crewmate_activity_list"].execute({
+        unclosedOnly: true,
+      });
       const listJson = JSON.parse(listRes.content);
       assert.equal(listJson.length, 1);
       assert.equal(listJson[0].id, startJson.id);
@@ -311,7 +347,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
             err.message.includes("[Crewmate Guardrail Blocked]") &&
             err.message.includes("is restricted: Subagent role 'scout'")
           );
-        }
+        },
       );
 
       // 4b. Introspection tools (crewmate_status) MUST be allowed for any role
@@ -348,7 +384,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
             err.message.includes("[Crewmate Guardrail Blocked]") &&
             err.message.includes("is restricted: Subagent role 'builder'")
           );
-        }
+        },
       );
 
       // 4d2. Goto command MUST be blocked for builder role
@@ -366,7 +402,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
             err.message.includes("[Crewmate Guardrail Blocked]") &&
             err.message.includes("is restricted: Subagent role 'builder'")
           );
-        }
+        },
       );
 
       // 4d3. Goto command MUST be allowed for orchestrator (matte)
@@ -430,9 +466,11 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         (err: Error) => {
           return (
             err.message.includes("[Crewmate Guardrail Blocked]") &&
-            err.message.includes("Shell execution of crewmate CLI commands is restricted: Subagent role 'builder'")
+            err.message.includes(
+              "Shell execution of crewmate CLI commands is restricted: Subagent role 'builder'",
+            )
           );
-        }
+        },
       );
 
       // 4h. Shell execution with npx / chained commands MUST also be BLOCKED for subagents
@@ -440,7 +478,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         async () => {
           await executeBefore({
             tool: "shell",
-            input: { command: "npm run build && npx crewmate task complete --id task_1" },
+            input: {
+              command:
+                "npm run build && npx crewmate task complete --id task_1",
+            },
             agent: "builder",
             sessionID: "ses_unit_test",
           });
@@ -448,9 +489,11 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         (err: Error) => {
           return (
             err.message.includes("[Crewmate Guardrail Blocked]") &&
-            err.message.includes("Shell execution of crewmate CLI commands is restricted: Subagent role 'builder'")
+            err.message.includes(
+              "Shell execution of crewmate CLI commands is restricted: Subagent role 'builder'",
+            )
           );
-        }
+        },
       );
 
       // 4i. Orchestrator (Matte) MUST be ALLOWED to run crewmate CLI commands in shell if needed
@@ -492,7 +535,9 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       });
 
       // 4k. Execute crewmate_goto
-      const gotoRes = await registeredTools["crewmate_goto"].execute({ node: "plan" });
+      const gotoRes = await registeredTools["crewmate_goto"].execute({
+        node: "plan",
+      });
       const gotoJson = JSON.parse(gotoRes.content);
       assert.equal(gotoJson.to, "plan");
 
@@ -509,9 +554,11 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         (err: Error) => {
           return (
             err.message.includes("[Crewmate Guardrail Blocked]") &&
-            err.message.includes("Access to path outside the project workspace is forbidden")
+            err.message.includes(
+              "Access to path outside the project workspace is forbidden",
+            )
           );
-        }
+        },
       );
 
       await assert.rejects(
@@ -531,9 +578,11 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         (err: Error) => {
           return (
             err.message.includes("[Crewmate Guardrail Blocked]") &&
-            err.message.includes("Access to path outside the project workspace is forbidden")
+            err.message.includes(
+              "Access to path outside the project workspace is forbidden",
+            )
           );
-        }
+        },
       );
 
       // In-workspace reads MUST be permitted for subagents
@@ -568,7 +617,9 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
   });
 
   it("reconciles stale orphan activities when harness goes offline", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-reconcile-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-reconcile-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -579,7 +630,9 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         label: "Unfinished work on database schema",
       });
 
-      const unclosedBefore = await engine.getActivityManager().getUnclosedActivities();
+      const unclosedBefore = await engine
+        .getActivityManager()
+        .getUnclosedActivities();
       assert.equal(unclosedBefore.length, 1);
       assert.equal(unclosedBefore[0].id, actId);
 
@@ -589,7 +642,9 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       assert.equal(reconciled[0], actId);
 
       // After reconcile, no unclosed activities remain
-      const unclosedAfter = await engine.getActivityManager().getUnclosedActivities();
+      const unclosedAfter = await engine
+        .getActivityManager()
+        .getUnclosedActivities();
       assert.equal(unclosedAfter.length, 0);
 
       // The ended activity now has status "interrupted"
@@ -608,12 +663,21 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
     assert.equal(isCrewmateCliCommand("crewmate advance"), true);
     assert.equal(isCrewmateCliCommand("crewmate status --json"), true);
     assert.equal(isCrewmateCliCommand("crewmate.exe watch"), true);
-    assert.equal(isCrewmateCliCommand("./node_modules/.bin/crewmate task start"), true);
+    assert.equal(
+      isCrewmateCliCommand("./node_modules/.bin/crewmate task start"),
+      true,
+    );
     assert.equal(isCrewmateCliCommand(".\\bin\\crewmate goto execute"), true);
 
     // Should match chained / compound commands
-    assert.equal(isCrewmateCliCommand("npm run build && crewmate advance"), true);
-    assert.equal(isCrewmateCliCommand("git status; crewmate workflow reset"), true);
+    assert.equal(
+      isCrewmateCliCommand("npm run build && crewmate advance"),
+      true,
+    );
+    assert.equal(
+      isCrewmateCliCommand("git status; crewmate workflow reset"),
+      true,
+    );
     assert.equal(isCrewmateCliCommand("FOO=bar crewmate task complete"), true);
 
     // Should match runner invocations (npx, pnpm, yarn, bun)
@@ -624,7 +688,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
     assert.equal(isCrewmateCliCommand("bunx crewmate status"), true);
 
     // Should match node cli invocations
-    assert.equal(isCrewmateCliCommand("node dist/src/cli/index.js advance"), true);
+    assert.equal(
+      isCrewmateCliCommand("node dist/src/cli/index.js advance"),
+      true,
+    );
     assert.equal(isCrewmateCliCommand("node bin/crewmate.js task list"), true);
 
     // Should NOT match non-crewmate commands
@@ -635,21 +702,37 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
     assert.equal(isCrewmateCliCommand("echo hello"), false);
 
     // Should NOT match commands that merely mention crewmate in arguments / commit messages / file paths
-    assert.equal(isCrewmateCliCommand('git commit -m "fix: crewmate config"'), false);
-    assert.equal(isCrewmateCliCommand("git add .crewmate/contracts/index.yaml"), false);
+    assert.equal(
+      isCrewmateCliCommand('git commit -m "fix: crewmate config"'),
+      false,
+    );
+    assert.equal(
+      isCrewmateCliCommand("git add .crewmate/contracts/index.yaml"),
+      false,
+    );
     assert.equal(isCrewmateCliCommand("cat .crewmate/state.jsonl"), false);
     assert.equal(isCrewmateCliCommand("grep -r 'crewmate' src/"), false);
 
     // Command string extraction
     assert.deepEqual(extractCommandStrings("ls"), ["ls"]);
-    assert.deepEqual(extractCommandStrings({ command: "npm test" }), ["npm test"]);
-    assert.deepEqual(extractCommandStrings({ cmd: "git status" }), ["git status"]);
-    assert.deepEqual(extractCommandStrings({ script: "python app.py" }), ["python app.py"]);
-    assert.deepEqual(extractCommandStrings({ args: ["crewmate", "advance"] }), ["crewmate advance"]);
+    assert.deepEqual(extractCommandStrings({ command: "npm test" }), [
+      "npm test",
+    ]);
+    assert.deepEqual(extractCommandStrings({ cmd: "git status" }), [
+      "git status",
+    ]);
+    assert.deepEqual(extractCommandStrings({ script: "python app.py" }), [
+      "python app.py",
+    ]);
+    assert.deepEqual(extractCommandStrings({ args: ["crewmate", "advance"] }), [
+      "crewmate advance",
+    ]);
   });
 
   it("isolates non-Matte agents: bypasses guardrails and context injection while enforcing subagents", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-agent-isolation-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-agent-isolation-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -702,17 +785,32 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       // When caller is "build" or "general", ZERO context should be injected (completely invisible)
       const buildSessionCtx: any = { system: [], agent: "build" };
       await contextHook(buildSessionCtx);
-      assert.equal(buildSessionCtx.system.length, 0, "Non-Matte agent must receive zero injected context");
+      assert.equal(
+        buildSessionCtx.system.length,
+        0,
+        "Non-Matte agent must receive zero injected context",
+      );
 
       const generalSessionCtx: any = { system: [], agent: "general" };
       await contextHook(generalSessionCtx);
-      assert.equal(generalSessionCtx.system.length, 0, "General agent must receive zero injected context");
+      assert.equal(
+        generalSessionCtx.system.length,
+        0,
+        "General agent must receive zero injected context",
+      );
 
       // But when caller is a Crewmate agent (e.g. "scout" or "matte"), context IS injected
       const scoutSessionCtx: any = { system: [], agent: "scout" };
       await contextHook(scoutSessionCtx);
-      assert.ok(scoutSessionCtx.system.length > 0, "Crewmate subagent must receive injected context");
-      assert.ok(scoutSessionCtx.system[0].text.includes("CREWMATE CONTEXT [NODE: SCOUT]"));
+      assert.ok(
+        scoutSessionCtx.system.length > 0,
+        "Crewmate subagent must receive injected context",
+      );
+      assert.ok(
+        scoutSessionCtx.system[0].text.includes(
+          "CREWMATE CONTEXT [NODE: SCOUT]",
+        ),
+      );
 
       // 3. Test Tool Execution Guardrail Bypass:
       // The workflow is currently at node "scout" (scope: "read-only").
@@ -720,7 +818,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
       await assert.doesNotReject(async () => {
         await executeBefore({
           tool: "write",
-          input: { path: "src/user-code.ts", content: "console.log('by build agent');" },
+          input: {
+            path: "src/user-code.ts",
+            content: "console.log('by build agent');",
+          },
           agent: "build",
         });
       }, "Non-Matte agent 'build' must NOT be blocked by read-only guardrail");
@@ -739,7 +840,10 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         async () => {
           await executeBefore({
             tool: "write",
-            input: { path: "src/user-code.ts", content: "console.log('by scout');" },
+            input: {
+              path: "src/user-code.ts",
+              content: "console.log('by scout');",
+            },
             agent: "scout",
           });
         },
@@ -749,7 +853,7 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
             err.message.includes("has scope 'read-only'")
           );
         },
-        "Crewmate subagent 'scout' MUST be strictly blocked by read-only guardrail"
+        "Crewmate subagent 'scout' MUST be strictly blocked by read-only guardrail",
       );
 
       // And Crewmate subagent "scout" MUST still have CLI execution blocked:
@@ -764,10 +868,12 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         (err: Error) => {
           return (
             err.message.includes("[Crewmate Guardrail Blocked]") &&
-            err.message.includes("Shell execution of crewmate CLI commands is restricted")
+            err.message.includes(
+              "Shell execution of crewmate CLI commands is restricted",
+            )
           );
         },
-        "Crewmate subagent 'scout' MUST be blocked from running CLI shell commands"
+        "Crewmate subagent 'scout' MUST be blocked from running CLI shell commands",
       );
 
       // 4. Test Dynamic Discovery of Custom Workflow Agents:
@@ -783,13 +889,26 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         },
       });
       await fs.writeFile(
-        path.join(tmpDir, ".crewmate", "workflows", "feature-pipeline", "nodes", "audit.node.yaml"),
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "nodes",
+          "audit.node.yaml",
+        ),
         customNodeYaml,
-        "utf-8"
+        "utf-8",
       );
 
       // Add "audit" to graph.yaml
-      const graphPath = path.join(tmpDir, ".crewmate", "workflows", "feature-pipeline", "graph.yaml");
+      const graphPath = path.join(
+        tmpDir,
+        ".crewmate",
+        "workflows",
+        "feature-pipeline",
+        "graph.yaml",
+      );
       const currentGraph = yaml.parse(await fs.readFile(graphPath, "utf-8"));
       currentGraph.nodes.push({ id: "audit", next: "done" });
       await fs.writeFile(graphPath, yaml.stringify(currentGraph), "utf-8");

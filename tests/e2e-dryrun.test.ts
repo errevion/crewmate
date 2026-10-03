@@ -9,7 +9,9 @@ import { crewmateOpenCodePlugin as crewmatePlugin } from "../src/adapters/openco
 
 describe("Phase 4: Full End-to-End Dry Run", () => {
   it("executes complete lifecycle: scout -> clarify -> plan -> execute -> contract -> verify fail -> route back -> fix -> done", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-e2e-dryrun-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-e2e-dryrun-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
 
@@ -55,14 +57,19 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
       // Agent turn 1: Context injection
       const sessionCtx1: any = { system: [] };
       await pluginHooks["context"][0](sessionCtx1);
-      assert.ok(sessionCtx1.system[0].text.includes("CREWMATE CONTEXT [NODE: SCOUT]"));
+      assert.ok(
+        sessionCtx1.system[0].text.includes("CREWMATE CONTEXT [NODE: SCOUT]"),
+      );
       assert.ok(sessionCtx1.system[1].text.includes("Active Role: scout"));
 
       // Analyst tries to write code -> Guardrail blocks!
       await assert.rejects(async () => {
         await pluginHooks["execute.before"][0]({
           tool: "write",
-          input: { path: "src/example/index.ts", content: "console.log('scout');" },
+          input: {
+            path: "src/example/index.ts",
+            content: "console.log('scout');",
+          },
         });
       });
 
@@ -80,14 +87,23 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
       // Clarify turn: Context injection
       const sessionCtxClarify: any = { system: [] };
       await pluginHooks["context"][0](sessionCtxClarify);
-      assert.ok(sessionCtxClarify.system[0].text.includes("CREWMATE CONTEXT [NODE: CLARIFY]"));
-      assert.ok(sessionCtxClarify.system[1].text.includes("Active Role: orchestrator"));
+      assert.ok(
+        sessionCtxClarify.system[0].text.includes(
+          "CREWMATE CONTEXT [NODE: CLARIFY]",
+        ),
+      );
+      assert.ok(
+        sessionCtxClarify.system[1].text.includes("Active Role: orchestrator"),
+      );
 
       // Clarify is read-only -> writes are blocked!
       await assert.rejects(async () => {
         await pluginHooks["execute.before"][0]({
           tool: "write",
-          input: { path: "src/example/index.ts", content: "console.log('clarify');" },
+          input: {
+            path: "src/example/index.ts",
+            content: "console.log('clarify');",
+          },
         });
       });
 
@@ -105,14 +121,19 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
       // Agent turn 2: Context injection
       const sessionCtx2: any = { system: [] };
       await pluginHooks["context"][0](sessionCtx2);
-      assert.ok(sessionCtx2.system[0].text.includes("CREWMATE CONTEXT [NODE: PLAN]"));
+      assert.ok(
+        sessionCtx2.system[0].text.includes("CREWMATE CONTEXT [NODE: PLAN]"),
+      );
       assert.ok(sessionCtx2.system[1].text.includes("Active Role: planner"));
 
       // Planner tries to write code -> Guardrail blocks!
       await assert.rejects(async () => {
         await pluginHooks["execute.before"][0]({
           tool: "write",
-          input: { path: "src/example/index.ts", content: "console.log('plan');" },
+          input: {
+            path: "src/example/index.ts",
+            content: "console.log('plan');",
+          },
         });
       });
 
@@ -130,7 +151,9 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
       // Agent turn 3: Context injection
       const sessionCtx3: any = { system: [] };
       await pluginHooks["context"][0](sessionCtx3);
-      assert.ok(sessionCtx3.system[0].text.includes("CREWMATE CONTEXT [NODE: EXECUTE]"));
+      assert.ok(
+        sessionCtx3.system[0].text.includes("CREWMATE CONTEXT [NODE: EXECUTE]"),
+      );
       assert.ok(sessionCtx3.system[1].text.includes("Active Role: builder"));
 
       // Builder implements example function conforming to example.contract.yaml
@@ -139,7 +162,8 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
           tool: "write",
           input: {
             path: "src/example/index.ts",
-            content: "export function exampleFn(): void { console.log('active'); }\n",
+            content:
+              "export function exampleFn(): void { console.log('active'); }\n",
           },
         });
       });
@@ -149,7 +173,7 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "index.ts"),
         "export function exampleFn(): void { console.log('active'); }\n",
-        "utf-8"
+        "utf-8",
       );
 
       // Advance to contract
@@ -166,7 +190,11 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
       // Agent turn 4: Context injection
       const sessionCtx4: any = { system: [] };
       await pluginHooks["context"][0](sessionCtx4);
-      assert.ok(sessionCtx4.system[0].text.includes("CREWMATE CONTEXT [NODE: CONTRACT]"));
+      assert.ok(
+        sessionCtx4.system[0].text.includes(
+          "CREWMATE CONTEXT [NODE: CONTRACT]",
+        ),
+      );
       assert.ok(sessionCtx4.system[1].text.includes("Active Role: contractor"));
 
       // Advance to verify
@@ -183,14 +211,16 @@ describe("Phase 4: Full End-to-End Dry Run", () => {
       // Verifier turn: context injection
       const sessionCtx5: any = { system: [] };
       await pluginHooks["context"][0](sessionCtx5);
-      assert.ok(sessionCtx5.system[0].text.includes("CREWMATE CONTEXT [NODE: VERIFY]"));
+      assert.ok(
+        sessionCtx5.system[0].text.includes("CREWMATE CONTEXT [NODE: VERIFY]"),
+      );
       assert.ok(sessionCtx5.system[1].text.includes("Active Role: verifier"));
 
       // Introduce dead code: unreferenced export not in contracts!
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "dead.ts"),
         "export function unusedFunction(): string { return 'ghost'; }\n",
-        "utf-8"
+        "utf-8",
       );
 
       // Verify post-gate check on advance should FAIL and route back to execute

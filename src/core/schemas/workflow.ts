@@ -28,7 +28,10 @@ export const SoftGuardrailSchema = z.object({
   description: z.string().optional(),
 });
 
-export const GuardrailSchema = z.union([HardGuardrailSchema, SoftGuardrailSchema]);
+export const GuardrailSchema = z.union([
+  HardGuardrailSchema,
+  SoftGuardrailSchema,
+]);
 export type Guardrail = z.infer<typeof GuardrailSchema>;
 export type HardGuardrail = z.infer<typeof HardGuardrailSchema>;
 export type SoftGuardrail = z.infer<typeof SoftGuardrailSchema>;
