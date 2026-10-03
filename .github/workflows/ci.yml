@@ -43,7 +43,7 @@ jobs:
 
       - name: Check for Rust changes
         id: rust-changes
-        uses: tj-actions/changed-files@v42
+        uses: tj-actions/changed-files@v47
         with:
           files: |
             crates/**
