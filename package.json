@@ -14,7 +14,7 @@
     "build": "tsc",
     "build:watch": "cargo build --release --manifest-path crates/crewmate-watch/Cargo.toml",
     "watch": "tsc --watch",
-    "test": "node --test dist/tests/**/*.test.js",
+    "test": "node --test dist/tests/*.test.js",
     "test:src": "node --experimental-strip-types --test tests/**/*.test.ts"
   },
   "keywords": [
