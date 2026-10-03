@@ -146,7 +146,12 @@ For detailed plugin architecture, hook configuration, and custom harness adapter
 
 `crewmate watch` launches a read-only, real-time terminal UI observer built in Rust with [Ratatui](https://ratatui.rs) and [Tachyonfx](https://github.com/sand4rt/tachyonfx).
 
-Features:
+### Native Binary Installation
+
+The pre-built native `crewmate-watch` binary for your platform (Linux, macOS, Windows) is automatically downloaded and verified via `npm postinstall`. If the postinstall step is skipped (for example, when using `--ignore-scripts`), `crewmate watch` automatically falls back to an on-demand lazy download the first time the command is executed.
+
+### Features
+
 - **Strictly Read-Only**: Never alters workspace files or mutates engine state.
 - **Visual Workflow Graph**: Renders live node transitions with smooth tweened animations (`[1] Workflow`).
 - **Parallel Task Board**: Live lock tables, running/waiting task queues, and blocker diagnostics (`[2] Tasks`).
