@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output - TypeScript
+dist/
+*.tsbuildinfo
+
+# Build output - Rust
+**/target/
+
+# Built binaries
+bin/*.exe
+
+# Runtime data & state
+.crewmate/*
+!.crewmate/contracts/
+!.crewmate/workflows/
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
