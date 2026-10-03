@@ -1,5 +1,5 @@
 {
-  "name": "crew-mate",
+  "name": "@errevion/crewmate",
   "version": "0.1.0",
   "description": "CLI-based workflow engine for contract-driven agent development",
   "type": "module",
