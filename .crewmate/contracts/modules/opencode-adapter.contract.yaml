@@ -19,7 +19,7 @@ public_api:
     file: src/adapters/opencode/index.ts
     description: "Set of recognized Crewmate subagent role identifiers."
   - export: isCrewmateAgent
-    signature: "(agentName?: string, cwd?: string, roleDirective?: string) => Promise<boolean>"
+    signature: "(engine: CrewmateEngine, agentName: string | undefined | null) => Promise<boolean>"
     file: src/adapters/opencode/index.ts
     description: "Validates whether an agent session belongs to a Crewmate subagent."
   - export: crewmateOpenCodePlugin

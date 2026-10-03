@@ -1,5 +1,5 @@
 {
-  "name": "crewmate",
+  "name": "crew-mate",
   "version": "0.1.0",
   "description": "CLI-based workflow engine for contract-driven agent development",
   "type": "module",
@@ -11,6 +11,7 @@
     "./plugin": "./dist/src/adapters/opencode/index.js"
   },
   "scripts": {
+    "prepack": "npm run build",
     "build": "tsc",
     "build:watch": "cargo build --release --manifest-path crates/crewmate-watch/Cargo.toml",
     "watch": "tsc --watch",
@@ -30,8 +31,23 @@
     "ai-agents",
     "opencode"
   ],
+  "files": [
+    "dist/src",
+    "bin"
+  ],
   "author": "Noiverre",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/errevion/crewmate.git"
+  },
+  "homepage": "https://github.com/errevion/crewmate#readme",
+  "bugs": {
+    "url": "https://github.com/errevion/crewmate/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@opencode/plugin": "^2.0.16",
     "commander": "^15.0.0",
