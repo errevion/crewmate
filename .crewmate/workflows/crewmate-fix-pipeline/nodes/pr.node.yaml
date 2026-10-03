@@ -1,0 +1,18 @@
+id: pr
+instructions: >
+  Stage changes with `git add .`, amend the existing commit or create a fixup
+  commit (`git commit -m "fix: ..."`), force-push to the existing branch with
+  `git push --force-with-lease`, and update the PR description if needed.
+
+  Do NOT create a new branch or a new PR — update the existing one.
+inputs: []
+subagent:
+  role: builder
+  agent: builder
+  scope: read-only
+guardrails:
+  pre: []
+  post: []
+on_fail: route(fix)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

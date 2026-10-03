@@ -1,0 +1,26 @@
+id: verify
+instructions: >
+  Verify the fix by running the test suite and scanning for architecture
+  boundary violations and dead code.
+
+  Ensure all tests pass and no new violations were introduced by the fix.
+inputs:
+  - diff
+subagent:
+  role: verifier
+  agent: verifier
+  scope: read-only
+guardrails:
+  pre:
+    - type: hard
+      run: crewmate scan arch
+  post:
+    - type: hard
+      run: npm test
+    - type: hard
+      run: crewmate scan dead-code
+    - type: hard
+      run: crewmate scan arch
+on_fail: route(fix)
+on_fail_max_retries: 2
+escalate_after_max_retries: human
