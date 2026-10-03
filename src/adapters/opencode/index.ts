@@ -897,10 +897,11 @@ export const crewmateOpenCodePlugin = Plugin.define({
           const inputObj = info.input as Record<string, unknown> | undefined;
           const targetPath = (inputObj?.path || inputObj?.filePath || inputObj?.file) as string | undefined;
           if (targetPath && typeof targetPath === "string") {
+            const isForeignWinAbs = process.platform !== "win32" && /^[a-zA-Z]:[/\\]/.test(targetPath);
             const resolvedTarget = path.resolve(projectRoot, targetPath);
             const resolvedProjectRoot = path.resolve(projectRoot);
             const rel = path.relative(resolvedProjectRoot, resolvedTarget);
-            const isInside = !rel.startsWith("..") && !path.isAbsolute(rel);
+            const isInside = !isForeignWinAbs && !rel.startsWith("..") && !path.isAbsolute(rel);
             if (!isInside) {
               throw new Error(
                 `[Crewmate Guardrail Blocked] Access to path outside the project workspace is forbidden: '${targetPath}'. Subagents must operate strictly within the workspace directory.`

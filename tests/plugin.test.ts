@@ -518,7 +518,12 @@ describe("OpenCode v2 Crewmate Plugin (Phase 3)", () => {
         async () => {
           await executeBefore({
             tool: "grep",
-            input: { path: "C:/some/external/system/path" },
+            input: {
+              path:
+                process.platform === "win32"
+                  ? "C:/some/external/system/path"
+                  : "/some/external/system/path",
+            },
             agent: "planner",
             sessionID: "ses_unit_test",
           });
