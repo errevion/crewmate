@@ -64,14 +64,24 @@ describe("Crewmate Watch CLI & Binary", () => {
         stdio: ["pipe", "pipe", "pipe"],
       });
 
+      const exitPromise = new Promise((resolve) => {
+        if (child.exitCode !== null || child.signalCode !== null) {
+          resolve(child.exitCode);
+        } else {
+          child.once("exit", resolve);
+        }
+      });
+
       let stderrOutput = "";
       child.stderr.on("data", (chunk) => {
         stderrOutput += chunk.toString();
       });
 
       await new Promise((resolve) => setTimeout(resolve, 350));
-      child.kill();
-      await new Promise((resolve) => child.on("exit", resolve));
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill();
+      }
+      await exitPromise;
       await new Promise((resolve) => setTimeout(resolve, 150));
 
       assert.doesNotMatch(stderrOutput, /Could not find 'crewmate-watch/i);

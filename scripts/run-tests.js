@@ -13,7 +13,8 @@ if (!fs.existsSync(testsDir)) {
 const testFiles = fs
   .readdirSync(testsDir)
   .filter((f) => f.endsWith(".test.js"))
-  .map((f) => path.join("dist", "tests", f));
+  .map((f) => path.join("dist", "tests", f))
+  .sort();
 
 if (testFiles.length === 0) {
   console.error("No test files found in dist/tests");
@@ -23,5 +24,13 @@ if (testFiles.length === 0) {
 const result = spawnSync(process.execPath, ["--test", ...testFiles], {
   stdio: "inherit",
 });
+
+if (result.error) {
+  console.error("Test execution error:", result.error);
+}
+
+if (result.signal) {
+  console.error(`Test process terminated with signal: ${result.signal}`);
+}
 
 process.exit(result.status ?? 1);
