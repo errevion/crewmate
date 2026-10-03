@@ -190,6 +190,11 @@ jobs:
             release-assets/*.tar.gz
             release-assets/*.zip
             release-assets/*.sha256
+          body: |
+            ## Installation
+            ```sh
+            npm install -g crew-mate
+            ```
           generate_release_notes: true
           draft: false
         env:
