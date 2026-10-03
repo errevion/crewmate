@@ -633,4 +633,46 @@ describe("Crewmate Watch CLI & Binary", () => {
       }
     });
   });
+
+  describe("scripts/postinstall.js lifecycle execution", () => {
+    it("postinstall script exits cleanly with code 0 when dist is not built", async () => {
+      const postinstallScript = path.resolve("scripts", "postinstall.js");
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "crewmate-test-postinstall-empty-"),
+      );
+      try {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "test-postinstall", type: "module" }),
+        );
+        const dummyScriptsDir = path.join(tempDir, "scripts");
+        fs.mkdirSync(dummyScriptsDir, { recursive: true });
+        const scriptCopy = path.join(dummyScriptsDir, "postinstall.js");
+        fs.copyFileSync(postinstallScript, scriptCopy);
+
+        const { stdout, stderr } = await execFileAsync(process.execPath, [
+          scriptCopy,
+        ]);
+        assert.strictEqual(stderr, "");
+        assert.strictEqual(stdout, "");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("postinstall script runs installWatchBinary when dist exists", async () => {
+      const postinstallScript = path.resolve("scripts", "postinstall.js");
+      const { stderr } = await execFileAsync(
+        process.execPath,
+        [postinstallScript],
+        {
+          env: {
+            ...process.env,
+            CREWMATE_SKIP_WATCH_INSTALL: "1",
+          },
+        },
+      );
+      assert.strictEqual(stderr, "");
+    });
+  });
 });
