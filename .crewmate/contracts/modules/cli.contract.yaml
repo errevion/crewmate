@@ -6,4 +6,8 @@ invariants:
   - "Commands exit with code 0 on success and non-zero exit codes on failure."
   - "Supports both human-readable console output and machine-readable JSON output via --json flag."
   - "Validates workflow and task prerequisites prior to executing transitions or lock grants."
+  - "Codebase conforms to Biome linting and formatting standards configured in biome.json and verified via npm run lint and npm run format:check."
+  - "Continuous integration pipeline validates multi-platform (Ubuntu, macOS, Windows) and multi-node (Node 20, Node 22) matrix tests, Biome linting, Rust clippy/fmt, and Crewmate scanner gates."
+  - "Release workflow automates cross-compilation of native binaries across 5 target platforms, generates SHA-256 checksums, publishes GitHub releases, and publishes to npm with provenance."
+  - "Automated dependency updates for npm, cargo, and GitHub Actions are maintained on a weekly schedule via Dependabot."
 declared_consumers: []

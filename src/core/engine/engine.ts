@@ -23,7 +23,11 @@ import {
   type NodeDef,
   NodeDefSchema,
 } from "../schemas/workflow.js";
-import { type EngineState, type GateResult, type StateEvent } from "../schemas/state.js";
+import {
+  type EngineState,
+  type GateResult,
+  type StateEvent,
+} from "../schemas/state.js";
 import { type ActivityRecord } from "../schemas/activity.js";
 import { StateManager } from "../state/state-manager.js";
 import { ActivityManager } from "../activity/activity-manager.js";
@@ -42,7 +46,10 @@ import {
   type WorkflowRunReport,
   type ReportSummaryItem,
 } from "../report/report-manager.js";
-import { ArchiveManager, type ArchiveManifest } from "../archive/archive-manager.js";
+import {
+  ArchiveManager,
+  type ArchiveManifest,
+} from "../archive/archive-manager.js";
 import {
   DEFAULT_ARCHITECTURE_YAML,
   DEFAULT_CAPABILITIES_YAML,
@@ -242,7 +249,11 @@ export class CrewmateEngine {
     return this.taskManager.startTask(taskId);
   }
 
-  public async amendTaskScope(taskId: string, filePath: string, reason?: string): Promise<TaskAmendResult> {
+  public async amendTaskScope(
+    taskId: string,
+    filePath: string,
+    reason?: string,
+  ): Promise<TaskAmendResult> {
     return this.taskManager.amendScope(taskId, filePath, reason);
   }
 
@@ -254,7 +265,9 @@ export class CrewmateEngine {
     return this.taskManager.getLocks();
   }
 
-  public async listTasks(filter?: { status?: TaskStatus }): Promise<TaskDefinition[]> {
+  public async listTasks(filter?: {
+    status?: TaskStatus;
+  }): Promise<TaskDefinition[]> {
     return this.taskManager.listTasks(filter);
   }
 
@@ -265,24 +278,39 @@ export class CrewmateEngine {
   /**
    * Get files being verified in current workspace
    */
-  public async getVerifiedFiles(unclosedActivities?: ActivityRecord[]): Promise<string[]> {
+  public async getVerifiedFiles(
+    unclosedActivities?: ActivityRecord[],
+  ): Promise<string[]> {
     const verified = new Set<string>();
 
     // 1. Try git status / diff
     try {
-      const { stdout: statusOut } = await execAsync("git status --porcelain", { cwd: this.projectRoot });
-      const lines = statusOut.split("\n").filter((l: string) => l.trim().length > 0);
+      const { stdout: statusOut } = await execAsync("git status --porcelain", {
+        cwd: this.projectRoot,
+      });
+      const lines = statusOut
+        .split("\n")
+        .filter((l: string) => l.trim().length > 0);
       for (const line of lines) {
         const raw = line.slice(3).trim();
         const clean = raw.includes(" -> ") ? raw.split(" -> ")[1].trim() : raw;
-        verified.add(this.activityManager.normalizePath(clean.replace(/^"|"$/g, "")));
+        verified.add(
+          this.activityManager.normalizePath(clean.replace(/^"|"$/g, "")),
+        );
       }
 
       try {
-        const { stdout: diffOut } = await execAsync("git diff --name-only HEAD", { cwd: this.projectRoot });
-        const diffLines = diffOut.split("\n").filter((l: string) => l.trim().length > 0);
+        const { stdout: diffOut } = await execAsync(
+          "git diff --name-only HEAD",
+          { cwd: this.projectRoot },
+        );
+        const diffLines = diffOut
+          .split("\n")
+          .filter((l: string) => l.trim().length > 0);
         for (const dl of diffLines) {
-          verified.add(this.activityManager.normalizePath(dl.trim().replace(/^"|"$/g, "")));
+          verified.add(
+            this.activityManager.normalizePath(dl.trim().replace(/^"|"$/g, "")),
+          );
         }
       } catch {
         // HEAD might not exist
@@ -357,7 +385,10 @@ export class CrewmateEngine {
         // If segments end in .yaml, also check .yml
         const last = segments[segments.length - 1];
         if (last && last.endsWith(".yaml")) {
-          const ymlSegments = [...segments.slice(0, -1), last.replace(/\.yaml$/, ".yml")];
+          const ymlSegments = [
+            ...segments.slice(0, -1),
+            last.replace(/\.yaml$/, ".yml"),
+          ];
           const ymlCandidate = path.join(dir, ...ymlSegments);
           try {
             await fs.access(ymlCandidate);
@@ -375,7 +406,10 @@ export class CrewmateEngine {
   /**
    * Safely read and parse a YAML file
    */
-  private async readYaml<T>(filePath: string, schema: { parse: (val: unknown) => T }): Promise<T> {
+  private async readYaml<T>(
+    filePath: string,
+    schema: { parse: (val: unknown) => T },
+  ): Promise<T> {
     const content = await fs.readFile(filePath, "utf-8");
     const parsed = yaml.parse(content);
     return schema.parse(parsed);
@@ -384,44 +418,157 @@ export class CrewmateEngine {
   /**
    * Initialize standard project structure
    */
-  public async init(options: { force?: boolean; example?: boolean } = {}): Promise<InitResult> {
-    const indexContent = options.example ? DEFAULT_EXAMPLE_INDEX_YAML : DEFAULT_INDEX_YAML;
-    const archContent = options.example ? DEFAULT_EXAMPLE_ARCHITECTURE_YAML : DEFAULT_ARCHITECTURE_YAML;
-    const capsContent = options.example ? DEFAULT_EXAMPLE_CAPABILITIES_YAML : DEFAULT_CAPABILITIES_YAML;
+  public async init(
+    options: { force?: boolean; example?: boolean } = {},
+  ): Promise<InitResult> {
+    const indexContent = options.example
+      ? DEFAULT_EXAMPLE_INDEX_YAML
+      : DEFAULT_INDEX_YAML;
+    const archContent = options.example
+      ? DEFAULT_EXAMPLE_ARCHITECTURE_YAML
+      : DEFAULT_ARCHITECTURE_YAML;
+    const capsContent = options.example
+      ? DEFAULT_EXAMPLE_CAPABILITIES_YAML
+      : DEFAULT_CAPABILITIES_YAML;
 
     const filesToCreate = [
-      { path: this.p(".crewmate", "contracts", "index.yaml"), content: indexContent },
-      { path: this.p(".crewmate", "contracts", "architecture.yaml"), content: archContent },
-      { path: this.p(".crewmate", "contracts", "structure.yaml"), content: DEFAULT_STRUCTURE_YAML },
-      { path: this.p(".crewmate", "contracts", "capabilities.yaml"), content: capsContent },
-      { path: this.p(".crewmate", "contracts", "SCHEMA.md"), content: DEFAULT_SCHEMA_MD },
+      {
+        path: this.p(".crewmate", "contracts", "index.yaml"),
+        content: indexContent,
+      },
+      {
+        path: this.p(".crewmate", "contracts", "architecture.yaml"),
+        content: archContent,
+      },
+      {
+        path: this.p(".crewmate", "contracts", "structure.yaml"),
+        content: DEFAULT_STRUCTURE_YAML,
+      },
+      {
+        path: this.p(".crewmate", "contracts", "capabilities.yaml"),
+        content: capsContent,
+      },
+      {
+        path: this.p(".crewmate", "contracts", "SCHEMA.md"),
+        content: DEFAULT_SCHEMA_MD,
+      },
       ...(options.example
         ? [
             {
-              path: this.p(".crewmate", "contracts", "modules", "example.contract.yaml"),
+              path: this.p(
+                ".crewmate",
+                "contracts",
+                "modules",
+                "example.contract.yaml",
+              ),
               content: DEFAULT_EXAMPLE_CONTRACT_YAML,
             },
           ]
         : []),
       // Primary workflow: feature-pipeline
-      { path: this.p(".crewmate", "workflows", "feature-pipeline", "graph.yaml"), content: DEFAULT_GRAPH_YAML },
-      { path: this.p(".crewmate", "workflows", "feature-pipeline", "nodes", "scout.node.yaml"), content: DEFAULT_SCOUT_NODE_YAML },
-      { path: this.p(".crewmate", "workflows", "feature-pipeline", "nodes", "clarify.node.yaml"), content: DEFAULT_CLARIFY_NODE_YAML },
-      { path: this.p(".crewmate", "workflows", "feature-pipeline", "nodes", "plan.node.yaml"), content: DEFAULT_PLAN_NODE_YAML },
-      { path: this.p(".crewmate", "workflows", "feature-pipeline", "nodes", "execute.node.yaml"), content: DEFAULT_EXECUTE_NODE_YAML },
-      { path: this.p(".crewmate", "workflows", "feature-pipeline", "nodes", "contract.node.yaml"), content: DEFAULT_CONTRACT_NODE_YAML },
-      { path: this.p(".crewmate", "workflows", "feature-pipeline", "nodes", "verify.node.yaml"), content: DEFAULT_VERIFY_NODE_YAML },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "graph.yaml",
+        ),
+        content: DEFAULT_GRAPH_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "nodes",
+          "scout.node.yaml",
+        ),
+        content: DEFAULT_SCOUT_NODE_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "nodes",
+          "clarify.node.yaml",
+        ),
+        content: DEFAULT_CLARIFY_NODE_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "nodes",
+          "plan.node.yaml",
+        ),
+        content: DEFAULT_PLAN_NODE_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "nodes",
+          "execute.node.yaml",
+        ),
+        content: DEFAULT_EXECUTE_NODE_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "nodes",
+          "contract.node.yaml",
+        ),
+        content: DEFAULT_CONTRACT_NODE_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "feature-pipeline",
+          "nodes",
+          "verify.node.yaml",
+        ),
+        content: DEFAULT_VERIFY_NODE_YAML,
+      },
       // Secondary workflow: contract-sync
-      { path: this.p(".crewmate", "workflows", "contract-sync", "graph.yaml"), content: SYNC_GRAPH_YAML },
-      { path: this.p(".crewmate", "workflows", "contract-sync", "nodes", "scout.node.yaml"), content: SYNC_SCOUT_NODE_YAML },
-      { path: this.p(".crewmate", "workflows", "contract-sync", "nodes", "contract.node.yaml"), content: SYNC_CONTRACT_NODE_YAML },
+      {
+        path: this.p(".crewmate", "workflows", "contract-sync", "graph.yaml"),
+        content: SYNC_GRAPH_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "contract-sync",
+          "nodes",
+          "scout.node.yaml",
+        ),
+        content: SYNC_SCOUT_NODE_YAML,
+      },
+      {
+        path: this.p(
+          ".crewmate",
+          "workflows",
+          "contract-sync",
+          "nodes",
+          "contract.node.yaml",
+        ),
+        content: SYNC_CONTRACT_NODE_YAML,
+      },
     ];
 
     if (!options.force) {
       for (const file of filesToCreate) {
         try {
           await fs.access(file.path);
-          throw new Error(`File already exists: ${path.relative(this.projectRoot, file.path)}. Use --force to overwrite.`);
+          throw new Error(
+            `File already exists: ${path.relative(this.projectRoot, file.path)}. Use --force to overwrite.`,
+          );
         } catch (err: unknown) {
           if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
             throw err;
@@ -434,11 +581,15 @@ export class CrewmateEngine {
     for (const file of filesToCreate) {
       await fs.mkdir(path.dirname(file.path), { recursive: true });
       await fs.writeFile(file.path, file.content, "utf-8");
-      created.push(path.relative(this.projectRoot, file.path).replace(/\\/g, "/"));
+      created.push(
+        path.relative(this.projectRoot, file.path).replace(/\\/g, "/"),
+      );
     }
 
     // Always ensure the contracts/modules directory exists even if no contracts are created initially
-    await fs.mkdir(this.p(".crewmate", "contracts", "modules"), { recursive: true });
+    await fs.mkdir(this.p(".crewmate", "contracts", "modules"), {
+      recursive: true,
+    });
 
     // Install OpenCode project-wide plugin (.opencode/plugins/crewmate.ts)
     // Clean up any legacy crewmate.js so OpenCode does not attempt duplicate/conflicting loading
@@ -462,7 +613,10 @@ export class CrewmateEngine {
       // Resolve absolute file URL to this installation's adapter as fallback for projects without crewmate in node_modules
       let fallbackAdapterUrl: string | undefined;
       try {
-        fallbackAdapterUrl = new URL("../../adapters/opencode/index.js", import.meta.url).href;
+        fallbackAdapterUrl = new URL(
+          "../../adapters/opencode/index.js",
+          import.meta.url,
+        ).href;
       } catch {
         fallbackAdapterUrl = undefined;
       }
@@ -470,7 +624,9 @@ export class CrewmateEngine {
       const pluginContent = generateOpenCodePluginTs(fallbackAdapterUrl);
       await fs.mkdir(path.dirname(pluginTsPath), { recursive: true });
       await fs.writeFile(pluginTsPath, pluginContent, "utf-8");
-      created.push(path.relative(this.projectRoot, pluginTsPath).replace(/\\/g, "/"));
+      created.push(
+        path.relative(this.projectRoot, pluginTsPath).replace(/\\/g, "/"),
+      );
     }
 
     // Install OpenCode specialized orchestrator and subagents in .opencode/agents/
@@ -496,7 +652,9 @@ export class CrewmateEngine {
       if (!agentExists || options.force) {
         await fs.mkdir(path.dirname(agentPath), { recursive: true });
         await fs.writeFile(agentPath, agent.content, "utf-8");
-        created.push(path.relative(this.projectRoot, agentPath).replace(/\\/g, "/"));
+        created.push(
+          path.relative(this.projectRoot, agentPath).replace(/\\/g, "/"),
+        );
       }
     }
 
@@ -507,11 +665,15 @@ export class CrewmateEngine {
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed.plugins)) {
         const cleaned = parsed.plugins.filter(
-          (p: string) => !p.includes(".opencode/plugins/crewmate")
+          (p: string) => !p.includes(".opencode/plugins/crewmate"),
         );
         if (cleaned.length !== parsed.plugins.length) {
           parsed.plugins = cleaned;
-          await fs.writeFile(opencodeJsonPath, JSON.stringify(parsed, null, 2), "utf-8");
+          await fs.writeFile(
+            opencodeJsonPath,
+            JSON.stringify(parsed, null, 2),
+            "utf-8",
+          );
         }
       }
     } catch {
@@ -538,7 +700,9 @@ export class CrewmateEngine {
   public async status(): Promise<StatusResult> {
     const state = await this.stateManager.getState();
     if (!state.currentNode) {
-      throw new Error("Crewmate is not initialized. Run 'crewmate init' first.");
+      throw new Error(
+        "Crewmate is not initialized. Run 'crewmate init' first.",
+      );
     }
 
     let instructions = "";
@@ -556,7 +720,8 @@ export class CrewmateEngine {
 
     const currentRetries = state.retryCounts[state.currentNode] || 0;
     const gateResults = state.lastGateResults[state.currentNode] || [];
-    const unclosedActivities = await this.activityManager.getUnclosedActivities();
+    const unclosedActivities =
+      await this.activityManager.getUnclosedActivities();
 
     return {
       currentNode: state.currentNode,
@@ -575,7 +740,10 @@ export class CrewmateEngine {
    * Load node definition
    */
   public async getNodeDef(nodeId: string): Promise<NodeDef> {
-    const nodeFile = await this.resolveWorkflowPath("nodes", `${nodeId}.node.yaml`);
+    const nodeFile = await this.resolveWorkflowPath(
+      "nodes",
+      `${nodeId}.node.yaml`,
+    );
     return this.readYaml(nodeFile, NodeDefSchema);
   }
 
@@ -590,18 +758,29 @@ export class CrewmateEngine {
   /**
    * Assemble tiered context for a node
    */
-  public async context(nodeId?: string, options: { module?: string } = {}): Promise<ContextBundle> {
+  public async context(
+    nodeId?: string,
+    options: { module?: string } = {},
+  ): Promise<ContextBundle> {
     const state = await this.stateManager.getState();
     const targetNode = nodeId || state.currentNode;
     if (!targetNode) {
-      throw new Error("Cannot determine node for context: workflow has no current node.");
+      throw new Error(
+        "Cannot determine node for context: workflow has no current node.",
+      );
     }
 
     const nodeDef = await this.getNodeDef(targetNode);
 
     // Tier 0: Manifest and Capabilities
-    const index = await this.readYaml(await this.resolveContractPath("index.yaml"), IndexManifestSchema);
-    const capabilities = await this.readYaml(await this.resolveContractPath("capabilities.yaml"), CapabilitiesSchema);
+    const index = await this.readYaml(
+      await this.resolveContractPath("index.yaml"),
+      IndexManifestSchema,
+    );
+    const capabilities = await this.readYaml(
+      await this.resolveContractPath("capabilities.yaml"),
+      CapabilitiesSchema,
+    );
 
     // Tier 1: Target Module Contract(s)
     const contracts: Record<string, ModuleContract> = {};
@@ -612,7 +791,10 @@ export class CrewmateEngine {
         if (file.endsWith(".contract.yaml")) {
           const modName = file.replace(/\.contract\.yaml$/, "");
           if (!options.module || options.module === modName) {
-            const contract = await this.readYaml(path.join(modulesDir, file), ModuleContractSchema);
+            const contract = await this.readYaml(
+              path.join(modulesDir, file),
+              ModuleContractSchema,
+            );
             contracts[contract.module] = contract;
           }
         }
@@ -622,8 +804,14 @@ export class CrewmateEngine {
     }
 
     // Tier 2: Architecture & Structure
-    const architecture = await this.readYaml(await this.resolveContractPath("architecture.yaml"), ArchitectureSchema);
-    const structure = await this.readYaml(await this.resolveContractPath("structure.yaml"), StructureSchema);
+    const architecture = await this.readYaml(
+      await this.resolveContractPath("architecture.yaml"),
+      ArchitectureSchema,
+    );
+    const structure = await this.readYaml(
+      await this.resolveContractPath("structure.yaml"),
+      StructureSchema,
+    );
 
     // Human/Agent readable formatted bundle
     const formatted = this.formatContextBundle({
@@ -655,13 +843,24 @@ export class CrewmateEngine {
     tier2: { architecture: Architecture; structure: Structure };
   }): string {
     const lines: string[] = [];
-    lines.push(`=== CREWMATE CONTEXT [NODE: ${bundle.nodeId.toUpperCase()}] ===`);
+    lines.push(
+      `=== CREWMATE CONTEXT [NODE: ${bundle.nodeId.toUpperCase()}] ===`,
+    );
 
     if (bundle.subagent) {
-      const agentPart = bundle.subagent.agent ? ` | Subagent: ${bundle.subagent.agent}` : "";
-      lines.push(`Role: ${bundle.subagent.role}${agentPart} | Scope: ${bundle.subagent.scope}`);
-      if (bundle.subagent.allowed_tools && bundle.subagent.allowed_tools.length > 0) {
-        lines.push(`Allowed Tools: ${bundle.subagent.allowed_tools.join(", ")}`);
+      const agentPart = bundle.subagent.agent
+        ? ` | Subagent: ${bundle.subagent.agent}`
+        : "";
+      lines.push(
+        `Role: ${bundle.subagent.role}${agentPart} | Scope: ${bundle.subagent.scope}`,
+      );
+      if (
+        bundle.subagent.allowed_tools &&
+        bundle.subagent.allowed_tools.length > 0
+      ) {
+        lines.push(
+          `Allowed Tools: ${bundle.subagent.allowed_tools.join(", ")}`,
+        );
       }
     }
 
@@ -688,7 +887,9 @@ export class CrewmateEngine {
         if (contract.public_api.length > 0) {
           lines.push("  Public API:");
           for (const api of contract.public_api) {
-            lines.push(`    - ${api.export} (${api.file})${api.signature ? `: ${api.signature}` : ""}`);
+            lines.push(
+              `    - ${api.export} (${api.file})${api.signature ? `: ${api.signature}` : ""}`,
+            );
           }
         }
         if (contract.invariants.length > 0) {
@@ -706,11 +907,15 @@ export class CrewmateEngine {
     // Tier 2
     lines.push("\n--- Tier 2: Architecture & Structure Rules ---");
     lines.push("Allowed Dependencies:");
-    for (const [mod, rule] of Object.entries(bundle.tier2.architecture.modules)) {
+    for (const [mod, rule] of Object.entries(
+      bundle.tier2.architecture.modules,
+    )) {
       lines.push(`  ${mod} -> [${rule.allowed_dependencies.join(", ")}]`);
     }
     if (bundle.tier2.structure.forbidden_patterns.length > 0) {
-      lines.push(`Forbidden Patterns: ${bundle.tier2.structure.forbidden_patterns.join(", ")}`);
+      lines.push(
+        `Forbidden Patterns: ${bundle.tier2.structure.forbidden_patterns.join(", ")}`,
+      );
     }
 
     return lines.join("\n");
@@ -720,21 +925,26 @@ export class CrewmateEngine {
    * Single-field contract lookup
    */
   public async query(moduleName: string, field: string): Promise<unknown> {
-    const contractPath = await this.resolveContractPath("modules", `${moduleName}.contract.yaml`);
+    const contractPath = await this.resolveContractPath(
+      "modules",
+      `${moduleName}.contract.yaml`,
+    );
     try {
       const contract = await this.readYaml(contractPath, ModuleContractSchema);
       const val = (contract as Record<string, unknown>)[field];
       if (val === undefined) {
         throw new Error(
           `Field '${field}' not found in contract for module '${moduleName}'. Available fields: ${Object.keys(
-            contract
-          ).join(", ")}`
+            contract,
+          ).join(", ")}`,
         );
       }
       return val;
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        throw new Error(`Module contract not found for '${moduleName}' at ${contractPath}`);
+        throw new Error(
+          `Module contract not found for '${moduleName}' at ${contractPath}`,
+        );
       }
       throw err;
     }
@@ -743,15 +953,22 @@ export class CrewmateEngine {
   /**
    * Run hard gates for a node
    */
-  public async gateCheck(nodeId: string, options: GateCheckOptions = {}): Promise<GateCheckResult> {
+  public async gateCheck(
+    nodeId: string,
+    options: GateCheckOptions = {},
+  ): Promise<GateCheckResult> {
     const nodeDef = await this.getNodeDef(nodeId);
-    const phases: ("pre" | "post")[] = options.phase ? [options.phase] : ["pre", "post"];
+    const phases: ("pre" | "post")[] = options.phase
+      ? [options.phase]
+      : ["pre", "post"];
     const results: GateResult[] = [];
     let overallPassed = true;
 
     for (const phase of phases) {
       const guardrails = nodeDef.guardrails[phase] || [];
-      const hardGuardrails = guardrails.filter((g): g is HardGuardrail => g.type === "hard");
+      const hardGuardrails = guardrails.filter(
+        (g): g is HardGuardrail => g.type === "hard",
+      );
 
       for (const guard of hardGuardrails) {
         const checkResult = await this.executeGateRun(nodeId, phase, guard.run);
@@ -783,7 +1000,11 @@ export class CrewmateEngine {
   /**
    * Execute a single gate command
    */
-  public async executeGateRun(nodeId: string, phase: "pre" | "post", command: string): Promise<GateResult> {
+  public async executeGateRun(
+    nodeId: string,
+    phase: "pre" | "post",
+    command: string,
+  ): Promise<GateResult> {
     const trimmedCmd = command.trim();
 
     // Fast-path internal dispatch for crewmate scan commands
@@ -797,8 +1018,13 @@ export class CrewmateEngine {
         status: result.valid ? "passed" : "failed",
         exitCode: result.valid ? 0 : 1,
         output: JSON.stringify(result, null, 2),
-        evidence: { violations: result.violations, scannedFiles: result.scannedFiles },
-        error: result.valid ? undefined : `Found ${result.violations.length} architecture violations.`,
+        evidence: {
+          violations: result.violations,
+          scannedFiles: result.scannedFiles,
+        },
+        error: result.valid
+          ? undefined
+          : `Found ${result.violations.length} architecture violations.`,
       };
     }
 
@@ -817,7 +1043,9 @@ export class CrewmateEngine {
           flaggedForReview: result.flaggedForReview,
           summary: result.summary,
         },
-        error: result.valid ? undefined : `Found ${result.safeDeleteCandidates.length} dead code safe-delete candidates.`,
+        error: result.valid
+          ? undefined
+          : `Found ${result.safeDeleteCandidates.length} dead code safe-delete candidates.`,
       };
     }
 
@@ -850,10 +1078,17 @@ export class CrewmateEngine {
         error: stderr.trim() || undefined,
       };
     } catch (err: unknown) {
-      const errorObj = err as { code?: number; stdout?: string; stderr?: string; message?: string };
+      const errorObj = err as {
+        code?: number;
+        stdout?: string;
+        stderr?: string;
+        message?: string;
+      };
       const exitCode = typeof errorObj.code === "number" ? errorObj.code : 1;
       const stdout = errorObj.stdout ? errorObj.stdout.trim() : "";
-      const stderr = errorObj.stderr ? errorObj.stderr.trim() : errorObj.message || String(err);
+      const stderr = errorObj.stderr
+        ? errorObj.stderr.trim()
+        : errorObj.message || String(err);
 
       let evidence: Record<string, unknown> | undefined = undefined;
       try {
@@ -908,7 +1143,8 @@ export class CrewmateEngine {
     }
 
     // 0. Check for unclosed activities (orphans) touching verified files
-    const unclosedActivities = await this.activityManager.getUnclosedActivities();
+    const unclosedActivities =
+      await this.activityManager.getUnclosedActivities();
     if (unclosedActivities.length > 0) {
       const verifiedFiles = await this.getVerifiedFiles(unclosedActivities);
       const blockingActivities: ActivityRecord[] = [];
@@ -917,8 +1153,8 @@ export class CrewmateEngine {
         const actFiles = this.activityManager.extractFiles(act);
         const overlaps = actFiles.some((f) =>
           verifiedFiles.some(
-            (vf) => vf === f || vf.endsWith("/" + f) || f.endsWith("/" + vf)
-          )
+            (vf) => vf === f || vf.endsWith("/" + f) || f.endsWith("/" + vf),
+          ),
         );
         if (overlaps) {
           blockingActivities.push(act);
@@ -956,7 +1192,10 @@ export class CrewmateEngine {
           event: "COMPLETE",
           node: currentNode,
         });
-        const report = await this.generateCurrentRunReport("completed", "Workflow completed successfully");
+        const report = await this.generateCurrentRunReport(
+          "completed",
+          "Workflow completed successfully",
+        );
         return {
           advanced: true,
           from: currentNode,
@@ -1000,7 +1239,7 @@ export class CrewmateEngine {
   private async handleGateFailure(
     nodeId: string,
     nodeDef: NodeDef,
-    failedResults: GateResult[]
+    failedResults: GateResult[],
   ): Promise<AdvanceResult> {
     const state = await this.stateManager.getState();
     const currentRetries = state.retryCounts[nodeId] || 0;
@@ -1071,7 +1310,10 @@ export class CrewmateEngine {
   /**
    * Manual override
    */
-  public async goto(targetNode: string, options: { force?: boolean } = {}): Promise<{ from: string; to: string }> {
+  public async goto(
+    targetNode: string,
+    options: { force?: boolean } = {},
+  ): Promise<{ from: string; to: string }> {
     const state = await this.stateManager.getState();
     const fromNode = state.currentNode || "none";
 
@@ -1122,8 +1364,14 @@ export class CrewmateEngine {
       try {
         const legacyGraph = path.join(legacyWorkflowDir, "graph.yaml");
         await fs.access(legacyGraph);
-        await fs.mkdir(path.join(workflowsDir, "feature-pipeline"), { recursive: true });
-        await fs.cp(legacyWorkflowDir, path.join(workflowsDir, "feature-pipeline"), { recursive: true });
+        await fs.mkdir(path.join(workflowsDir, "feature-pipeline"), {
+          recursive: true,
+        });
+        await fs.cp(
+          legacyWorkflowDir,
+          path.join(workflowsDir, "feature-pipeline"),
+          { recursive: true },
+        );
       } catch {
         return [];
       }
@@ -1183,7 +1431,9 @@ export class CrewmateEngine {
   /**
    * Validate a workflow's graph structure, node definitions, and edge connectivity
    */
-  public async validateWorkflow(workflowName?: string): Promise<WorkflowValidationResult> {
+  public async validateWorkflow(
+    workflowName?: string,
+  ): Promise<WorkflowValidationResult> {
     let targetName = workflowName;
     if (!targetName) {
       try {
@@ -1299,7 +1549,9 @@ export class CrewmateEngine {
       return {
         workflow: targetName,
         valid: false,
-        graphPath: path.relative(this.projectRoot, resolvedGraphPath).replace(/\\/g, "/"),
+        graphPath: path
+          .relative(this.projectRoot, resolvedGraphPath)
+          .replace(/\\/g, "/"),
         issues,
         summary: {
           errors: issues.filter((i) => i.type === "error").length,
@@ -1406,13 +1658,20 @@ export class CrewmateEngine {
         }
 
         if (nodeDef.subagent?.agent) {
-          const agentPath = path.join(this.projectRoot, ".opencode", "agents", `${nodeDef.subagent.agent}.md`);
+          const agentPath = path.join(
+            this.projectRoot,
+            ".opencode",
+            "agents",
+            `${nodeDef.subagent.agent}.md`,
+          );
           try {
             await fs.access(agentPath);
           } catch {
             // Check if .opencode/agents/ directory exists before warning
             try {
-              await fs.access(path.join(this.projectRoot, ".opencode", "agents"));
+              await fs.access(
+                path.join(this.projectRoot, ".opencode", "agents"),
+              );
               issues.push({
                 type: "warning",
                 code: "MISSING_AGENT_FILE",
@@ -1449,7 +1708,10 @@ export class CrewmateEngine {
         if (nodeObj && nodeObj.next) {
           if (nodeObj.next === "done") {
             reachesDone = true;
-          } else if (!reachable.has(nodeObj.next) && nodeIds.has(nodeObj.next)) {
+          } else if (
+            !reachable.has(nodeObj.next) &&
+            nodeIds.has(nodeObj.next)
+          ) {
             queue.push(nodeObj.next);
           }
         }
@@ -1481,7 +1743,9 @@ export class CrewmateEngine {
     return {
       workflow: targetName,
       valid: errors === 0,
-      graphPath: path.relative(this.projectRoot, resolvedGraphPath).replace(/\\/g, "/"),
+      graphPath: path
+        .relative(this.projectRoot, resolvedGraphPath)
+        .replace(/\\/g, "/"),
       issues,
       summary: {
         errors,
@@ -1496,14 +1760,20 @@ export class CrewmateEngine {
    */
   public async createWorkflow(
     workflowName: string,
-    options: WorkflowCreateOptions = {}
+    options: WorkflowCreateOptions = {},
   ): Promise<WorkflowCreateResult> {
     if (!workflowName || !workflowName.trim()) {
       throw new Error("Workflow name cannot be empty.");
     }
     const cleanWfName = workflowName.trim();
-    if (!/^[a-zA-Z0-9_\-\.]+$/.test(cleanWfName) || cleanWfName === "." || cleanWfName === "..") {
-      throw new Error(`Invalid workflow name "${cleanWfName}". Use alphanumeric characters, dashes, and underscores.`);
+    if (
+      !/^[a-zA-Z0-9_\-\.]+$/.test(cleanWfName) ||
+      cleanWfName === "." ||
+      cleanWfName === ".."
+    ) {
+      throw new Error(
+        `Invalid workflow name "${cleanWfName}". Use alphanumeric characters, dashes, and underscores.`,
+      );
     }
 
     const targetDir = this.p(".crewmate", "workflows", cleanWfName);
@@ -1517,7 +1787,7 @@ export class CrewmateEngine {
 
     if (dirExists && !options.force) {
       throw new Error(
-        `Workflow "${cleanWfName}" already exists at .crewmate/workflows/${cleanWfName}. Use --force to overwrite.`
+        `Workflow "${cleanWfName}" already exists at .crewmate/workflows/${cleanWfName}. Use --force to overwrite.`,
       );
     }
 
@@ -1554,7 +1824,9 @@ export class CrewmateEngine {
 
     const graphFilePath = path.join(targetDir, "graph.yaml");
     await fs.writeFile(graphFilePath, graphContent, "utf-8");
-    filesCreated.push(path.relative(this.projectRoot, graphFilePath).replace(/\\/g, "/"));
+    filesCreated.push(
+      path.relative(this.projectRoot, graphFilePath).replace(/\\/g, "/"),
+    );
 
     for (const nodeId of nodeList) {
       let role = "builder";
@@ -1571,15 +1843,28 @@ export class CrewmateEngine {
         role = "scout";
         scope = "read-only";
         agent = "scout";
-      } else if (lower.includes("plan") || lower.includes("design") || lower.includes("architect")) {
+      } else if (
+        lower.includes("plan") ||
+        lower.includes("design") ||
+        lower.includes("architect")
+      ) {
         role = "planner";
         scope = "contracts-write";
         agent = "planner";
-      } else if (lower.includes("contract") || lower.includes("reconcile") || lower.includes("sync")) {
+      } else if (
+        lower.includes("contract") ||
+        lower.includes("reconcile") ||
+        lower.includes("sync")
+      ) {
         role = "contractor";
         scope = "contracts-write";
         agent = "contractor";
-      } else if (lower.includes("verify") || lower.includes("test") || lower.includes("check") || lower.includes("lint")) {
+      } else if (
+        lower.includes("verify") ||
+        lower.includes("test") ||
+        lower.includes("check") ||
+        lower.includes("lint")
+      ) {
         role = "verifier";
         scope = "read-only";
         agent = "verifier";
@@ -1605,7 +1890,9 @@ export class CrewmateEngine {
 
       const nodeFilePath = path.join(targetDir, "nodes", `${nodeId}.node.yaml`);
       await fs.writeFile(nodeFilePath, nodeContent, "utf-8");
-      filesCreated.push(path.relative(this.projectRoot, nodeFilePath).replace(/\\/g, "/"));
+      filesCreated.push(
+        path.relative(this.projectRoot, nodeFilePath).replace(/\\/g, "/"),
+      );
     }
 
     const validation = await this.validateWorkflow(cleanWfName);
@@ -1624,7 +1911,7 @@ export class CrewmateEngine {
    */
   public async runWorkflow(
     workflowName: string,
-    options: { force?: boolean } = {}
+    options: { force?: boolean } = {},
   ): Promise<WorkflowRunResult> {
     const workflowsDir = this.p(".crewmate", "workflows");
     const targetWfDir = path.join(workflowsDir, workflowName);
@@ -1644,7 +1931,7 @@ export class CrewmateEngine {
 
     if (!resolvedGraphPath) {
       throw new Error(
-        `Workflow "${workflowName}" not found in .crewmate/workflows/${workflowName}/ (missing graph.yaml)`
+        `Workflow "${workflowName}" not found in .crewmate/workflows/${workflowName}/ (missing graph.yaml)`,
       );
     }
 
@@ -1654,7 +1941,7 @@ export class CrewmateEngine {
     const liveness = await this.getHarnessLiveness();
     if (liveness.status === "running" && !options.force) {
       throw new Error(
-        `Cannot switch or run workflow while harness is actively RUNNING (session: ${liveness.session?.id || "active"}). Wait for idle or pass --force.`
+        `Cannot switch or run workflow while harness is actively RUNNING (session: ${liveness.session?.id || "active"}). Wait for idle or pass --force.`,
       );
     }
 
@@ -1662,7 +1949,7 @@ export class CrewmateEngine {
     const locks = await this.getTaskLocks();
     if (locks.locks.length > 0 && !options.force) {
       throw new Error(
-        `Cannot switch or run workflow while tasks are actively locked (${locks.locks.length} active locks). Complete active tasks or pass --force.`
+        `Cannot switch or run workflow while tasks are actively locked (${locks.locks.length} active locks). Complete active tasks or pass --force.`,
       );
     }
 
@@ -1675,10 +1962,11 @@ export class CrewmateEngine {
     const currentState = await this.stateManager.getState();
     let previousRunReport: WorkflowRunReport | null = null;
     if (currentState.history && currentState.history.length > 0) {
-      const prevStatus = currentState.status === "completed" ? "completed" : "superseded";
+      const prevStatus =
+        currentState.status === "completed" ? "completed" : "superseded";
       previousRunReport = await this.generateCurrentRunReport(
         prevStatus,
-        `Superseded by workflow run "${workflowName}"`
+        `Superseded by workflow run "${workflowName}"`,
       );
 
       // Auto-archive previous run
@@ -1692,7 +1980,9 @@ export class CrewmateEngine {
             pruneActiveState: false,
           });
         } catch (err) {
-          console.warn(`[Crewmate Engine] Failed to auto-archive run ${previousRunReport.runId}: ${err}`);
+          console.warn(
+            `[Crewmate Engine] Failed to auto-archive run ${previousRunReport.runId}: ${err}`,
+          );
         }
       }
     }
@@ -1724,13 +2014,13 @@ export class CrewmateEngine {
    * Reset the current workflow run
    */
   public async resetWorkflow(
-    options: { reason?: string; node?: string; force?: boolean } = {}
+    options: { reason?: string; node?: string; force?: boolean } = {},
   ): Promise<WorkflowResetResult> {
     // 1. Idle safety check: harness liveness
     const liveness = await this.getHarnessLiveness();
     if (liveness.status === "running" && !options.force) {
       throw new Error(
-        `Cannot reset workflow while harness is actively RUNNING (session: ${liveness.session?.id || "active"}). Wait for idle or pass --force.`
+        `Cannot reset workflow while harness is actively RUNNING (session: ${liveness.session?.id || "active"}). Wait for idle or pass --force.`,
       );
     }
 
@@ -1738,7 +2028,7 @@ export class CrewmateEngine {
     const locks = await this.getTaskLocks();
     if (locks.locks.length > 0 && !options.force) {
       throw new Error(
-        `Cannot reset workflow while tasks are actively locked (${locks.locks.length} active locks). Complete active tasks or pass --force.`
+        `Cannot reset workflow while tasks are actively locked (${locks.locks.length} active locks). Complete active tasks or pass --force.`,
       );
     }
 
@@ -1753,7 +2043,7 @@ export class CrewmateEngine {
     if (currentState.history && currentState.history.length > 0) {
       previousRunReport = await this.generateCurrentRunReport(
         "reset",
-        options.reason || "Workflow reset"
+        options.reason || "Workflow reset",
       );
     }
 
@@ -1797,7 +2087,7 @@ export class CrewmateEngine {
    */
   public async generateCurrentRunReport(
     status: "completed" | "reset" | "superseded" | "failed" | "active",
-    reason?: string
+    reason?: string,
   ): Promise<WorkflowRunReport | null> {
     const state = await this.stateManager.getState();
     if (!state.history || state.history.length === 0) {
@@ -1808,7 +2098,11 @@ export class CrewmateEngine {
     let runStartIndex = 0;
     for (let i = state.history.length - 1; i >= 0; i--) {
       const ev = state.history[i];
-      if (ev.event === "RUN_START" || ev.event === "INIT" || ev.event === "RESET") {
+      if (
+        ev.event === "RUN_START" ||
+        ev.event === "INIT" ||
+        ev.event === "RESET"
+      ) {
         runStartIndex = i;
         break;
       }
@@ -1824,7 +2118,9 @@ export class CrewmateEngine {
     let activities: ActivityRecord[] = [];
     try {
       const allActivities = await this.activityManager.getActivities();
-      activities = allActivities.filter((a: ActivityRecord) => a.startAt >= startedAt);
+      activities = allActivities.filter(
+        (a: ActivityRecord) => a.startAt >= startedAt,
+      );
     } catch {
       // ignore
     }
@@ -1832,7 +2128,9 @@ export class CrewmateEngine {
     let tasks: TaskDefinition[] = [];
     try {
       const allTasks = await this.taskManager.listTasks();
-      tasks = allTasks.filter((t: TaskDefinition) => !t.created_at || t.created_at >= startedAt);
+      tasks = allTasks.filter(
+        (t: TaskDefinition) => !t.created_at || t.created_at >= startedAt,
+      );
     } catch {
       // ignore
     }
@@ -1876,17 +2174,19 @@ export class CrewmateEngine {
     }
 
     if (!report && currentState.currentRunId === targetRunId) {
-      const mappedStatus = currentState.status === "escalated" ? "failed" : currentState.status;
+      const mappedStatus =
+        currentState.status === "escalated" ? "failed" : currentState.status;
       const generated = await this.generateCurrentRunReport(
         mappedStatus,
-        "Manual archive"
+        "Manual archive",
       );
       if (generated) {
         report = generated;
       }
     }
 
-    const finalStatus = currentState.status === "escalated" ? "failed" : currentState.status;
+    const finalStatus =
+      currentState.status === "escalated" ? "failed" : currentState.status;
 
     return await this.archiveManager.archiveRun({
       runId: targetRunId,

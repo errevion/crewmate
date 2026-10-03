@@ -15,7 +15,9 @@ const cliPath = path.resolve("dist/src/cli/index.js");
 
 describe("Workflow Run Archival System", () => {
   it("archives completed run data to .crewmate/archive/<runId>/ and prunes active state", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-archive-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-archive-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -26,7 +28,9 @@ describe("Workflow Run Archival System", () => {
 
       // Create a task and complete it
       await execAsync("git init", { cwd: tmpDir });
-      await execAsync('git config user.email "test@crewmate.dev"', { cwd: tmpDir });
+      await execAsync('git config user.email "test@crewmate.dev"', {
+        cwd: tmpDir,
+      });
       await execAsync('git config user.name "Crewmate Test"', { cwd: tmpDir });
       await execAsync("git add .", { cwd: tmpDir });
       await execAsync('git commit -m "init"', { cwd: tmpDir });
@@ -41,7 +45,7 @@ describe("Workflow Run Archival System", () => {
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "index.ts"),
         "export function exampleFn(): void {}\n",
-        "utf-8"
+        "utf-8",
       );
       await engine.completeTask(task.id);
 
@@ -60,7 +64,9 @@ describe("Workflow Run Archival System", () => {
       assert.equal(stateBefore.status, "completed");
 
       // Verify task exists in .crewmate/tasks/
-      const tasksBefore = await fs.readdir(path.join(tmpDir, ".crewmate", "tasks"));
+      const tasksBefore = await fs.readdir(
+        path.join(tmpDir, ".crewmate", "tasks"),
+      );
       assert.ok(tasksBefore.some((f) => f.includes(task.id)));
 
       // Perform archive
@@ -72,7 +78,12 @@ describe("Workflow Run Archival System", () => {
       assert.equal(manifest.taskCount, 1);
       assert.ok(manifest.activityCount > 0);
 
-      const archiveRunDir = path.join(tmpDir, ".crewmate", "archive", manifest.runId);
+      const archiveRunDir = path.join(
+        tmpDir,
+        ".crewmate",
+        "archive",
+        manifest.runId,
+      );
 
       // Verify files in archive
       const archiveFiles = await fs.readdir(archiveRunDir);
@@ -83,13 +94,21 @@ describe("Workflow Run Archival System", () => {
       assert.ok(archiveFiles.includes("activity.jsonl"));
 
       // Verify completed task was moved out of active .crewmate/tasks/
-      const tasksAfter = await fs.readdir(path.join(tmpDir, ".crewmate", "tasks"));
+      const tasksAfter = await fs.readdir(
+        path.join(tmpDir, ".crewmate", "tasks"),
+      );
       assert.ok(!tasksAfter.some((f) => f.includes(task.id)));
 
       // Verify contracts in .crewmate/contracts/ REMAIN INTACT!
       const contractContent = await fs.readFile(
-        path.join(tmpDir, ".crewmate", "contracts", "modules", "example.contract.yaml"),
-        "utf-8"
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "contracts",
+          "modules",
+          "example.contract.yaml",
+        ),
+        "utf-8",
       );
       assert.ok(contractContent.includes("status: final"));
 
@@ -99,7 +118,9 @@ describe("Workflow Run Archival System", () => {
       assert.equal(archives[0].runId, manifest.runId);
 
       // Get archive detail
-      const detail = await engine.getArchiveManager().getArchive(manifest.runId);
+      const detail = await engine
+        .getArchiveManager()
+        .getArchive(manifest.runId);
       assert.ok(detail);
       assert.equal(detail.manifest.runId, manifest.runId);
       assert.ok(detail.stateEvents.length > 0);
@@ -109,7 +130,9 @@ describe("Workflow Run Archival System", () => {
   });
 
   it("auto-archives previous run when runWorkflow() starts a new run", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-auto-archive-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-auto-archive-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -120,12 +143,12 @@ describe("Workflow Run Archival System", () => {
       await fs.writeFile(
         path.join(bugfixDir, "graph.yaml"),
         "version: '1.0.0'\nname: 'Bugfix'\ninitial: triage\nnodes:\n  - id: triage\n    next: done\n",
-        "utf-8"
+        "utf-8",
       );
       await fs.writeFile(
         path.join(bugfixDir, "nodes", "triage.node.yaml"),
         "id: triage\ninstructions: 'Fix bug'\ninputs: []\nguardrails: { pre: [], post: [] }\n",
-        "utf-8"
+        "utf-8",
       );
 
       // Move default workflow ahead a couple nodes
@@ -154,23 +177,31 @@ describe("Workflow Run Archival System", () => {
   });
 
   it("executes CLI commands: crewmate archive and crewmate archive list", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-cli-archive-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-cli-archive-"),
+    );
     try {
       await execAsync(`node "${cliPath}" init --example -p "${tmpDir}"`);
 
       // 1. Initially no archives
-      const listEmptyOut = await execAsync(`node "${cliPath}" archive list --json -p "${tmpDir}"`);
+      const listEmptyOut = await execAsync(
+        `node "${cliPath}" archive list --json -p "${tmpDir}"`,
+      );
       const emptyArchives = JSON.parse(listEmptyOut.stdout);
       assert.equal(emptyArchives.length, 0);
 
       // 2. Archive current run via CLI
-      const archiveOut = await execAsync(`node "${cliPath}" archive --json -p "${tmpDir}"`);
+      const archiveOut = await execAsync(
+        `node "${cliPath}" archive --json -p "${tmpDir}"`,
+      );
       const manifest = JSON.parse(archiveOut.stdout);
       assert.ok(manifest.runId.startsWith("run_"));
       assert.equal(manifest.workflow, "feature-pipeline");
 
       // 3. Now list shows the archive
-      const listOut = await execAsync(`node "${cliPath}" archive list --json -p "${tmpDir}"`);
+      const listOut = await execAsync(
+        `node "${cliPath}" archive list --json -p "${tmpDir}"`,
+      );
       const archives = JSON.parse(listOut.stdout);
       assert.equal(archives.length, 1);
       assert.equal(archives[0].runId, manifest.runId);
@@ -180,7 +211,9 @@ describe("Workflow Run Archival System", () => {
   });
 
   it("enforces plugin permissions on crewmate_archive (orchestrator only)", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-plugin-archive-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-plugin-archive-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -229,7 +262,7 @@ describe("Workflow Run Archival System", () => {
             err.message.includes("[Crewmate Guardrail Blocked]") &&
             err.message.includes("is restricted: Subagent role 'scout'")
           );
-        }
+        },
       );
 
       // 2. Orchestrator (Matte) MUST be ALLOWED to call crewmate_archive
@@ -253,12 +286,18 @@ describe("Workflow Run Archival System", () => {
       });
 
       // 4. Execute the tool as orchestrator
-      const res = await registeredTools["crewmate_archive"].execute({}, { agent: "matte" });
+      const res = await registeredTools["crewmate_archive"].execute(
+        {},
+        { agent: "matte" },
+      );
       const manifest = JSON.parse(res.content);
       assert.ok(manifest.runId);
 
       // 5. Execute archive_list
-      const listRes = await registeredTools["crewmate_archive_list"].execute({}, { agent: "scout" });
+      const listRes = await registeredTools["crewmate_archive_list"].execute(
+        {},
+        { agent: "scout" },
+      );
       const list = JSON.parse(listRes.content);
       assert.equal(list.length, 1);
     } finally {

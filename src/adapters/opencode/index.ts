@@ -55,7 +55,10 @@ export function isCrewmateCliCommand(cmdStr: string): boolean {
   }
 
   // Quick check: must mention crewmate or local cli script
-  if (!/\bcrewmate\b/i.test(cmdStr) && !/(?:[/\\]cli[/\\]|cli\.js|cli\.ts)/i.test(cmdStr)) {
+  if (
+    !/\bcrewmate\b/i.test(cmdStr) &&
+    !/(?:[/\\]cli[/\\]|cli\.js|cli\.ts)/i.test(cmdStr)
+  ) {
     return false;
   }
 
@@ -66,7 +69,10 @@ export function isCrewmateCliCommand(cmdStr: string): boolean {
     if (!sub) continue;
 
     // Quick sub-command check
-    if (!/\bcrewmate\b/i.test(sub) && !/(?:[/\\]cli[/\\]|cli\.js|cli\.ts)/i.test(sub)) {
+    if (
+      !/\bcrewmate\b/i.test(sub) &&
+      !/(?:[/\\]cli[/\\]|cli\.js|cli\.ts)/i.test(sub)
+    ) {
       continue;
     }
 
@@ -75,12 +81,18 @@ export function isCrewmateCliCommand(cmdStr: string): boolean {
     let cmdIdx = 0;
 
     // Skip environment variable assignments at the beginning (e.g. "FOO=1 BAR=2 crewmate ...")
-    while (cmdIdx < words.length && words[cmdIdx].includes("=") && !words[cmdIdx].startsWith("-")) {
+    while (
+      cmdIdx < words.length &&
+      words[cmdIdx].includes("=") &&
+      !words[cmdIdx].startsWith("-")
+    ) {
       cmdIdx++;
     }
     if (cmdIdx >= words.length) continue;
 
-    const baseCmd = words[cmdIdx].replace(/^["']|["']$/g, "").replace(/\\/g, "/");
+    const baseCmd = words[cmdIdx]
+      .replace(/^["']|["']$/g, "")
+      .replace(/\\/g, "/");
     const cmdName = baseCmd.split("/").pop()?.toLowerCase() || "";
 
     // 1. Direct binary invocation: crewmate, crewmate.exe, ./node_modules/.bin/crewmate
@@ -108,11 +120,19 @@ export function isCrewmateCliCommand(cmdStr: string): boolean {
     // 3. Node invocation: node dist/src/cli/index.js, node .../crewmate
     if (cmdName === "node" || cmdName === "node.exe") {
       for (let j = cmdIdx + 1; j < words.length; j++) {
-        const arg = words[j].replace(/^["']|["']$/g, "").replace(/\\/g, "/").toLowerCase();
+        const arg = words[j]
+          .replace(/^["']|["']$/g, "")
+          .replace(/\\/g, "/")
+          .toLowerCase();
         if (arg.startsWith("-")) {
           continue;
         }
-        if (arg.includes("crewmate") || arg.includes("/cli/") || arg.endsWith("/cli.js") || arg.endsWith("/cli.ts")) {
+        if (
+          arg.includes("crewmate") ||
+          arg.includes("/cli/") ||
+          arg.endsWith("/cli.js") ||
+          arg.endsWith("/cli.ts")
+        ) {
           return true;
         }
         break;
@@ -176,7 +196,7 @@ export const DEFAULT_CREWMATE_AGENTS = new Set([
  */
 export async function isCrewmateAgent(
   engine: CrewmateEngine,
-  agentName: string | undefined | null
+  agentName: string | undefined | null,
 ): Promise<boolean> {
   if (!agentName) {
     // When agentName is omitted (e.g. test mocks without agent metadata),
@@ -202,10 +222,16 @@ export async function isCrewmateAgent(
     for (const node of graph.nodes) {
       try {
         const nodeDef = await engine.getNodeDef(node.id);
-        if (nodeDef.subagent?.agent && nodeDef.subagent.agent.toLowerCase().trim() === normalized) {
+        if (
+          nodeDef.subagent?.agent &&
+          nodeDef.subagent.agent.toLowerCase().trim() === normalized
+        ) {
           return true;
         }
-        if (nodeDef.subagent?.role && nodeDef.subagent.role.toLowerCase().trim() === normalized) {
+        if (
+          nodeDef.subagent?.role &&
+          nodeDef.subagent.role.toLowerCase().trim() === normalized
+        ) {
           return true;
         }
       } catch {
@@ -238,9 +264,15 @@ export const crewmateOpenCodePlugin = Plugin.define({
       if (!sessionId) return;
       if (!activeSession || activeSession.id !== sessionId) {
         activeSession = { id: sessionId, title };
-        if (!title && ctx.session && typeof (ctx.session as any).get === "function") {
+        if (
+          !title &&
+          ctx.session &&
+          typeof (ctx.session as any).get === "function"
+        ) {
           try {
-            const info = await (ctx.session as any).get({ sessionID: sessionId });
+            const info = await (ctx.session as any).get({
+              sessionID: sessionId,
+            });
             if (info && (info as any).title) {
               activeSession.title = (info as any).title;
             }
@@ -288,7 +320,11 @@ export const crewmateOpenCodePlugin = Plugin.define({
           status,
           session: activeSession,
         };
-        await fs.writeFile(heartbeatPath, JSON.stringify(payload, null, 2), "utf-8");
+        await fs.writeFile(
+          heartbeatPath,
+          JSON.stringify(payload, null, 2),
+          "utf-8",
+        );
       } catch {
         // Silently ignore during shutdown
       }
@@ -297,7 +333,10 @@ export const crewmateOpenCodePlugin = Plugin.define({
     await writeHeartbeat("idle");
     const heartbeatTimer = setInterval(() => {
       const elapsedSinceActivity = Date.now() - lastActivityTs;
-      if (currentHeartbeatStatus === "running" && elapsedSinceActivity >= RUNNING_TIMEOUT_MS) {
+      if (
+        currentHeartbeatStatus === "running" &&
+        elapsedSinceActivity >= RUNNING_TIMEOUT_MS
+      ) {
         currentHeartbeatStatus = "idle";
       }
       writeHeartbeat(currentHeartbeatStatus).catch(() => {});
@@ -320,8 +359,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
               session: activeSession,
             },
             null,
-            2
-          )
+            2,
+          ),
         );
       } catch {
         // Silently ignore
@@ -344,15 +383,23 @@ export const crewmateOpenCodePlugin = Plugin.define({
             if (!isInit) {
               return {
                 content: JSON.stringify(
-                  { initialized: false, message: "Crewmate project not initialized. Run init first." },
+                  {
+                    initialized: false,
+                    message:
+                      "Crewmate project not initialized. Run init first.",
+                  },
                   null,
-                  2
+                  2,
                 ),
               };
             }
             const status = await engine.status();
-            const unclosed = await engine.getActivityManager().getUnclosedActivities();
-            const liveness = await engine.getActivityManager().getHarnessLiveness();
+            const unclosed = await engine
+              .getActivityManager()
+              .getUnclosedActivities();
+            const liveness = await engine
+              .getActivityManager()
+              .getHarnessLiveness();
             return {
               content: JSON.stringify(
                 {
@@ -366,7 +413,7 @@ export const crewmateOpenCodePlugin = Plugin.define({
                   harness: liveness,
                 },
                 null,
-                2
+                2,
               ),
             };
           },
@@ -391,10 +438,17 @@ export const crewmateOpenCodePlugin = Plugin.define({
             "Transition the workflow to a specific target node (e.g. 'execute' when verification fails, or 'plan'). Manual override for orchestrator.",
           input: z.object({
             node: z.string().describe("Target node ID to transition to"),
-            force: z.boolean().optional().describe("Force transition even if node file does not exist (e.g. 'done')"),
+            force: z
+              .boolean()
+              .optional()
+              .describe(
+                "Force transition even if node file does not exist (e.g. 'done')",
+              ),
           }),
           execute: async (input) => {
-            const result = await engine.goto(input.node, { force: input.force });
+            const result = await engine.goto(input.node, {
+              force: input.force,
+            });
             return { content: JSON.stringify(result, null, 2) };
           },
         });
@@ -402,16 +456,29 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_gate_check
         editor.add({
           name: "crewmate_gate_check",
-          description: "Run pre-gate or post-gate checks for a node in the workflow.",
+          description:
+            "Run pre-gate or post-gate checks for a node in the workflow.",
           input: z.object({
-            node: z.string().optional().describe("Node ID to check (defaults to current active node)"),
-            phase: z.enum(["pre", "post", "both"]).optional().describe("Gate phase to check (pre, post, or both)"),
+            node: z
+              .string()
+              .optional()
+              .describe("Node ID to check (defaults to current active node)"),
+            phase: z
+              .enum(["pre", "post", "both"])
+              .optional()
+              .describe("Gate phase to check (pre, post, or both)"),
           }),
           execute: async (input) => {
             const status = await engine.status();
             const node = input?.node || status.currentNode;
             if (!node) {
-              return { content: JSON.stringify({ error: "No active node found to check gates." }, null, 2) };
+              return {
+                content: JSON.stringify(
+                  { error: "No active node found to check gates." },
+                  null,
+                  2,
+                ),
+              };
             }
             const phase = input?.phase || "both";
             if (phase === "both") {
@@ -430,15 +497,32 @@ export const crewmateOpenCodePlugin = Plugin.define({
           description:
             "Start a tracked activity in Crewmate. Returns the unique activity ID. Always end the activity with crewmate_activity_end when complete.",
           input: z.object({
-            label: z.string().describe("Descriptive label of the activity being performed"),
-            agent: z.string().optional().describe("Name of the agent performing the activity"),
-            node: z.string().optional().describe("Workflow node this activity belongs to"),
-            parent: z.string().optional().describe("Parent activity ID if this is a subtask"),
-            meta: z.record(z.string(), z.unknown()).optional().describe("Optional metadata (e.g. files touched, intent)"),
+            label: z
+              .string()
+              .describe("Descriptive label of the activity being performed"),
+            agent: z
+              .string()
+              .optional()
+              .describe("Name of the agent performing the activity"),
+            node: z
+              .string()
+              .optional()
+              .describe("Workflow node this activity belongs to"),
+            parent: z
+              .string()
+              .optional()
+              .describe("Parent activity ID if this is a subtask"),
+            meta: z
+              .record(z.string(), z.unknown())
+              .optional()
+              .describe("Optional metadata (e.g. files touched, intent)"),
           }),
           execute: async (input, toolCtx) => {
             const status = await engine.status().catch(() => null);
-            const agentName = input.agent || (toolCtx ? (toolCtx as any).agent : "agent") || "agent";
+            const agentName =
+              input.agent ||
+              (toolCtx ? (toolCtx as any).agent : "agent") ||
+              "agent";
             const nodeName = input.node || status?.currentNode;
             const id = await engine.getActivityManager().start({
               agent: String(agentName),
@@ -449,9 +533,15 @@ export const crewmateOpenCodePlugin = Plugin.define({
             });
             return {
               content: JSON.stringify(
-                { id, label: input.label, agent: agentName, node: nodeName, status: "active" },
+                {
+                  id,
+                  label: input.label,
+                  agent: agentName,
+                  node: nodeName,
+                  status: "active",
+                },
                 null,
-                2
+                2,
               ),
             };
           },
@@ -462,12 +552,17 @@ export const crewmateOpenCodePlugin = Plugin.define({
           name: "crewmate_activity_end",
           description: "End a tracked activity in Crewmate by its ID.",
           input: z.object({
-            id: z.string().describe("The activity ID returned by crewmate_activity_start"),
+            id: z
+              .string()
+              .describe("The activity ID returned by crewmate_activity_start"),
             status: z
               .enum(["completed", "failed", "interrupted"])
               .optional()
               .describe("Final status of the activity (defaults to completed)"),
-            meta: z.record(z.string(), z.unknown()).optional().describe("Optional completion metadata"),
+            meta: z
+              .record(z.string(), z.unknown())
+              .optional()
+              .describe("Optional completion metadata"),
           }),
           execute: async (input) => {
             const record = await engine.getActivityManager().end({
@@ -477,9 +572,14 @@ export const crewmateOpenCodePlugin = Plugin.define({
             });
             return {
               content: JSON.stringify(
-                { id: record.id, label: record.label, status: record.status, endAt: record.endAt },
+                {
+                  id: record.id,
+                  label: record.label,
+                  status: record.status,
+                  endAt: record.endAt,
+                },
                 null,
-                2
+                2,
               ),
             };
           },
@@ -488,13 +588,21 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_activity_list
         editor.add({
           name: "crewmate_activity_list",
-          description: "List tracked activities in Crewmate. Can filter to only unclosed (in-progress) activities.",
+          description:
+            "List tracked activities in Crewmate. Can filter to only unclosed (in-progress) activities.",
           input: z.object({
-            unclosedOnly: z.boolean().optional().describe("If true, returns only currently active/unclosed activities"),
+            unclosedOnly: z
+              .boolean()
+              .optional()
+              .describe(
+                "If true, returns only currently active/unclosed activities",
+              ),
           }),
           execute: async (input) => {
             if (input.unclosedOnly) {
-              const unclosed = await engine.getActivityManager().getUnclosedActivities();
+              const unclosed = await engine
+                .getActivityManager()
+                .getUnclosedActivities();
               return { content: JSON.stringify(unclosed, null, 2) };
             }
             const all = await engine.getActivityManager().getActivities();
@@ -508,12 +616,21 @@ export const crewmateOpenCodePlugin = Plugin.define({
           description:
             "Reconcile and close any abandoned or stale unclosed activities (e.g. from crashed or interrupted sessions).",
           input: z.object({
-            reason: z.string().optional().describe("Reason for closing the stale activities"),
+            reason: z
+              .string()
+              .optional()
+              .describe("Reason for closing the stale activities"),
           }),
           execute: async (input) => {
-            const reconciled = await engine.reconcileStaleActivities(input.reason || "manually reconciled");
+            const reconciled = await engine.reconcileStaleActivities(
+              input.reason || "manually reconciled",
+            );
             return {
-              content: JSON.stringify({ closedCount: reconciled.length, closedIds: reconciled }, null, 2),
+              content: JSON.stringify(
+                { closedCount: reconciled.length, closedIds: reconciled },
+                null,
+                2,
+              ),
             };
           },
         });
@@ -524,7 +641,12 @@ export const crewmateOpenCodePlugin = Plugin.define({
           description:
             "Get the tiered contract context bundle (Tier 0 manifest, Tier 1 contracts, Tier 2 architecture) for the active or specified workflow node.",
           input: z.object({
-            node: z.string().optional().describe("Node ID to get context for (defaults to current node)"),
+            node: z
+              .string()
+              .optional()
+              .describe(
+                "Node ID to get context for (defaults to current node)",
+              ),
           }),
           execute: async (input) => {
             const bundle = await engine.context(input?.node);
@@ -535,7 +657,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_query
         editor.add({
           name: "crewmate_query",
-          description: "Query a specific field from a module contract (e.g. public_api, invariants, dependencies).",
+          description:
+            "Query a specific field from a module contract (e.g. public_api, invariants, dependencies).",
           input: z.object({
             module: z.string().describe("Module name (e.g. auth, users)"),
             field: z.string().describe("Contract field name to query"),
@@ -549,7 +672,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_scan_arch
         editor.add({
           name: "crewmate_scan_arch",
-          description: "Run AST-based static analysis scanner to check architecture boundary violations against architecture.yaml rules.",
+          description:
+            "Run AST-based static analysis scanner to check architecture boundary violations against architecture.yaml rules.",
           input: z.object({}),
           execute: async () => {
             const scanResult = await scanArchitecture(projectRoot);
@@ -560,7 +684,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_scan_dead_code
         editor.add({
           name: "crewmate_scan_dead_code",
-          description: "Run AST-based static analysis scanner to detect dead code or unreferenced exports in module contracts.",
+          description:
+            "Run AST-based static analysis scanner to detect dead code or unreferenced exports in module contracts.",
           input: z.object({}),
           execute: async () => {
             const scanResult = await scanDeadCode(projectRoot);
@@ -571,12 +696,18 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_task_create
         editor.add({
           name: "crewmate_task_create",
-          description: "Create a new contract-scoped task with atomic scope and dependency checking.",
+          description:
+            "Create a new contract-scoped task with atomic scope and dependency checking.",
           input: z.object({
-            contract: z.string().describe("Module contract file path or module name"),
+            contract: z
+              .string()
+              .describe("Module contract file path or module name"),
             files: z.array(z.string()).describe("List of files in task scope"),
             goal: z.string().describe("Goal/description of the task"),
-            depends_on: z.array(z.string()).optional().describe("Optional list of dependency task IDs"),
+            depends_on: z
+              .array(z.string())
+              .optional()
+              .describe("Optional list of dependency task IDs"),
             id: z.string().optional().describe("Optional custom task ID"),
           }),
           execute: async (input) => {
@@ -594,7 +725,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_task_start
         editor.add({
           name: "crewmate_task_start",
-          description: "Attempt atomic lock-grant and start a task (sets status to active or blocked).",
+          description:
+            "Attempt atomic lock-grant and start a task (sets status to active or blocked).",
           input: z.object({
             id: z.string().describe("Task ID to start"),
           }),
@@ -607,14 +739,22 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_task_amend
         editor.add({
           name: "crewmate_task_amend",
-          description: "Amend scope for an active task by requesting an additional file (goes through atomic lock-grant).",
+          description:
+            "Amend scope for an active task by requesting an additional file (goes through atomic lock-grant).",
           input: z.object({
             id: z.string().describe("Active task ID"),
             file: z.string().describe("File path to add to scope"),
-            reason: z.string().optional().describe("Optional reason for amendment"),
+            reason: z
+              .string()
+              .optional()
+              .describe("Optional reason for amendment"),
           }),
           execute: async (input) => {
-            const res = await engine.amendTaskScope(input.id, input.file, input.reason);
+            const res = await engine.amendTaskScope(
+              input.id,
+              input.file,
+              input.reason,
+            );
             return { content: JSON.stringify(res, null, 2) };
           },
         });
@@ -622,7 +762,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_task_complete
         editor.add({
           name: "crewmate_task_complete",
-          description: "Run task completion gate (scope-diff backstop + contract/architecture gates) and finalize task.",
+          description:
+            "Run task completion gate (scope-diff backstop + contract/architecture gates) and finalize task.",
           input: z.object({
             id: z.string().describe("Active task ID to complete"),
           }),
@@ -637,7 +778,9 @@ export const crewmateOpenCodePlugin = Plugin.define({
           name: "crewmate_task_list",
           description: "List tasks in Crewmate, optionally filtered by status.",
           input: z.object({
-            status: z.enum(["pending", "active", "blocked", "done", "failed"]).optional(),
+            status: z
+              .enum(["pending", "active", "blocked", "done", "failed"])
+              .optional(),
           }),
           execute: async (input) => {
             const tasks = await engine.listTasks({ status: input.status });
@@ -648,7 +791,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_task_locks
         editor.add({
           name: "crewmate_task_locks",
-          description: "Display current active lock table (which task holds which files).",
+          description:
+            "Display current active lock table (which task holds which files).",
           input: z.object({}),
           execute: async () => {
             const locks = await engine.getTaskLocks();
@@ -659,7 +803,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
         // crewmate_workflow_list
         editor.add({
           name: "crewmate_workflow_list",
-          description: "List available workflows in .crewmate/workflows/ and show which workflow is currently active.",
+          description:
+            "List available workflows in .crewmate/workflows/ and show which workflow is currently active.",
           input: z.object({}),
           execute: async () => {
             const workflows = await engine.listWorkflows();
@@ -674,10 +819,15 @@ export const crewmateOpenCodePlugin = Plugin.define({
             "Switch to and start running a named workflow from .crewmate/workflows/<name>/. Automatically archives the previous run report.",
           input: z.object({
             workflow: z.string().describe("The name of the workflow to run"),
-            force: z.boolean().optional().describe("Force run/switch even if tasks are locked"),
+            force: z
+              .boolean()
+              .optional()
+              .describe("Force run/switch even if tasks are locked"),
           }),
           execute: async (input) => {
-            const res = await engine.runWorkflow(input.workflow, { force: input.force });
+            const res = await engine.runWorkflow(input.workflow, {
+              force: input.force,
+            });
             return { content: JSON.stringify(res, null, 2) };
           },
         });
@@ -688,9 +838,18 @@ export const crewmateOpenCodePlugin = Plugin.define({
           description:
             "Reset the current workflow run to initial or target node, generating an audit report for the prior run.",
           input: z.object({
-            reason: z.string().optional().describe("Reason for resetting workflow"),
-            node: z.string().optional().describe("Target node to reset to (defaults to graph initial)"),
-            force: z.boolean().optional().describe("Force reset even if tasks are locked"),
+            reason: z
+              .string()
+              .optional()
+              .describe("Reason for resetting workflow"),
+            node: z
+              .string()
+              .optional()
+              .describe("Target node to reset to (defaults to graph initial)"),
+            force: z
+              .boolean()
+              .optional()
+              .describe("Force reset even if tasks are locked"),
           }),
           execute: async (input) => {
             const res = await engine.resetWorkflow({
@@ -708,7 +867,10 @@ export const crewmateOpenCodePlugin = Plugin.define({
           description:
             "Retrieve a workflow run report by runId, or get the latest run report if no runId is specified.",
           input: z.object({
-            runId: z.string().optional().describe("Run ID to retrieve (omitted for latest)"),
+            runId: z
+              .string()
+              .optional()
+              .describe("Run ID to retrieve (omitted for latest)"),
           }),
           execute: async (input) => {
             const report = await engine.getReport(input.runId);
@@ -725,7 +887,10 @@ export const crewmateOpenCodePlugin = Plugin.define({
           description:
             "Archive a workflow run's events, tasks, activities, and report to .crewmate/archive/<runId>/, pruning them from active files.",
           input: z.object({
-            runId: z.string().optional().describe("Optional runId to archive (defaults to current run)"),
+            runId: z
+              .string()
+              .optional()
+              .describe("Optional runId to archive (defaults to current run)"),
           }),
           execute: async (input) => {
             const manifest = await engine.archiveRun(input.runId);
@@ -806,7 +971,9 @@ export const crewmateOpenCodePlugin = Plugin.define({
         }
       } catch (err) {
         // Silently handle context hook errors so agent doesn't crash if repo lacks contracts
-        console.warn(`[Crewmate Plugin] Context hook warning: ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(
+          `[Crewmate Plugin] Context hook warning: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     });
 
@@ -858,7 +1025,8 @@ export const crewmateOpenCodePlugin = Plugin.define({
       }
 
       // Crewmate Native Tool Access Control
-      const isCrewmateTool = info.tool.startsWith("crewmate_") || info.tool.startsWith("crewmate:");
+      const isCrewmateTool =
+        info.tool.startsWith("crewmate_") || info.tool.startsWith("crewmate:");
       if (isCrewmateTool) {
         const normTool = info.tool.replace(/^crewmate:/, "crewmate_");
         const allowed = CREWMATE_TOOL_ACCESS[normTool];
@@ -872,7 +1040,7 @@ export const crewmateOpenCodePlugin = Plugin.define({
         }
 
         throw new Error(
-          `[Crewmate Guardrail Blocked] Tool '${info.tool}' is restricted: Subagent role '${effectiveRole}' is not permitted to execute this command.`
+          `[Crewmate Guardrail Blocked] Tool '${info.tool}' is restricted: Subagent role '${effectiveRole}' is not permitted to execute this command.`,
         );
       }
 
@@ -883,7 +1051,7 @@ export const crewmateOpenCodePlugin = Plugin.define({
         for (const cmdStr of cmdStrings) {
           if (isCrewmateCliCommand(cmdStr)) {
             throw new Error(
-              `[Crewmate Guardrail Blocked] Shell execution of crewmate CLI commands is restricted: Subagent role '${effectiveRole}' is not permitted to execute CLI commands directly. Use the provided native Crewmate plugin tools instead.`
+              `[Crewmate Guardrail Blocked] Shell execution of crewmate CLI commands is restricted: Subagent role '${effectiveRole}' is not permitted to execute CLI commands directly. Use the provided native Crewmate plugin tools instead.`,
             );
           }
         }
@@ -892,19 +1060,35 @@ export const crewmateOpenCodePlugin = Plugin.define({
       // Workspace Directory Boundary Enforcement for Subagents
       // Prevents subagents from wandering into outside directories (e.g. harness, system, or other repos)
       if (effectiveRole !== "orchestrator") {
-        const fileAccessTools = ["read", "edit", "write", "patch", "delete", "create_file", "grep", "glob"];
+        const fileAccessTools = [
+          "read",
+          "edit",
+          "write",
+          "patch",
+          "delete",
+          "create_file",
+          "grep",
+          "glob",
+        ];
         if (fileAccessTools.includes(info.tool)) {
           const inputObj = info.input as Record<string, unknown> | undefined;
-          const targetPath = (inputObj?.path || inputObj?.filePath || inputObj?.file) as string | undefined;
+          const targetPath = (inputObj?.path ||
+            inputObj?.filePath ||
+            inputObj?.file) as string | undefined;
           if (targetPath && typeof targetPath === "string") {
-            const isForeignWinAbs = process.platform !== "win32" && /^[a-zA-Z]:[/\\]/.test(targetPath);
+            const isForeignWinAbs =
+              process.platform !== "win32" &&
+              /^[a-zA-Z]:[/\\]/.test(targetPath);
             const resolvedTarget = path.resolve(projectRoot, targetPath);
             const resolvedProjectRoot = path.resolve(projectRoot);
             const rel = path.relative(resolvedProjectRoot, resolvedTarget);
-            const isInside = !isForeignWinAbs && !rel.startsWith("..") && !path.isAbsolute(rel);
+            const isInside =
+              !isForeignWinAbs &&
+              !rel.startsWith("..") &&
+              !path.isAbsolute(rel);
             if (!isInside) {
               throw new Error(
-                `[Crewmate Guardrail Blocked] Access to path outside the project workspace is forbidden: '${targetPath}'. Subagents must operate strictly within the workspace directory.`
+                `[Crewmate Guardrail Blocked] Access to path outside the project workspace is forbidden: '${targetPath}'. Subagents must operate strictly within the workspace directory.`,
               );
             }
           }
@@ -915,20 +1099,34 @@ export const crewmateOpenCodePlugin = Plugin.define({
       if (nodeDef.subagent) {
         // A. Read-only scope enforcement
         if (nodeDef.subagent.scope === "read-only") {
-          const modifyingTools = ["write", "edit", "patch", "delete", "create_file"];
+          const modifyingTools = [
+            "write",
+            "edit",
+            "patch",
+            "delete",
+            "create_file",
+          ];
           if (modifyingTools.includes(info.tool)) {
             throw new Error(
-              `[Crewmate Guardrail Blocked] Tool '${info.tool}' is forbidden: Current node '${status.currentNode}' has scope 'read-only'. File modifications are not permitted during this phase.`
+              `[Crewmate Guardrail Blocked] Tool '${info.tool}' is forbidden: Current node '${status.currentNode}' has scope 'read-only'. File modifications are not permitted during this phase.`,
             );
           }
         }
 
         // A2. Contracts-write scope enforcement (only permits modifications in .crewmate/contracts/)
         if (nodeDef.subagent.scope === "contracts-write") {
-          const modifyingTools = ["write", "edit", "patch", "delete", "create_file"];
+          const modifyingTools = [
+            "write",
+            "edit",
+            "patch",
+            "delete",
+            "create_file",
+          ];
           if (modifyingTools.includes(info.tool)) {
             const inputObj = info.input as Record<string, unknown> | undefined;
-            const targetPath = (inputObj?.path || inputObj?.filePath || inputObj?.file) as string | undefined;
+            const targetPath = (inputObj?.path ||
+              inputObj?.filePath ||
+              inputObj?.file) as string | undefined;
             const normPath = targetPath ? targetPath.replace(/\\/g, "/") : "";
             const isContractFile =
               normPath.includes(".crewmate/contracts/") ||
@@ -937,19 +1135,22 @@ export const crewmateOpenCodePlugin = Plugin.define({
 
             if (!targetPath || !isContractFile) {
               throw new Error(
-                `[Crewmate Guardrail Blocked] Tool '${info.tool}' blocked on '${targetPath || "unknown"}': Current node '${status.currentNode}' has scope 'contracts-write'. Only contract definitions in .crewmate/contracts/ may be modified during this phase.`
+                `[Crewmate Guardrail Blocked] Tool '${info.tool}' blocked on '${targetPath || "unknown"}': Current node '${status.currentNode}' has scope 'contracts-write'. Only contract definitions in .crewmate/contracts/ may be modified during this phase.`,
               );
             }
           }
         }
 
         // B. Allowed tools whitelist enforcement
-        if (nodeDef.subagent.allowed_tools && nodeDef.subagent.allowed_tools.length > 0) {
+        if (
+          nodeDef.subagent.allowed_tools &&
+          nodeDef.subagent.allowed_tools.length > 0
+        ) {
           if (!nodeDef.subagent.allowed_tools.includes(info.tool)) {
             throw new Error(
               `[Crewmate Guardrail Blocked] Tool '${info.tool}' is not permitted: Node '${
                 status.currentNode
-              }' allows only [${nodeDef.subagent.allowed_tools.join(", ")}].`
+              }' allows only [${nodeDef.subagent.allowed_tools.join(", ")}].`,
             );
           }
         }
@@ -958,23 +1159,33 @@ export const crewmateOpenCodePlugin = Plugin.define({
       // C. Forbidden file path enforcement (from .crewmate/contracts/structure.yaml)
       if (["write", "edit", "patch"].includes(info.tool)) {
         const inputObj = info.input as Record<string, unknown> | undefined;
-        const targetPath = (inputObj?.path || inputObj?.filePath || inputObj?.file) as string | undefined;
+        const targetPath = (inputObj?.path ||
+          inputObj?.filePath ||
+          inputObj?.file) as string | undefined;
 
         if (targetPath) {
           try {
-            const structurePath = await resolveContractPath(projectRoot, "structure.yaml");
+            const structurePath = await resolveContractPath(
+              projectRoot,
+              "structure.yaml",
+            );
             const structureContent = await fs.readFile(structurePath, "utf-8");
-            const structure = StructureSchema.parse(yaml.parse(structureContent));
+            const structure = StructureSchema.parse(
+              yaml.parse(structureContent),
+            );
 
             for (const pattern of structure.forbidden_patterns) {
               if (matchGlob(pattern, targetPath)) {
                 throw new Error(
-                  `[Crewmate Guardrail Blocked] Target path '${targetPath}' violates structure contract forbidden pattern: '${pattern}'.`
+                  `[Crewmate Guardrail Blocked] Target path '${targetPath}' violates structure contract forbidden pattern: '${pattern}'.`,
                 );
               }
             }
           } catch (err) {
-            if (err instanceof Error && err.message.startsWith("[Crewmate Guardrail Blocked]")) {
+            if (
+              err instanceof Error &&
+              err.message.startsWith("[Crewmate Guardrail Blocked]")
+            ) {
               throw err;
             }
             // Ignore missing contracts/structure.yaml
@@ -985,7 +1196,9 @@ export const crewmateOpenCodePlugin = Plugin.define({
       // D. Task write-lock and scope enforcement (Write-only, reads are always unrestricted)
       if (["write", "edit", "patch"].includes(info.tool)) {
         const inputObj = info.input as Record<string, unknown> | undefined;
-        const targetPath = (inputObj?.path || inputObj?.filePath || inputObj?.file) as string | undefined;
+        const targetPath = (inputObj?.path ||
+          inputObj?.filePath ||
+          inputObj?.file) as string | undefined;
 
         if (targetPath) {
           const taskManager = engine.getTaskManager();
@@ -993,24 +1206,29 @@ export const crewmateOpenCodePlugin = Plugin.define({
 
           if (activeTasks.length > 0) {
             // Find candidate task: explicit taskId if passed, or matching task, or single active task
-            const explicitTaskId = (inputObj?.taskId || (info as any).meta?.taskId) as string | undefined;
+            const explicitTaskId = (inputObj?.taskId ||
+              (info as any).meta?.taskId) as string | undefined;
             const targetTask = explicitTaskId
               ? activeTasks.find((t) => t.id === explicitTaskId)
-              : activeTasks.find((t) => taskManager.isPathInList(targetPath, t.files)) ||
-                (activeTasks.length === 1 ? activeTasks[0] : undefined);
+              : activeTasks.find((t) =>
+                  taskManager.isPathInList(targetPath, t.files),
+                ) || (activeTasks.length === 1 ? activeTasks[0] : undefined);
 
             if (targetTask) {
-              const inScope = taskManager.isPathInList(targetPath, targetTask.files);
+              const inScope = taskManager.isPathInList(
+                targetPath,
+                targetTask.files,
+              );
               if (!inScope) {
                 // Attempt atomic scope amendment on write attempt
                 const amendResult = await taskManager.amendScope(
                   targetTask.id,
                   targetPath,
-                  "write tool auto-amendment"
+                  "write tool auto-amendment",
                 );
                 if (amendResult.conflict) {
                   throw new Error(
-                    `[Crewmate Guardrail Blocked] Scope conflict: Target file '${targetPath}' is currently locked by active task '${amendResult.conflictingTaskId}'. File modifications are blocked and escalated to lead agent.`
+                    `[Crewmate Guardrail Blocked] Scope conflict: Target file '${targetPath}' is currently locked by active task '${amendResult.conflictingTaskId}'. File modifications are blocked and escalated to lead agent.`,
                   );
                 }
               }
@@ -1018,10 +1236,12 @@ export const crewmateOpenCodePlugin = Plugin.define({
               // Multiple active tasks and targetPath does not belong to any:
               // Check if targetPath is locked by any active task
               const lockTable = await taskManager.getLocks();
-              const lockEntry = lockTable.locks.find((l) => taskManager.pathsEqual(l.file, targetPath));
+              const lockEntry = lockTable.locks.find((l) =>
+                taskManager.pathsEqual(l.file, targetPath),
+              );
               if (lockEntry) {
                 throw new Error(
-                  `[Crewmate Guardrail Blocked] Target file '${targetPath}' is currently locked by active task '${lockEntry.taskId}'.`
+                  `[Crewmate Guardrail Blocked] Target file '${targetPath}' is currently locked by active task '${lockEntry.taskId}'.`,
                 );
               }
             }
@@ -1035,7 +1255,9 @@ export const crewmateOpenCodePlugin = Plugin.define({
     const abortController = new AbortController();
     (async () => {
       try {
-        for await (const event of ctx.event.subscribe({ signal: abortController.signal })) {
+        for await (const event of ctx.event.subscribe({
+          signal: abortController.signal,
+        })) {
           const evType = (event as any).type;
 
           if (evType === "workspace.status") {
@@ -1056,14 +1278,19 @@ export const crewmateOpenCodePlugin = Plugin.define({
                 await writeHeartbeat("idle");
               }
             }
-          } else if (evType === "session.renamed" || evType === "session.title") {
-            const sid = (event as any).data?.sessionID || (event as any).data?.id;
+          } else if (
+            evType === "session.renamed" ||
+            evType === "session.title"
+          ) {
+            const sid =
+              (event as any).data?.sessionID || (event as any).data?.id;
             const title = (event as any).data?.title;
             if (sid) {
               await setActiveSession(sid, title);
             }
           } else if (evType === "session.deleted") {
-            const sid = (event as any).data?.sessionID || (event as any).data?.id;
+            const sid =
+              (event as any).data?.sessionID || (event as any).data?.id;
             if (activeSession?.id === sid) {
               activeSession = undefined;
               await writeHeartbeat("offline");
@@ -1081,11 +1308,18 @@ export const crewmateOpenCodePlugin = Plugin.define({
             const sid = (event as any).data?.sessionID;
             await setIdle(sid);
           } else if (evType === "session.status") {
-            const data = (event as Record<string, unknown>).data as Record<string, unknown> | undefined;
-            const eventStatus = data?.status as Record<string, unknown> | undefined;
+            const data = (event as Record<string, unknown>).data as
+              | Record<string, unknown>
+              | undefined;
+            const eventStatus = data?.status as
+              | Record<string, unknown>
+              | undefined;
             const sid = (data as any)?.sessionID as string | undefined;
 
-            if (eventStatus?.type === "running" || eventStatus?.type === "streaming") {
+            if (
+              eventStatus?.type === "running" ||
+              eventStatus?.type === "streaming"
+            ) {
               await touchActivity(sid);
             } else if (eventStatus?.type === "idle") {
               await setIdle(sid);
@@ -1094,7 +1328,7 @@ export const crewmateOpenCodePlugin = Plugin.define({
                 const state = await engine.getStateManager().getState();
                 if (state.status === "escalated") {
                   console.warn(
-                    `\n[Crewmate Alert] Workflow on node '${state.currentNode}' is ESCALATED to '${state.escalationTarget}'. Manual review required.`
+                    `\n[Crewmate Alert] Workflow on node '${state.currentNode}' is ESCALATED to '${state.escalationTarget}'. Manual review required.`,
                   );
                 }
               }

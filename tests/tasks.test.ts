@@ -12,7 +12,9 @@ const execAsync = promisify(exec);
 
 describe("Parallel Task System", () => {
   it("creates tasks and verifies the 3 sources of dependency edges", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-task-deps-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-task-deps-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -20,7 +22,13 @@ describe("Parallel Task System", () => {
       // Create two modules with a consumer relationship:
       // billing depends on auth, and auth declared_consumers includes [billing]
       await fs.writeFile(
-        path.join(tmpDir, ".crewmate", "contracts", "modules", "auth.contract.yaml"),
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "contracts",
+          "modules",
+          "auth.contract.yaml",
+        ),
         `module: auth
 version: "1.0.0"
 public_api:
@@ -31,11 +39,17 @@ invariants: []
 declared_consumers:
   - billing
 `,
-        "utf-8"
+        "utf-8",
       );
 
       await fs.writeFile(
-        path.join(tmpDir, ".crewmate", "contracts", "modules", "billing.contract.yaml"),
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "contracts",
+          "modules",
+          "billing.contract.yaml",
+        ),
         `module: billing
 version: "1.0.0"
 public_api:
@@ -45,7 +59,7 @@ public_api:
 invariants: []
 declared_consumers: []
 `,
-        "utf-8"
+        "utf-8",
       );
 
       // 1. Source 1: File overlap refusal
@@ -71,10 +85,11 @@ declared_consumers: []
         },
         (err: Error) => {
           return (
-            err.message.includes("Overlapping tasks cannot be parallel siblings") &&
-            err.message.includes("task_001")
+            err.message.includes(
+              "Overlapping tasks cannot be parallel siblings",
+            ) && err.message.includes("task_001")
           );
-        }
+        },
       );
 
       // Creating Task 2 with explicit depends_on: [task_001] succeeds and is tagged 'file-overlap'
@@ -86,7 +101,11 @@ declared_consumers: []
         depends_on: ["task_001"],
       });
       assert.equal(task2.id, "task_002");
-      assert.ok(task2.dependencies?.some((d) => d.taskId === "task_001" && d.reason === "file-overlap"));
+      assert.ok(
+        task2.dependencies?.some(
+          (d) => d.taskId === "task_001" && d.reason === "file-overlap",
+        ),
+      );
 
       // 2. Source 2: Contract-visible consumer relationship
       // Task 3 is in billing (a declared consumer of auth), and task 1 changes src/auth/token.ts (which is in auth's public_api!).
@@ -98,7 +117,11 @@ declared_consumers: []
         files: ["src/billing/discount.ts"],
       });
       assert.ok(task3.depends_on.includes("task_001"));
-      assert.ok(task3.dependencies?.some((d) => d.taskId === "task_001" && d.reason === "contract-consumer"));
+      assert.ok(
+        task3.dependencies?.some(
+          (d) => d.taskId === "task_001" && d.reason === "contract-consumer",
+        ),
+      );
 
       // 3. Source 3: Explicit lead-declared manual edges
       const task4 = await engine.createTask({
@@ -109,12 +132,22 @@ declared_consumers: []
         depends_on: ["task_003"],
       });
       assert.ok(task4.depends_on.includes("task_003"));
-      assert.ok(task4.dependencies?.some((d) => d.taskId === "task_003" && d.reason === "manual"));
+      assert.ok(
+        task4.dependencies?.some(
+          (d) => d.taskId === "task_003" && d.reason === "manual",
+        ),
+      );
 
       // 4. Future contract (status: draft) task creation
       // Authored during planning for a new module
       await fs.writeFile(
-        path.join(tmpDir, ".crewmate", "contracts", "modules", "notifications.contract.yaml"),
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "contracts",
+          "modules",
+          "notifications.contract.yaml",
+        ),
         `module: notifications
 status: draft
 version: "0.1.0"
@@ -126,7 +159,7 @@ invariants:
   - Must not send duplicate alerts
 declared_consumers: []
 `,
-        "utf-8"
+        "utf-8",
       );
 
       const taskDraft = await engine.createTask({
@@ -144,7 +177,9 @@ declared_consumers: []
   });
 
   it("enforces scheduling: two tasks with overlapping files cannot both reach active simultaneously (concurrent-start test)", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-task-concurrent-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-task-concurrent-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -165,7 +200,11 @@ declared_consumers: []
 
       // Verify lock table shows common.ts locked by task_A
       const locks = await engine.getTaskLocks();
-      assert.ok(locks.locks.some((l) => l.file === "src/shared/common.ts" && l.taskId === "task_A"));
+      assert.ok(
+        locks.locks.some(
+          (l) => l.file === "src/shared/common.ts" && l.taskId === "task_A",
+        ),
+      );
 
       // Now create Task B that has an overlapping file with Task A (created after with explicit depends_on, or created directly)
       const taskB = await engine.createTask({
@@ -191,7 +230,9 @@ declared_consumers: []
   });
 
   it("enforces depends_on gating: a task cannot start before dependencies reach done", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-task-dep-gate-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-task-dep-gate-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -222,10 +263,15 @@ declared_consumers: []
 
       // Initialize git repo so completion gate check works
       await execAsync("git init", { cwd: tmpDir });
-      await execAsync('git config user.email "test@crewmate.dev"', { cwd: tmpDir });
+      await execAsync('git config user.email "test@crewmate.dev"', {
+        cwd: tmpDir,
+      });
       await execAsync('git config user.name "Crewmate Test"', { cwd: tmpDir });
       await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
-      await fs.writeFile(path.join(tmpDir, "src", "first.ts"), "export const first = 1;\n");
+      await fs.writeFile(
+        path.join(tmpDir, "src", "first.ts"),
+        "export const first = 1;\n",
+      );
       await execAsync("git add .", { cwd: tmpDir });
       await execAsync('git commit -m "feat: first"', { cwd: tmpDir });
 
@@ -243,7 +289,9 @@ declared_consumers: []
   });
 
   it("handles scope amendment: unclaimed file granted, while locked file triggers hard conflict and escalation", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-task-amend-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-task-amend-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -269,21 +317,34 @@ declared_consumers: []
       assert.equal(resBeta.status, "active");
 
       // 1. Scope amendment with UNCLAIMED file -> granted
-      const amendUnclaimed = await engine.amendTaskScope("task_alpha", "src/extra_alpha.ts");
+      const amendUnclaimed = await engine.amendTaskScope(
+        "task_alpha",
+        "src/extra_alpha.ts",
+      );
       assert.equal(amendUnclaimed.success, true);
       assert.equal(amendUnclaimed.file, "src/extra_alpha.ts");
 
       // Verify file is now in task_alpha locked files
       const alphaDef = await engine.getTaskManager().getTask("task_alpha");
       assert.ok(alphaDef?.files.includes("src/extra_alpha.ts"));
-      assert.ok(alphaDef?.amendments.some((a) => a.type === "scope_amendment" && a.file === "src/extra_alpha.ts"));
+      assert.ok(
+        alphaDef?.amendments.some(
+          (a) =>
+            a.type === "scope_amendment" && a.file === "src/extra_alpha.ts",
+        ),
+      );
 
       // 2. Scope amendment with LOCKED file held by task_beta -> HARD CONFLICT!
-      const conflictRes = await engine.amendTaskScope("task_alpha", "src/beta.ts");
+      const conflictRes = await engine.amendTaskScope(
+        "task_alpha",
+        "src/beta.ts",
+      );
       assert.equal(conflictRes.success, false);
       assert.equal(conflictRes.conflict, true);
       assert.equal(conflictRes.conflictingTaskId, "task_beta");
-      assert.ok(conflictRes.message.includes("locked by active task 'task_beta'"));
+      assert.ok(
+        conflictRes.message.includes("locked by active task 'task_beta'"),
+      );
 
       // Verify scope_conflict event logged
       const conflicts = await engine.getTaskConflictSummary();
@@ -296,14 +357,18 @@ declared_consumers: []
   });
 
   it("enforces task completion gate as ground-truth backstop: failing on un-amended file modifications", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-task-gate-backstop-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-task-gate-backstop-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
 
       // Git repo setup
       await execAsync("git init", { cwd: tmpDir });
-      await execAsync('git config user.email "test@crewmate.dev"', { cwd: tmpDir });
+      await execAsync('git config user.email "test@crewmate.dev"', {
+        cwd: tmpDir,
+      });
       await execAsync('git config user.name "Crewmate Test"', { cwd: tmpDir });
       await execAsync("git add .", { cwd: tmpDir });
       await execAsync('git commit -m "initial"', { cwd: tmpDir });
@@ -321,15 +386,25 @@ declared_consumers: []
       // Simulate a bypass (e.g. subagent writing directly to disk without plugin interception):
       // Worker touches allowed file AND forbidden out-of-scope file
       await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
-      await fs.writeFile(path.join(tmpDir, "src", "allowed.ts"), "export const ok = true;\n");
-      await fs.writeFile(path.join(tmpDir, "src", "bypassed_leak.ts"), "export const forbidden = true;\n");
+      await fs.writeFile(
+        path.join(tmpDir, "src", "allowed.ts"),
+        "export const ok = true;\n",
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "src", "bypassed_leak.ts"),
+        "export const forbidden = true;\n",
+      );
 
       // Run task complete -> MUST FAIL AT COMPLETION GATE!
       const completeRes = await engine.completeTask("task_strict");
       assert.equal(completeRes.success, false);
       assert.equal(completeRes.status, "failed");
       assert.ok(completeRes.error?.includes("bypassed_leak.ts"));
-      assert.ok(completeRes.outOfScopeFiles?.some((f) => f.includes("bypassed_leak.ts")));
+      assert.ok(
+        completeRes.outOfScopeFiles?.some((f) =>
+          f.includes("bypassed_leak.ts"),
+        ),
+      );
 
       // Verify task status is failed on disk and locks released
       const taskDef = await engine.getTaskManager().getTask("task_strict");
@@ -343,7 +418,9 @@ declared_consumers: []
   });
 
   it("enforces plugin write-only guardrail while keeping reads unrestricted", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-plugin-tasks-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-plugin-tasks-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -441,7 +518,7 @@ declared_consumers: []
             err.message.includes("Scope conflict") &&
             err.message.includes("task_2")
           );
-        }
+        },
       );
 
       if (typeof cleanup === "function") {
@@ -453,65 +530,85 @@ declared_consumers: []
   });
 
   it("executes CLI commands: task create, list, start, amend, complete, locks, conflicts", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-cli-tasks-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-cli-tasks-"),
+    );
     const cliPath = path.resolve("dist", "src", "cli", "index.js");
     try {
       // Init repo
       await execAsync(`node "${cliPath}" init --example -p "${tmpDir}"`);
       await execAsync("git init", { cwd: tmpDir });
-      await execAsync('git config user.email "test@crewmate.dev"', { cwd: tmpDir });
+      await execAsync('git config user.email "test@crewmate.dev"', {
+        cwd: tmpDir,
+      });
       await execAsync('git config user.name "Crewmate Test"', { cwd: tmpDir });
       await execAsync("git add .", { cwd: tmpDir });
       await execAsync('git commit -m "init"', { cwd: tmpDir });
 
       // 1. task create
       const createOut = await execAsync(
-        `node "${cliPath}" task create --contract modules/example.contract.yaml --files src/example/index.ts --goal "Implement example feature" --json -p "${tmpDir}"`
+        `node "${cliPath}" task create --contract modules/example.contract.yaml --files src/example/index.ts --goal "Implement example feature" --json -p "${tmpDir}"`,
       );
       const created = JSON.parse(createOut.stdout);
       assert.equal(created.id, "task_001");
       assert.equal(created.status, "pending");
 
       // 2. task list
-      const listOut = await execAsync(`node "${cliPath}" task list --json -p "${tmpDir}"`);
+      const listOut = await execAsync(
+        `node "${cliPath}" task list --json -p "${tmpDir}"`,
+      );
       const list = JSON.parse(listOut.stdout);
       assert.equal(list.length, 1);
       assert.equal(list[0].id, "task_001");
 
       // 3. task start
-      const startOut = await execAsync(`node "${cliPath}" task start --id task_001 --json -p "${tmpDir}"`);
+      const startOut = await execAsync(
+        `node "${cliPath}" task start --id task_001 --json -p "${tmpDir}"`,
+      );
       const started = JSON.parse(startOut.stdout);
       assert.equal(started.success, true);
       assert.equal(started.status, "active");
 
       // 4. task locks
-      const locksOut = await execAsync(`node "${cliPath}" task locks --json -p "${tmpDir}"`);
+      const locksOut = await execAsync(
+        `node "${cliPath}" task locks --json -p "${tmpDir}"`,
+      );
       const locks = JSON.parse(locksOut.stdout);
       assert.equal(locks.activeTasks.length, 1);
-      assert.ok(locks.locks.some((l: any) => l.file === "src/example/index.ts"));
+      assert.ok(
+        locks.locks.some((l: any) => l.file === "src/example/index.ts"),
+      );
 
       // 5. task amend
       const amendOut = await execAsync(
-        `node "${cliPath}" task amend --id task_001 --add-file src/example/helper.ts --json -p "${tmpDir}"`
+        `node "${cliPath}" task amend --id task_001 --add-file src/example/helper.ts --json -p "${tmpDir}"`,
       );
       const amended = JSON.parse(amendOut.stdout);
       assert.equal(amended.success, true);
 
       // Touch the declared files
       await fs.mkdir(path.join(tmpDir, "src", "example"), { recursive: true });
-      await fs.writeFile(path.join(tmpDir, "src", "example", "index.ts"), "export const x = 1;\n");
-      await fs.writeFile(path.join(tmpDir, "src", "example", "helper.ts"), "export const h = 2;\n");
+      await fs.writeFile(
+        path.join(tmpDir, "src", "example", "index.ts"),
+        "export const x = 1;\n",
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "src", "example", "helper.ts"),
+        "export const h = 2;\n",
+      );
 
       // 6. task complete
       const completeOut = await execAsync(
-        `node "${cliPath}" task complete --id task_001 --json -p "${tmpDir}"`
+        `node "${cliPath}" task complete --id task_001 --json -p "${tmpDir}"`,
       );
       const completed = JSON.parse(completeOut.stdout);
       assert.equal(completed.success, true);
       assert.equal(completed.status, "done");
 
       // 7. task conflicts
-      const conflictsOut = await execAsync(`node "${cliPath}" task conflicts --json -p "${tmpDir}"`);
+      const conflictsOut = await execAsync(
+        `node "${cliPath}" task conflicts --json -p "${tmpDir}"`,
+      );
       const conflicts = JSON.parse(conflictsOut.stdout);
       assert.equal(conflicts.totalConflicts, 0);
     } finally {

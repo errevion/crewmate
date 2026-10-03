@@ -10,7 +10,9 @@ import { CrewmateEngine } from "../src/core/engine/engine.js";
 
 describe("Static Analysis Scanners (Phase 2)", () => {
   it("detects architectural boundary violations with evidence", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-arch-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-arch-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -33,7 +35,7 @@ modules:
     version: "1.0.0"
     public_surface: ["src/billing/index.ts"]
 `,
-        "utf-8"
+        "utf-8",
       );
 
       await fs.writeFile(
@@ -45,7 +47,7 @@ modules:
   billing:
     allowed_dependencies: [auth]
 `,
-        "utf-8"
+        "utf-8",
       );
 
       // Create valid billing -> auth import
@@ -55,7 +57,7 @@ modules:
       await fs.writeFile(
         path.join(tmpDir, "src", "auth", "index.ts"),
         `export function getUserId(): string { return "user_1"; }\n`,
-        "utf-8"
+        "utf-8",
       );
 
       await fs.writeFile(
@@ -65,7 +67,7 @@ export function chargeUser(): void {
   const id = getUserId();
 }
 `,
-        "utf-8"
+        "utf-8",
       );
 
       // Check valid
@@ -81,7 +83,7 @@ export function illegalOperation(): void {
   chargeUser();
 }
 `,
-        "utf-8"
+        "utf-8",
       );
 
       // Check violation detected
@@ -99,7 +101,9 @@ export function illegalOperation(): void {
   });
 
   it("enforces the dead-code decision rule (safe-delete vs flag-for-review)", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-deadcode-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-deadcode-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -107,7 +111,13 @@ export function illegalOperation(): void {
       // Configure module contract for auth:
       // public_api has "verifyToken"
       await fs.writeFile(
-        path.join(tmpDir, ".crewmate", "contracts", "modules", "auth.contract.yaml"),
+        path.join(
+          tmpDir,
+          ".crewmate",
+          "contracts",
+          "modules",
+          "auth.contract.yaml",
+        ),
         `module: auth
 version: "1.0.0"
 public_api:
@@ -117,7 +127,7 @@ public_api:
 invariants: []
 declared_consumers: []
 `,
-        "utf-8"
+        "utf-8",
       );
 
       // Configure capabilities.yaml:
@@ -130,7 +140,7 @@ declared_consumers: []
     description: "External tool capability"
     entrypoint: "src/auth/tools.ts:externalHelper"
 `,
-        "utf-8"
+        "utf-8",
       );
 
       await fs.mkdir(path.join(tmpDir, "src", "auth"), { recursive: true });
@@ -139,21 +149,21 @@ declared_consumers: []
       await fs.writeFile(
         path.join(tmpDir, "src", "auth", "jwt.ts"),
         `export function verifyToken(token: string): boolean { return true; }\n`,
-        "utf-8"
+        "utf-8",
       );
 
       // File 2: tools.ts with externalHelper (unreferenced locally, but in capabilities.yaml!)
       await fs.writeFile(
         path.join(tmpDir, "src", "auth", "tools.ts"),
         `export function externalHelper(): void {}\n`,
-        "utf-8"
+        "utf-8",
       );
 
       // File 3: internal.ts with unusedSecretFn (unreferenced AND NOT in any contract!)
       await fs.writeFile(
         path.join(tmpDir, "src", "auth", "internal.ts"),
         `export function unusedSecretFn(): void {}\n`,
-        "utf-8"
+        "utf-8",
       );
 
       // File 4: active.ts with usedFn, which is called within active.ts
@@ -162,7 +172,7 @@ declared_consumers: []
         `export function usedFn(): void {}
 usedFn();
 `,
-        "utf-8"
+        "utf-8",
       );
 
       const scanResult = await scanDeadCode(tmpDir);
@@ -181,7 +191,9 @@ usedFn();
 
       // usedFn MUST NOT be in either
       assert.ok(!flaggedSymbols.includes("usedFn"));
-      assert.ok(scanResult.safeDeleteCandidates.every((c) => c.symbol !== "usedFn"));
+      assert.ok(
+        scanResult.safeDeleteCandidates.every((c) => c.symbol !== "usedFn"),
+      );
 
       // valid must be false because there is a safeDeleteCandidate
       assert.equal(scanResult.valid, false);

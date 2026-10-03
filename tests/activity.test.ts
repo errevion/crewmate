@@ -15,7 +15,9 @@ const cliPath = path.resolve("dist", "src", "cli", "index.js");
 
 describe("Activity Tracking Engine & CLI", () => {
   it("logs activity start, end, lists history, and builds activity tree", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-act-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-act-test-"),
+    );
     try {
       const manager = new ActivityManager(tmpDir);
 
@@ -85,7 +87,9 @@ describe("Activity Tracking Engine & CLI", () => {
   });
 
   it("surfaces unclosed activities in status", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-status-act-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-status-act-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init();
@@ -100,11 +104,20 @@ describe("Activity Tracking Engine & CLI", () => {
 
       const status = await engine.status();
       assert.equal(status.unclosedActivities.length, 1);
-      assert.equal(status.unclosedActivities[0].label, "interrupted task writing auth.ts");
+      assert.equal(
+        status.unclosedActivities[0].label,
+        "interrupted task writing auth.ts",
+      );
 
       // Verify CLI status output displays unclosed activity
-      const statusOut = await execAsync(`node "${cliPath}" status --project-root "${tmpDir}"`);
-      assert.ok(statusOut.stdout.includes("Unclosed Activities (1): [INTERRUPTED / UNFINISHED WORK]"));
+      const statusOut = await execAsync(
+        `node "${cliPath}" status --project-root "${tmpDir}"`,
+      );
+      assert.ok(
+        statusOut.stdout.includes(
+          "Unclosed Activities (1): [INTERRUPTED / UNFINISHED WORK]",
+        ),
+      );
       assert.ok(statusOut.stdout.includes("interrupted task writing auth.ts"));
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
@@ -112,7 +125,9 @@ describe("Activity Tracking Engine & CLI", () => {
   });
 
   it("blocks advance when unclosed activity touches verified files", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-advance-act-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-advance-act-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -122,7 +137,7 @@ describe("Activity Tracking Engine & CLI", () => {
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "index.ts"),
         "export function exampleFn(): void { console.log('hello'); }\n",
-        "utf-8"
+        "utf-8",
       );
 
       // Advance to execute
@@ -139,7 +154,11 @@ describe("Activity Tracking Engine & CLI", () => {
       // Advance to verify should be BLOCKED because of unclosed activity touching src/example/index.ts!
       const advBlocked = await engine.advance();
       assert.equal(advBlocked.advanced, false);
-      assert.ok(advBlocked.message?.includes("Advance blocked: Unclosed activities touching verified files"));
+      assert.ok(
+        advBlocked.message?.includes(
+          "Advance blocked: Unclosed activities touching verified files",
+        ),
+      );
       assert.ok(advBlocked.message?.includes(unclosedId));
       assert.equal(advBlocked.unclosedActivities?.length, 1);
 
@@ -159,7 +178,9 @@ describe("Activity Tracking Engine & CLI", () => {
   });
 
   it("correlates dead-code scan candidates with originating activity provenance", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-provenance-test-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-provenance-test-"),
+    );
     try {
       const engine = new CrewmateEngine(tmpDir);
       await engine.init({ example: true });
@@ -169,12 +190,12 @@ describe("Activity Tracking Engine & CLI", () => {
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "index.ts"),
         "export function exampleFn(): void {}\n",
-        "utf-8"
+        "utf-8",
       );
       await fs.writeFile(
         path.join(tmpDir, "src", "example", "unused.ts"),
         "export function ghostFunction(): void {}\n",
-        "utf-8"
+        "utf-8",
       );
 
       // 1. Without activity log, dead code scan works and gracefully omits provenance
@@ -208,7 +229,10 @@ describe("Activity Tracking Engine & CLI", () => {
       assert.ok(candidate.provenance);
       assert.equal(candidate.provenance.originatingActivityId, act1);
       assert.equal(candidate.provenance.originatingAgent, "legacy-agent");
-      assert.equal(candidate.provenance.originatingLabel, "initial spike with experimental helpers");
+      assert.equal(
+        candidate.provenance.originatingLabel,
+        "initial spike with experimental helpers",
+      );
       assert.equal(candidate.provenance.subsequentReferenceCount, 1);
       assert.deepEqual(candidate.provenance.subsequentActivityIds, [act2]);
     } finally {
@@ -217,18 +241,20 @@ describe("Activity Tracking Engine & CLI", () => {
   });
 
   it("executes CLI commands: activity start, end, list, tree", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crewmate-cli-act-"));
+    const tmpDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "crewmate-cli-act-"),
+    );
     try {
       // 1. activity start
       const startOut = await execAsync(
-        `node "${cliPath}" activity start --agent test-agent --label "writing feature" --project-root "${tmpDir}" --meta "{\\"files\\":[\\"src/feature.ts\\"]}"`
+        `node "${cliPath}" activity start --agent test-agent --label "writing feature" --project-root "${tmpDir}" --meta "{\\"files\\":[\\"src/feature.ts\\"]}"`,
       );
       const actId = startOut.stdout.trim();
       assert.ok(actId.startsWith("act_"));
 
       // 2. activity list --active
       const listActiveOut = await execAsync(
-        `node "${cliPath}" activity list --active --project-root "${tmpDir}" --json`
+        `node "${cliPath}" activity list --active --project-root "${tmpDir}" --json`,
       );
       const activeList = JSON.parse(listActiveOut.stdout);
       assert.equal(activeList.length, 1);
@@ -236,20 +262,20 @@ describe("Activity Tracking Engine & CLI", () => {
 
       // 3. activity tree
       const treeOut = await execAsync(
-        `node "${cliPath}" activity tree --project-root "${tmpDir}"`
+        `node "${cliPath}" activity tree --project-root "${tmpDir}"`,
       );
       assert.ok(treeOut.stdout.includes(actId));
       assert.ok(treeOut.stdout.includes("[UNCLOSED]"));
 
       // 4. activity end
       const endOut = await execAsync(
-        `node "${cliPath}" activity end --id "${actId}" --status completed --project-root "${tmpDir}"`
+        `node "${cliPath}" activity end --id "${actId}" --status completed --project-root "${tmpDir}"`,
       );
       assert.ok(endOut.stdout.includes("ended with status 'completed'"));
 
       // 5. activity list --active now empty
       const listAfterEnd = await execAsync(
-        `node "${cliPath}" activity list --active --project-root "${tmpDir}" --json`
+        `node "${cliPath}" activity list --active --project-root "${tmpDir}" --json`,
       );
       assert.equal(JSON.parse(listAfterEnd.stdout).length, 0);
     } finally {

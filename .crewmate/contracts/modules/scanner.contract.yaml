@@ -33,6 +33,7 @@ public_api:
 invariants:
   - "scanArchitecture enforces that module imports strictly comply with allowed_dependencies in architecture.yaml."
   - "scanDeadCode verifies whether exports with zero references are declared in contracts, marking undeclared exports as safe delete candidates."
+  - "Architecture boundary scanning (scan:arch) and dead code detection (scan:dead-code) are enforced as required gates in the CI workflow."
 declared_consumers:
   - task
   - engine

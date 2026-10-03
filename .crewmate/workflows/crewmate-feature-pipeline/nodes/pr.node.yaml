@@ -3,6 +3,13 @@ instructions: >
   Run `git add .`, create a single conventional commit `git commit -m "feat: ..."`,
   push to remote with `git push -u origin HEAD`, and open a pull request using
   `gh pr create`.
+  After creating the pull request, dynamically determine and request reviewers:
+  1. Check for a CODEOWNERS file (`.github/CODEOWNERS`, `CODEOWNERS`, or `docs/CODEOWNERS`)
+     and extract assigned owner usernames/teams (stripping any leading `@`).
+  2. If no CODEOWNERS file or valid owners are found, fallback to the repository owner
+     using `gh repo view --json owner -q .owner.login`.
+  3. Filter out the current authenticated user (`gh api user -q .login`) to avoid self-review requests.
+  4. Request review using `gh pr edit --add-reviewer <reviewers>` (or pass `--reviewer <reviewers>` during `gh pr create`).
 inputs: []
 subagent:
   role: builder

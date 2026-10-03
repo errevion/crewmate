@@ -6,14 +6,22 @@ on:
   pull_request:
     branches: ["master", "main"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   test:
-    name: Test on ${{ matrix.os }}
+    name: Test on ${{ matrix.os }} (Node ${{ matrix.node-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20, 22]
 
     steps:
       - name: Checkout repository
@@ -24,11 +32,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: "npm"
 
       - name: Install Node dependencies
         run: npm ci
+
+      - name: Biome Lint Check
+        run: npm run lint
 
       - name: Check for Rust changes
         id: rust-changes
@@ -38,14 +49,33 @@ jobs:
             crates/**
             .github/workflows/ci.yml
 
+      - name: Cache Rust binary
+        id: rust-binary-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            crates/crewmate-watch/target/release/crewmate-watch
+            crates/crewmate-watch/target/release/crewmate-watch.exe
+          key: rust-binary-${{ runner.os }}-${{ hashFiles('crates/crewmate-watch/Cargo.lock', 'crates/crewmate-watch/Cargo.toml', 'crates/crewmate-watch/src/**', 'crates/crewmate-watch/tests/**') }}
+
+      - name: Check Rust binary existence
+        id: check-rust-binary
+        shell: bash
+        run: |
+          if [ -f crates/crewmate-watch/target/release/crewmate-watch ] || [ -f crates/crewmate-watch/target/release/crewmate-watch.exe ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Rust
-        if: steps.rust-changes.outputs.any_changed == 'true' || github.event_name == 'push'
+        if: steps.rust-changes.outputs.any_changed == 'true' || github.event_name == 'push' || steps.check-rust-binary.outputs.exists != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
 
       - name: Rust Cache
-        if: steps.rust-changes.outputs.any_changed == 'true' || github.event_name == 'push'
+        if: steps.rust-changes.outputs.any_changed == 'true' || github.event_name == 'push' || steps.check-rust-binary.outputs.exists != 'true'
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: crates/crewmate-watch
@@ -63,11 +93,21 @@ jobs:
         run: cargo test --manifest-path crates/crewmate-watch/Cargo.toml
 
       - name: Build Rust Binary (Release)
-        if: steps.rust-changes.outputs.any_changed == 'true' || github.event_name == 'push'
+        if: steps.rust-changes.outputs.any_changed == 'true' || github.event_name == 'push' || steps.check-rust-binary.outputs.exists != 'true'
         run: npm run build:watch
+
+      - name: Ensure Rust binary is executable
+        if: runner.os != 'Windows'
+        run: |
+          if [ -f crates/crewmate-watch/target/release/crewmate-watch ]; then
+            chmod +x crates/crewmate-watch/target/release/crewmate-watch
+          fi
 
       - name: Build TypeScript
         run: npm run build
+
+      - name: Run Crewmate Scanners
+        run: npm run scan
 
       - name: Test (Node.js)
         run: npm test
