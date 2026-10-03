@@ -1,0 +1,28 @@
+module: utils
+status: final
+version: "1.0.0"
+public_api:
+  - export: matchGlob
+    signature: "(pattern: string, filePath: string) => boolean"
+    file: src/core/utils/glob.ts
+    description: "Zero-dependency glob pattern matcher supporting single segment (*) and recursive (**) wildcards."
+  - export: isSourceFile
+    signature: "(file: string) => boolean"
+    file: src/core/utils/fs.ts
+    description: "Determines whether a file path is a TypeScript or JavaScript source file, excluding definition files."
+  - export: getFilesRecursively
+    signature: "(dir: string) => Promise<string[]>"
+    file: src/core/utils/fs.ts
+    description: "Recursively scans a directory and returns an array of all discovered file paths."
+  - export: resolveContractPath
+    signature: "(projectRoot: string, ...segments: string[]) => Promise<string>"
+    file: src/core/utils/fs.ts
+    description: "Resolves a relative contract path, checking .crewmate/contracts/ first and falling back to contracts/."
+invariants:
+  - "Paths are normalized to POSIX style (forward slashes) across platforms."
+  - "Contract paths resolve first to .crewmate/contracts/ before falling back to contracts/."
+  - "Glob matching supports single-segment (*) and recursive globstar (**) wildcards."
+declared_consumers:
+  - scanner
+  - engine
+  - opencode-adapter

@@ -1,0 +1,40 @@
+module: scanner
+status: final
+version: "1.0.0"
+public_api:
+  - export: ArchViolation
+    signature: "interface ArchViolation"
+    file: src/core/scanner/arch.ts
+    description: "Details of an architectural boundary violation flagged by AST import scanner."
+  - export: ArchScanResult
+    signature: "interface ArchScanResult"
+    file: src/core/scanner/arch.ts
+    description: "Result of architecture boundary scan containing validity flag, violation list, and file count."
+  - export: scanArchitecture
+    signature: "(projectRoot?: string) => Promise<ArchScanResult>"
+    file: src/core/scanner/arch.ts
+    description: "Scans codebase imports using TypeScript AST and checks against architecture.yaml rules."
+  - export: SafeDeleteCandidate
+    signature: "interface SafeDeleteCandidate"
+    file: src/core/scanner/dead-code.ts
+    description: "Describes an unreferenced export not declared in any contract or capability."
+  - export: FlaggedForReview
+    signature: "interface FlaggedForReview"
+    file: src/core/scanner/dead-code.ts
+    description: "Describes an unreferenced export that is declared public in contracts or capabilities."
+  - export: DeadCodeScanResult
+    signature: "interface DeadCodeScanResult"
+    file: src/core/scanner/dead-code.ts
+    description: "Scan result containing candidate deletions, flagged review items, and summary counts."
+  - export: scanDeadCode
+    signature: "(projectRoot?: string) => Promise<DeadCodeScanResult>"
+    file: src/core/scanner/dead-code.ts
+    description: "Scans codebase for unreferenced exports and cross-references them against contract declarations."
+invariants:
+  - "scanArchitecture enforces that module imports strictly comply with allowed_dependencies in architecture.yaml."
+  - "scanDeadCode verifies whether exports with zero references are declared in contracts, marking undeclared exports as safe delete candidates."
+declared_consumers:
+  - task
+  - engine
+  - cli
+  - opencode-adapter

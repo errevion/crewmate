@@ -1,0 +1,9 @@
+module: cli
+status: final
+version: "1.0.0"
+public_api: []
+invariants:
+  - "Commands exit with code 0 on success and non-zero exit codes on failure."
+  - "Supports both human-readable console output and machine-readable JSON output via --json flag."
+  - "Validates workflow and task prerequisites prior to executing transitions or lock grants."
+declared_consumers: []

@@ -1,0 +1,17 @@
+module: archive
+status: final
+version: "1.0.0"
+public_api:
+  - export: ArchiveManifest
+    signature: "interface ArchiveManifest"
+    file: src/core/archive/archive-manager.ts
+    description: "Metadata manifest for an archived workflow run."
+  - export: ArchiveManager
+    signature: "class ArchiveManager"
+    file: src/core/archive/archive-manager.ts
+    description: "Handles packaging and isolating workflow run artifacts into .crewmate/archive/<runId>/."
+invariants:
+  - "Archival writes self-describing manifest.json alongside archived artifacts under .crewmate/archive/<runId>/."
+  - "When pruning active state, completed and failed tasks are relocated from .crewmate/tasks/ to the archive."
+declared_consumers:
+  - engine

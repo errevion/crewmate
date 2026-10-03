@@ -1,0 +1,37 @@
+module: opencode-adapter
+status: final
+version: "1.0.0"
+public_api:
+  - export: extractCommandStrings
+    signature: "(input: unknown) => string[]"
+    file: src/adapters/opencode/index.ts
+    description: "Extracts bash command strings from tool call input parameters."
+  - export: isCrewmateCliCommand
+    signature: "(cmdStr: string) => boolean"
+    file: src/adapters/opencode/index.ts
+    description: "Determines if a shell command string invokes the crewmate CLI."
+  - export: CREWMATE_TOOL_ACCESS
+    signature: "Record<string, string[] | \"all\">"
+    file: src/adapters/opencode/index.ts
+    description: "Default mapping of subagent roles to allowed tool sets."
+  - export: DEFAULT_CREWMATE_AGENTS
+    signature: "Set<string>"
+    file: src/adapters/opencode/index.ts
+    description: "Set of recognized Crewmate subagent role identifiers."
+  - export: isCrewmateAgent
+    signature: "(agentName?: string, cwd?: string, roleDirective?: string) => Promise<boolean>"
+    file: src/adapters/opencode/index.ts
+    description: "Validates whether an agent session belongs to a Crewmate subagent."
+  - export: crewmateOpenCodePlugin
+    signature: "Plugin"
+    file: src/adapters/opencode/index.ts
+    description: "OpenCode plugin integrating Crewmate guardrails, tools, and activity tracking into OpenCode runtime."
+  - export: crewmatePlugin
+    signature: "Plugin"
+    file: src/adapters/opencode/index.ts
+    description: "Alias for crewmateOpenCodePlugin."
+invariants:
+  - "Tool access is restricted based on active node subagent role and permissions."
+  - "File modifications are blocked if targeting forbidden patterns in structure.yaml."
+  - "All tool executions and bash commands are intercepted and mirrored to activity tracking."
+declared_consumers: []
