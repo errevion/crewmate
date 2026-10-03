@@ -1,0 +1,25 @@
+id: fix
+instructions: >
+  A PR was declined or CI checks failed. Apply targeted fixes based on the
+  review feedback or CI failure output.
+
+  Focus only on the specific issues raised — do not refactor, restructure,
+  or expand scope beyond what the review requested.
+
+  After making changes, the workflow will re-run verification and resubmit
+  the PR.
+inputs:
+  - pr_feedback
+  - ci_output
+subagent:
+  role: builder
+  agent: builder
+  scope: implementation
+guardrails:
+  pre: []
+  post:
+    - type: hard
+      run: crewmate scan arch
+on_fail: route(fix)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

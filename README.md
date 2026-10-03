@@ -49,6 +49,41 @@ crewmate watch
 
 ---
 
+## Workflows
+
+The workflows in Crewmate are declarative state machine graphs defined under `.crewmate/workflows/`. Two primary development workflows are supported:
+
+### Feature Pipeline (`crewmate-feature-pipeline`)
+
+A 10-node end-to-end development pipeline that drives features from initial exploration to pull request creation:
+
+```text
+scout → clarify → branch → plan → execute → contract → verify → docs → pr → done
+                                                           ▲            │
+                                                           └── fix ◄────┘ (on_fail)
+```
+
+- **Fix Loop**: When PR checks or verification fail (`on_fail`), the workflow routes automatically to `fix` instead of retrying `pr` directly. The agent applies targeted fixes based on review feedback or CI failure output, then re-enters the verification and documentation cycle (`pr -[on_fail]→ fix → verify → docs → pr`).
+- **Happy Path**: When verification and review pass, `pr` advances directly to `done`.
+
+### Fix Pipeline (`crewmate-fix-pipeline`)
+
+A streamlined, standalone 3-node workflow optimized for fix-and-resubmit cycles on existing branches:
+
+```text
+fix → verify → pr → done
+```
+
+- Designed for returning to an open or declined pull request in a new session without re-running exploratory and planning stages (`scout`, `clarify`, `branch`, `plan`, `execute`, `contract`).
+- Operates directly on the active PR branch using targeted fixup commits (`git commit -m "fix: ..."`) and force-pushes with `git push --force-with-lease`.
+
+### When to Use Which Pipeline
+
+- **Feature Pipeline Built-in Fix Loop**: Used automatically during active feature development when PR creation or local checks fail within the same session.
+- **Fix Pipeline (`crewmate-fix-pipeline`)**: Recommended when starting a new session to address reviewer feedback or remote CI failures on an already-opened PR (run with `crewmate workflow run crewmate-fix-pipeline`).
+
+---
+
 ## CLI Commands
 
 | Command | Description |

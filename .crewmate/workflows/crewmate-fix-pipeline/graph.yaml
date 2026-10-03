@@ -1,0 +1,10 @@
+version: 1.0.0
+name: Fix Pipeline
+initial: fix
+nodes:
+  - id: fix
+    next: verify
+  - id: verify
+    next: pr
+  - id: pr
+    next: done

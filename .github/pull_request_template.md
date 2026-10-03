@@ -14,7 +14,7 @@
 
 ## Related Crewmate Workflows & Modules
 <!-- Mention the affected workflows and module contracts. -->
-- **Workflow:** (e.g. `crewmate-feature-pipeline`, `contract-sync`)
+- **Workflow:** (e.g. `crewmate-feature-pipeline`, `crewmate-fix-pipeline`, `contract-sync`)
 - **Affected Modules:** (e.g. `engine`, `task`, `activity`, `scanner`, `schemas`, `cli`, `opencode-adapter`)
 - **Related Issues / Tasks:** (e.g. Closes #123, task_001)
 

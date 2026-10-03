@@ -18,6 +18,6 @@ subagent:
 guardrails:
   pre: []
   post: []
-on_fail: route(pr)
+on_fail: route(fix)
 on_fail_max_retries: 2
 escalate_after_max_retries: human

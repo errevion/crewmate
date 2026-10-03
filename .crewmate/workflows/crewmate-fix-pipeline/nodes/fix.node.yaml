@@ -1,0 +1,25 @@
+id: fix
+instructions: >
+  Apply targeted fixes based on PR review feedback or CI failure output.
+
+  The user should provide context on what failed (review comments, CI logs,
+  check output). Focus exclusively on resolving the reported issues.
+
+  Do not refactor, restructure, or expand scope beyond what is needed.
+inputs:
+  - pr_feedback
+  - ci_output
+subagent:
+  role: builder
+  agent: builder
+  scope: implementation
+guardrails:
+  pre:
+    - type: hard
+      run: crewmate scan arch
+  post:
+    - type: hard
+      run: crewmate scan arch
+on_fail: route(fix)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

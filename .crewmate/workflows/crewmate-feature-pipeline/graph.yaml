@@ -20,3 +20,5 @@ nodes:
     next: pr
   - id: pr
     next: done
+  - id: fix
+    next: verify
