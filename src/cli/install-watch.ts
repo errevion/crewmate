@@ -102,7 +102,7 @@ export function getPackageVersion(pkgRoot: string): string {
   } catch {
     // fallback to default version
   }
-  return "0.1.0";
+  return "0.2.0";
 }
 
 /**
