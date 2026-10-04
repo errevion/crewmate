@@ -53,7 +53,7 @@ describe("Crewmate Watch CLI & Binary", () => {
     assert.match(helpRes.stdout, /--root <ROOT>/i);
 
     const versionRes = await execFileAsync(binaryPath, ["--version"]);
-    assert.match(versionRes.stdout, /crewmate-watch 0\.1\.0/i);
+    assert.match(versionRes.stdout, /crewmate-watch 0\.2\.0/i);
   });
 
   it("resolves watch binary when invoked from an external initialized project directory", async () => {
@@ -229,7 +229,7 @@ describe("Crewmate Watch CLI & Binary", () => {
       assert.ok(fs.existsSync(path.join(pkgRoot, "package.json")));
 
       const version = getPackageVersion(pkgRoot);
-      assert.strictEqual(version, "0.1.0");
+      assert.strictEqual(version, "0.2.0");
     });
 
     it("finds package root from a nested subdirectory", () => {
@@ -253,7 +253,7 @@ describe("Crewmate Watch CLI & Binary", () => {
       }
     });
 
-    it("falls back to default version 0.1.0 when package.json has no version or is invalid", () => {
+    it("falls back to default version 0.2.0 when package.json has no version or is invalid", () => {
       const tempRoot = fs.mkdtempSync(
         path.join(os.tmpdir(), "crewmate-test-badpkg-"),
       );
@@ -261,7 +261,7 @@ describe("Crewmate Watch CLI & Binary", () => {
 
       try {
         const version = getPackageVersion(tempRoot);
-        assert.strictEqual(version, "0.1.0");
+        assert.strictEqual(version, "0.2.0");
       } finally {
         fs.rmSync(tempRoot, { recursive: true, force: true });
       }

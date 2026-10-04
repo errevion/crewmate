@@ -132,7 +132,7 @@ program
   .description(
     "CLI-based workflow engine for contract-driven agent development",
   )
-  .version("0.1.0");
+  .version("0.2.0");
 
 // crewmate init
 program
