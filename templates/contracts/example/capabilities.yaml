@@ -1,0 +1,5 @@
+capabilities:
+  - name: example-feature
+    module: example
+    description: Example capability provided by the sample module
+    entrypoint: "src/example/index.ts:exampleFn"

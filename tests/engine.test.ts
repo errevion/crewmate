@@ -5,6 +5,11 @@ import * as path from "node:path";
 import * as os from "node:os";
 
 import { CrewmateEngine } from "../src/core/engine/engine.js";
+import {
+  getTemplatesDir,
+  readTemplate,
+  readTemplateSync,
+} from "../src/core/engine/templates.js";
 
 describe("CrewmateEngine Core", () => {
   it("initializes project workspace and reads status", async () => {
@@ -424,5 +429,24 @@ describe("CrewmateEngine Core", () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it("loads decoupled template files successfully", async () => {
+    const templatesDir = getTemplatesDir();
+    assert.ok(templatesDir && templatesDir.length > 0);
+
+    const indexYaml = readTemplateSync("contracts/index.yaml");
+    assert.ok(indexYaml.includes("modules: []"));
+
+    const schemaMd = await readTemplate("contracts/SCHEMA.md");
+    assert.ok(schemaMd.includes("Crewmate Contract System Specification"));
+
+    const matteMd = readTemplateSync("agents/matte.md");
+    assert.ok(matteMd.includes("Chief Orchestrator"));
+
+    const featureGraph = await readTemplate(
+      "workflows/feature-pipeline/graph.yaml",
+    );
+    assert.ok(featureGraph.includes("Feature Pipeline"));
   });
 });

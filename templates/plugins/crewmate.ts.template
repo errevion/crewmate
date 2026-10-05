@@ -1,0 +1,9 @@
+let pluginModule: any;
+try {
+  pluginModule = await import("crewmate/plugin");
+} catch (err) {
+__FALLBACK_BLOCK__}
+
+export const crewmateOpenCodePlugin = pluginModule.crewmateOpenCodePlugin || pluginModule.default;
+export const crewmatePlugin = crewmateOpenCodePlugin;
+export default crewmateOpenCodePlugin;
