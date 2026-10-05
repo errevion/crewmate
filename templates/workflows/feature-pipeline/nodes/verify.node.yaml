@@ -1,0 +1,23 @@
+id: verify
+instructions: |
+  Perform rigorous verification of the implementation against reconciled contracts.
+  Scan for architectural boundary violations and dead code.
+inputs:
+  - diff
+  - contract_refs
+subagent:
+  role: verifier
+  agent: verifier
+  scope: read-only
+guardrails:
+  pre:
+    - type: hard
+      run: crewmate scan arch
+  post:
+    - type: hard
+      run: crewmate scan dead-code
+    - type: hard
+      run: crewmate scan arch
+on_fail: route(execute)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

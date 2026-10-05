@@ -13,7 +13,7 @@
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
     "prepack": "npm run build",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-templates.js",
     "build:watch": "cargo build --release --manifest-path crates/crewmate-watch/Cargo.toml",
     "watch": "tsc --watch",
     "lint": "biome lint",
@@ -34,6 +34,8 @@
   ],
   "files": [
     "dist/src",
+    "dist/templates",
+    "templates",
     "bin",
     "scripts/postinstall.js"
   ],

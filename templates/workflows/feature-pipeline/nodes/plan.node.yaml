@@ -1,0 +1,19 @@
+id: plan
+instructions: |
+  Analyze requirements and user clarifications against discovery findings and .crewmate/contracts/capabilities.yaml.
+  Formulate an implementation plan identifying affected modules, contracts, and dependency order.
+  Author future contracts for any new modules in .crewmate/contracts/modules/ with status: draft.
+inputs:
+  - task_description
+  - discovery_context
+  - clarified_requirements
+subagent:
+  role: planner
+  agent: planner
+  scope: contracts-write
+guardrails:
+  pre: []
+  post: []
+on_fail: route(scout)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

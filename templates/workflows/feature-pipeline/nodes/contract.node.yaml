@@ -1,0 +1,18 @@
+id: contract
+instructions: |
+  Reconcile module contracts with the implementation.
+  Update index.yaml, architecture.yaml, capabilities.yaml, and per-module contracts under .crewmate/contracts/ to reflect any new or modified exports, dependencies, or invariants.
+  Do not modify application source code during this phase.
+inputs:
+  - diff
+  - contract_refs
+subagent:
+  role: contractor
+  agent: contractor
+  scope: contracts-write
+guardrails:
+  pre: []
+  post: []
+on_fail: route(execute)
+on_fail_max_retries: 2
+escalate_after_max_retries: human

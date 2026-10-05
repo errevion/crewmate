@@ -1,0 +1,8 @@
+version: "1.0.0"
+modules:
+  - name: example
+    responsibility: Sample module demonstrating contract schema
+    path: src/example
+    version: "1.0.0"
+    public_surface:
+      - src/example/index.ts

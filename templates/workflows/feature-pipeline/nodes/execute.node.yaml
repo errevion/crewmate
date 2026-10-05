@@ -1,0 +1,21 @@
+id: execute
+instructions: |
+  Implement the planned changes following module contracts and dependency rules.
+  Check .crewmate/contracts/structure.yaml and architecture.yaml before creating files.
+inputs:
+  - plan
+  - contract_refs
+subagent:
+  role: builder
+  agent: builder
+  scope: implementation
+guardrails:
+  pre:
+    - type: hard
+      run: crewmate scan arch
+  post:
+    - type: hard
+      run: crewmate scan arch
+on_fail: route(plan)
+on_fail_max_retries: 2
+escalate_after_max_retries: human
